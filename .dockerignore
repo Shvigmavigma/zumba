@@ -1,0 +1,10 @@
+.git
+.env
+.venv
+**/__pycache__
+**/*.pyc
+frontend/node_modules
+frontend/dist
+tmp
+postgres_data
+

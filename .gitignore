@@ -1,0 +1,12 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+node_modules/
+.pnpm-store/
+dist/
+coverage/
+tmp/
+postgres_data/
