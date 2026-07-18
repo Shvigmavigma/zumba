@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="260" viewBox="0 0 1440 260" role="img" aria-label="BRML racing banner">
+  <rect width="1440" height="260" fill="#0b0f14"/>
+  <path d="M0 176 C210 130 360 218 540 164 C750 100 970 110 1440 58 L1440 260 L0 260 Z" fill="#17324d"/>
+  <path d="M70 182 H1370" stroke="#f43f3f" stroke-width="12" stroke-linecap="round"/>
+  <path d="M110 204 H1325" stroke="#f8fafc" stroke-width="4" stroke-dasharray="36 28" opacity=".9"/>
+  <text x="72" y="92" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#f8fafc">BRML</text>
+  <text x="73" y="132" font-family="Arial, sans-serif" font-size="22" fill="#cbd5e1">Race control platform</text>
+</svg>
+

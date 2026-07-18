@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="520" viewBox="0 0 320 520" role="img" aria-label="Side race banner">
+  <rect width="320" height="520" fill="#111827"/>
+  <path d="M42 0 L278 520" stroke="#f43f3f" stroke-width="28"/>
+  <path d="M0 398 C80 340 164 440 320 362 L320 520 L0 520 Z" fill="#1f3b57"/>
+  <text transform="translate(72 54) rotate(90)" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#f8fafc">BRML SERIES</text>
+</svg>
+
