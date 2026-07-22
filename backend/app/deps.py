@@ -18,6 +18,24 @@ MARSHALL_PLUS = {Role.admin, Role.moder, Role.marshall}
 BANNER_EDITORS = {Role.admin, Role.moder, Role.smm}
 
 
+def as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def clear_expired_timeout(user: User, now: datetime | None = None) -> bool:
+    if user.status != UserStatus.timeout or user.timeout_end is None:
+        return False
+    current_time = now or datetime.now(timezone.utc)
+    if as_utc(user.timeout_end) > current_time:
+        return False
+    user.status = UserStatus.active
+    user.timeout_start = None
+    user.timeout_end = None
+    return True
+
+
 async def resolve_user_from_token(
     credentials: HTTPAuthorizationCredentials | None,
     session: AsyncSession,
@@ -29,10 +47,7 @@ async def resolve_user_from_token(
     user = await session.get(User, user_id)
     if user is None:
         return None
-    if user.status == UserStatus.timeout and user.timeout_end and user.timeout_end <= datetime.now(timezone.utc):
-        user.status = UserStatus.active
-        user.timeout_start = None
-        user.timeout_end = None
+    if clear_expired_timeout(user):
         await session.commit()
         await session.refresh(user)
     return user
@@ -71,4 +86,4 @@ require_pilot_plus = require_roles(PILOT_PLUS)
 require_moder_plus = require_roles(MODER_PLUS)
 require_marshall_plus = require_roles(MARSHALL_PLUS)
 require_banner_editor = require_roles(BANNER_EDITORS)
-
+require_news_editor = require_roles(BANNER_EDITORS)

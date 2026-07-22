@@ -7,12 +7,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    app_name: str = "BRML Race Control"
+    app_name: str = "BMRL Race Control"
     app_domain: str = "localhost"
     public_base_url: str = "http://localhost"
     cors_origins: str = "http://localhost,http://127.0.0.1"
 
-    database_url: str = "postgresql+asyncpg://brml:brml@postgres:5432/brml"
+    database_url: str = "postgresql+asyncpg://bmrl:bmrl@postgres:5432/bmrl"
     db_pool_size: int = 20
     db_max_overflow: int = 40
     auto_create_tables: bool = True
@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     rate_limit_default: str = "3/minute"
     rate_limit_storage_uri: str | None = None
     steam_openid_url: str = "https://steamcommunity.com/openid/login"
+    upload_dir: str = "/app/uploads"
+    max_banner_upload_mb: int = 8
 
     @property
     def cors_origin_list(self) -> list[str]:

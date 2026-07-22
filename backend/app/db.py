@@ -1,5 +1,7 @@
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -20,6 +22,7 @@ engine = create_async_engine(
 )
 
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+DB_INIT_LOCK_ID = 75420260721
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
@@ -27,9 +30,55 @@ async def get_session() -> AsyncIterator[AsyncSession]:
         yield session
 
 
+@asynccontextmanager
+async def db_initialization_lock():
+    async with engine.connect() as conn:
+        await conn.execute(text("SELECT pg_advisory_lock(:lock_id)"), {"lock_id": DB_INIT_LOCK_ID})
+        try:
+            yield
+        finally:
+            await conn.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": DB_INIT_LOCK_ID})
+
+
 async def init_db() -> None:
     import app.models  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS games JSONB"))
+        await conn.execute(text("""UPDATE users SET games = '["ACC", "AC", "iRacing"]'::jsonb WHERE games IS NULL OR jsonb_typeof(games) <> 'array'"""))
+        await conn.execute(text("""ALTER TABLE users ALTER COLUMN games SET DEFAULT '["ACC", "AC", "iRacing"]'::jsonb"""))
+        await conn.execute(text("ALTER TABLE users ALTER COLUMN games SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_sr_range"))
+        await conn.execute(text("UPDATE users SET sr = LEAST(30.0, GREATEST(0.0, sr)) WHERE sr < 0.0 OR sr > 30.0"))
+        await conn.execute(text("ALTER TABLE users ADD CONSTRAINT ck_users_sr_range CHECK (sr >= 0.0 AND sr <= 30.0)"))
+        await conn.execute(text("ALTER TABLE penalties ADD COLUMN IF NOT EXISTS sr_applied_value NUMERIC DEFAULT 0"))
+        await conn.execute(text("UPDATE penalties SET sr_applied_value = 0 WHERE sr_applied_value IS NULL"))
+        await conn.execute(
+            text(
+                """
+                UPDATE penalties
+                SET sr_applied_value = penalty_value
+                WHERE penalty_type = 'sr'
+                    AND is_applied IS TRUE
+                    AND sr_applied_value = 0
+                """
+            )
+        )
+        await conn.execute(text("ALTER TABLE penalties ALTER COLUMN sr_applied_value SET DEFAULT 0"))
+        await conn.execute(text("ALTER TABLE penalties ALTER COLUMN sr_applied_value SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE races ALTER COLUMN game SET DEFAULT 'ACC'"))
+        await conn.execute(
+            text(
+                """
+                UPDATE races
+                SET game = CASE
+                    WHEN game IN ('ACC', 'Assetto Corsa Competizione') THEN 'ACC'
+                    WHEN game IN ('AC', 'Assetto Corsa') THEN 'AC'
+                    WHEN lower(game) IN ('iracing', 'iracin') THEN 'iRacing'
+                    ELSE 'ACC'
+                END
+                WHERE game IS NULL OR game NOT IN ('ACC', 'AC', 'iRacing')
+                """
+            )
+        )

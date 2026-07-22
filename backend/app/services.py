@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Penalty, PenaltyStatus, PenaltyType, Race, User
+from app.models import MAX_SR, MIN_SR, Penalty, PenaltyStatus, PenaltyType, Race, User
 
 
 def recalculate_results(results: dict | list | None, penalties: list[Penalty]) -> dict | list | None:
@@ -47,6 +47,20 @@ async def recalculate_race_results(session: AsyncSession, race: Race) -> None:
     race.results = recalculate_results(race.results, penalties)
 
 
+async def apply_sr_penalty(session: AsyncSession, penalty: Penalty) -> None:
+    if penalty.penalty_type != PenaltyType.sr or penalty.status != PenaltyStatus.active or penalty.is_applied:
+        return
+    target = await session.get(User, penalty.target_id)
+    if target is None:
+        return
+    current_sr = float(target.sr)
+    penalty_value = float(penalty.penalty_value)
+    applied_value = min(penalty_value, max(0, current_sr - MIN_SR))
+    target.sr = max(MIN_SR, current_sr - applied_value)
+    penalty.sr_applied_value = applied_value
+    penalty.is_applied = True
+
+
 async def apply_sr_penalties(session: AsyncSession, race: Race) -> None:
     penalties = (
         await session.scalars(
@@ -59,10 +73,7 @@ async def apply_sr_penalties(session: AsyncSession, race: Race) -> None:
         )
     ).all()
     for penalty in penalties:
-        target = await session.get(User, penalty.target_id)
-        if target is not None:
-            target.sr = max(5.0, float(target.sr) - float(penalty.penalty_value))
-            penalty.is_applied = True
+        await apply_sr_penalty(session, penalty)
 
 
 async def restore_sr_penalty(session: AsyncSession, penalty: Penalty) -> None:
@@ -70,6 +81,7 @@ async def restore_sr_penalty(session: AsyncSession, penalty: Penalty) -> None:
         return
     target = await session.get(User, penalty.target_id)
     if target is not None:
-        target.sr = min(30.0, float(target.sr) + float(penalty.penalty_value))
+        applied_value = float(penalty.sr_applied_value or 0)
+        target.sr = min(MAX_SR, float(target.sr) + applied_value)
+    penalty.sr_applied_value = 0
     penalty.is_applied = False
-

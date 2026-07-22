@@ -4,7 +4,8 @@ export const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 export async function api(path, options = {}) {
   const headers = new Headers(options.headers || {})
-  if (!headers.has('Content-Type') && options.body) {
+  const isFormData = options.body instanceof FormData
+  if (!headers.has('Content-Type') && options.body && !isFormData) {
     headers.set('Content-Type', 'application/json')
   }
   if (state.token) {
@@ -14,7 +15,7 @@ export async function api(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
-    body: options.body && typeof options.body !== 'string' ? JSON.stringify(options.body) : options.body
+    body: options.body && typeof options.body !== 'string' && !isFormData ? JSON.stringify(options.body) : options.body
   })
 
   if (response.status === 401) {

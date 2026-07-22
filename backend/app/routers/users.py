@@ -1,12 +1,13 @@
 ﻿from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import or_, select
+from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.deps import require_admin, require_moder_plus, require_pilot_plus
-from app.models import Role, User, UserStatus
+from app.deps import as_utc, clear_expired_timeout, require_admin, require_moder_plus, require_pilot_plus
+from app.models import Appeal, Banner, Penalty, Race, RaceRegistration, Role, Setup, User, UserStatus
 from app.rate_limit import limiter
 from app.schemas import RoleUpdate, TimeoutRequest, UserPrivate, UserPublic, UserUpdate
 
@@ -15,7 +16,7 @@ router = APIRouter()
 
 
 @router.get("/pilots", response_model=list[UserPublic])
-@limiter.limit("3/minute")
+@limiter.limit("1200/minute")
 async def list_pilots(
     request: Request,
     search: str | None = None,
@@ -56,11 +57,20 @@ async def admin_user_list(
     limit: int = 100,
     session: AsyncSession = Depends(get_session),
 ):
-    return (await session.scalars(select(User).order_by(User.created_at.desc()).offset(offset).limit(min(limit, 200)))).all()
+    users = (await session.scalars(select(User).order_by(User.created_at.desc()).offset(offset).limit(min(limit, 200)))).all()
+    now = datetime.now(timezone.utc)
+    has_expired_timeouts = False
+    for user in users:
+        has_expired_timeouts = clear_expired_timeout(user, now) or has_expired_timeouts
+    if has_expired_timeouts:
+        await session.commit()
+        for user in users:
+            await session.refresh(user)
+    return users
 
 
 @router.get("/{user_id}", response_model=UserPublic)
-@limiter.limit("3/minute")
+@limiter.limit("600/minute")
 async def get_user(user_id: int, request: Request, session: AsyncSession = Depends(get_session)):
     user = await session.get(User, user_id)
     if user is None:
@@ -77,7 +87,7 @@ async def update_me(
     session: AsyncSession = Depends(get_session),
 ):
     data = payload.model_dump(exclude_unset=True)
-    required_fields = {"email", "first_name", "last_name", "nickname", "avatar_color"}
+    required_fields = {"email", "first_name", "last_name", "nickname", "avatar_color", "games"}
     if any(field in data and data[field] is None for field in required_fields):
         raise HTTPException(status_code=400, detail="Required profile fields cannot be null")
     if "email" in data:
@@ -130,6 +140,45 @@ async def reject_user(user_id: int, request: Request, _: User = Depends(require_
     else:
         raise HTTPException(status_code=400, detail="No registration or profile change to reject")
     await session.commit()
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/minute")
+async def delete_user_account(
+    user_id: int,
+    request: Request,
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+    if user.role == Role.admin:
+        admin_count = await session.scalar(select(func.count()).select_from(User).where(User.role == Role.admin))
+        if (admin_count or 0) <= 1:
+            raise HTTPException(status_code=400, detail="The last admin account cannot be deleted")
+
+    target_penalty_ids = list((await session.scalars(select(Penalty.id).where(Penalty.target_id == user.id))).all())
+    if target_penalty_ids:
+        await session.execute(delete(Appeal).where(Appeal.penalty_id.in_(target_penalty_ids)))
+        await session.execute(delete(Penalty).where(Penalty.id.in_(target_penalty_ids)))
+
+    await session.execute(delete(Appeal).where(Appeal.user_id == user.id))
+    await session.execute(update(Appeal).where(Appeal.moderator_id == user.id).values(moderator_id=None))
+    await session.execute(delete(RaceRegistration).where(RaceRegistration.user_id == user.id))
+    await session.execute(delete(Setup).where(Setup.user_id == user.id))
+    await session.execute(update(Banner).where(Banner.updated_by == user.id).values(updated_by=None))
+    await session.execute(update(Race).where(Race.creator_id == user.id).values(creator_id=admin.id))
+    await session.execute(update(Penalty).where(Penalty.issuer_id == user.id).values(issuer_id=admin.id))
+
+    await session.delete(user)
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="User cannot be deleted because linked records still exist") from exc
 
 
 @router.patch("/{user_id}/role", response_model=UserPrivate)
@@ -186,17 +235,41 @@ async def timeout_user(
     user_id: int,
     request: Request,
     payload: TimeoutRequest,
-    _: User = Depends(require_moder_plus),
+    _: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
-    if payload.timeout_end <= datetime.now(timezone.utc):
+    timeout_end = as_utc(payload.timeout_end)
+    if timeout_end <= datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Timeout end must be in the future")
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.role == Role.admin:
+        raise HTTPException(status_code=403, detail="Admins cannot be timed out")
     user.status = UserStatus.timeout
     user.timeout_start = datetime.now(timezone.utc)
-    user.timeout_end = payload.timeout_end
+    user.timeout_end = timeout_end
+    user.ban_end = None
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+@router.delete("/{user_id}/timeout", response_model=UserPrivate)
+@limiter.limit("10/minute")
+async def end_timeout_user(
+    user_id: int,
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.status == UserStatus.timeout:
+        user.status = UserStatus.active
+    user.timeout_start = None
+    user.timeout_end = None
     await session.commit()
     await session.refresh(user)
     return user

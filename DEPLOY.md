@@ -16,9 +16,9 @@ cp .env.example .env
 В `.env` замените:
 
 ```env
-APP_DOMAIN=brml.example.com
-PUBLIC_BASE_URL=http://brml.example.com
-CORS_ORIGINS=http://brml.example.com
+APP_DOMAIN=bmrl.example.com
+PUBLIC_BASE_URL=http://bmrl.example.com
+CORS_ORIGINS=http://bmrl.example.com
 POSTGRES_PASSWORD=long-random-password
 JWT_SECRET=another-long-random-secret
 ADMIN_PASSWORD=strong-admin-password
@@ -48,13 +48,13 @@ docker compose logs -f backend
 ## Резервная копия PostgreSQL
 
 ```bash
-docker compose exec postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > brml_backup.sql
+docker compose exec postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > bmrl_backup.sql
 ```
 
 Восстановление:
 
 ```bash
-docker compose exec -T postgres psql -U "$POSTGRES_USER" "$POSTGRES_DB" < brml_backup.sql
+docker compose exec -T postgres psql -U "$POSTGRES_USER" "$POSTGRES_DB" < bmrl_backup.sql
 ```
 
 ## HTTPS

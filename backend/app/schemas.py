@@ -1,8 +1,11 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator
 
-from app.models import AppealStatus, BannerPosition, PenaltyStatus, PenaltyType, RaceStatus, Role, UserStatus
+from app.models import MAX_SR, MIN_SR, AppealStatus, BannerPosition, PenaltyStatus, PenaltyType, RaceStatus, Role, UserStatus
+
+GameCode = Literal["ACC", "AC", "iRacing"]
 
 
 class TokenResponse(BaseModel):
@@ -20,15 +23,16 @@ class UserRegister(BaseModel):
     login: str = Field(min_length=3, max_length=50)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
-    password_confirm: str
+    password_confirm: str = Field(min_length=8, max_length=128)
     first_name: str = Field(min_length=1, max_length=50)
     last_name: str = Field(min_length=1, max_length=50)
     nickname: str = Field(min_length=1, max_length=80)
     pilot_number: int = Field(ge=1, le=9999)
-    steam_id: str = Field(min_length=1, max_length=50)
+    steam_auth_token: str = Field(min_length=1)
     country: str | None = Field(default=None, max_length=50)
     discord: str | None = Field(default=None, max_length=100)
     avatar_color: str = Field(default="#2563eb", pattern=r"^#[0-9A-Fa-f]{6}$")
+    games: list[GameCode] = Field(default_factory=lambda: ["ACC"], min_length=1, max_length=3)
 
     @field_validator("password_confirm")
     @classmethod
@@ -46,12 +50,13 @@ class UserPublic(BaseModel):
     nickname: str
     pilot_number: int
     country: str | None
-    sr: float
+    sr: float = Field(ge=MIN_SR, le=MAX_SR)
     discord: str | None
     steam_id: str
     role: Role
     status: UserStatus
     avatar_color: str
+    games: list[str] = Field(default_factory=list)
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -74,6 +79,7 @@ class UserUpdate(BaseModel):
     country: str | None = Field(default=None, max_length=50)
     discord: str | None = Field(default=None, max_length=100)
     avatar_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    games: list[GameCode] | None = Field(default=None, min_length=1, max_length=3)
 
 
 class RoleUpdate(BaseModel):
@@ -101,7 +107,7 @@ class RaceBase(BaseModel):
     track: str = Field(min_length=1, max_length=100)
     mods_pack: list[str] = Field(default_factory=list)
     allowed_cars: list[str] = Field(default_factory=list)
-    game: str = Field(default="Assetto Corsa", max_length=50)
+    game: GameCode = "ACC"
     is_official: bool = False
 
 
@@ -122,7 +128,7 @@ class RaceUpdate(BaseModel):
     allowed_cars: list[str] | None = None
     status: RaceStatus | None = None
     results: dict | list | None = None
-    game: str | None = Field(default=None, max_length=50)
+    game: GameCode | None = None
     is_official: bool | None = None
 
 
@@ -137,6 +143,24 @@ class RaceRead(RaceBase):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class RaceManageRead(BaseModel):
+    id: int
+    name: str
+    description: str
+    status: RaceStatus
+    datetime_start: datetime
+    datetime_end: datetime
+    max_pilots: int
+    registered_count: int
+    car_class: str
+    track: str
+    game: str
+    creator_id: int
+    is_official: bool
+    created_at: datetime
+    updated_at: datetime
 
 
 class RaceRegisterRequest(BaseModel):
@@ -161,8 +185,19 @@ class PenaltyRead(PenaltyCreate):
     created_at: datetime
     status: PenaltyStatus
     is_applied: bool
+    sr_applied_value: float = 0.0
 
     model_config = {"from_attributes": True}
+
+
+class PenaltyDetailRead(PenaltyRead):
+    race_name: str | None = None
+    target_login: str | None = None
+    target_nickname: str | None = None
+    target_pilot_number: int | None = None
+    target_avatar_color: str | None = None
+    issuer_login: str | None = None
+    issuer_nickname: str | None = None
 
 
 class AppealCreate(BaseModel):
@@ -208,7 +243,7 @@ class SetupRead(SetupCreate):
 
 
 class BannerUpdate(BaseModel):
-    image_url: str = Field(min_length=1, max_length=255)
+    image_url: str = Field(default="", max_length=255)
     link_url: str = Field(default="#", max_length=255)
 
 
@@ -219,6 +254,32 @@ class BannerRead(BannerUpdate):
     updated_by: int | None
 
     model_config = {"from_attributes": True}
+
+
+class BannerFileRead(BaseModel):
+    name: str
+    url: str
+    size: int
+    updated_at: datetime
+
+
+class NewsItemRead(BaseModel):
+    id: int
+    title: str
+    body: str
+    image_url: str
+    is_published: bool
+    created_at: datetime
+    updated_at: datetime
+    created_by: int | None
+
+    model_config = {"from_attributes": True}
+
+
+class NewsItemUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    body: str | None = Field(default=None, min_length=1, max_length=1000)
+    is_published: bool | None = None
 
 
 class DashboardStats(BaseModel):
