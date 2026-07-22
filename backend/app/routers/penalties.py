@@ -1,13 +1,14 @@
 ﻿from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db import get_session
 from app.deps import MARSHALL_PLUS, get_current_user, require_marshall_plus
-from app.models import Penalty, PenaltyStatus, Race, User
+from app.models import Penalty, PenaltyStatus, Race, RaceStatus, User
 from app.rate_limit import limiter
-from app.schemas import PenaltyCreate, PenaltyRead
-from app.services import recalculate_race_results, restore_sr_penalty
+from app.schemas import PenaltyCreate, PenaltyDetailRead, PenaltyRead
+from app.services import apply_sr_penalty, recalculate_race_results, restore_sr_penalty
 
 
 router = APIRouter()
@@ -23,13 +24,46 @@ async def list_penalties(
     session: AsyncSession = Depends(get_session),
 ):
     stmt = select(Penalty).order_by(Penalty.created_at.desc())
-    if user.role not in MARSHALL_PLUS:
+    if user.role not in MARSHALL_PLUS and race_id is None:
         target_id = user.id
     if race_id is not None:
         stmt = stmt.where(Penalty.race_id == race_id)
     if target_id is not None:
         stmt = stmt.where(Penalty.target_id == target_id)
     return (await session.scalars(stmt.limit(200))).all()
+
+
+@router.get("/{penalty_id}", response_model=PenaltyDetailRead)
+@limiter.limit("600/minute")
+async def get_penalty(
+    penalty_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    penalty = await session.scalar(
+        select(Penalty)
+        .options(selectinload(Penalty.race), selectinload(Penalty.target), selectinload(Penalty.issuer))
+        .where(Penalty.id == penalty_id)
+    )
+    if penalty is None:
+        raise HTTPException(status_code=404, detail="Penalty not found")
+    if user.role not in MARSHALL_PLUS and penalty.target_id != user.id:
+        raise HTTPException(status_code=403, detail="Only penalty target can view this penalty")
+
+    data = PenaltyRead.model_validate(penalty).model_dump()
+    data.update(
+        {
+            "race_name": penalty.race.name if penalty.race else None,
+            "target_login": penalty.target.login if penalty.target else None,
+            "target_nickname": penalty.target.nickname if penalty.target else None,
+            "target_pilot_number": penalty.target.pilot_number if penalty.target else None,
+            "target_avatar_color": penalty.target.avatar_color if penalty.target else None,
+            "issuer_login": penalty.issuer.login if penalty.issuer else None,
+            "issuer_nickname": penalty.issuer.nickname if penalty.issuer else None,
+        }
+    )
+    return data
 
 
 @router.post("", response_model=PenaltyRead, status_code=status.HTTP_201_CREATED)
@@ -47,6 +81,8 @@ async def create_penalty(
     penalty = Penalty(**payload.model_dump(), issuer_id=issuer.id, status=PenaltyStatus.active, is_applied=False)
     session.add(penalty)
     await session.flush()
+    if race.status == RaceStatus.finished:
+        await apply_sr_penalty(session, penalty)
     await recalculate_race_results(session, race)
     await session.commit()
     await session.refresh(penalty)

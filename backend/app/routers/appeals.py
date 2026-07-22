@@ -5,10 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import MARSHALL_PLUS, require_marshall_plus, require_pilot_plus
-from app.models import Appeal, AppealStatus, Penalty, PenaltyStatus, Race, User
+from app.models import Appeal, AppealStatus, Penalty, PenaltyStatus, Race, RaceStatus, User
 from app.rate_limit import limiter
 from app.schemas import AppealCreate, AppealModerationRequest, AppealRead
-from app.services import recalculate_race_results, restore_sr_penalty
+from app.services import apply_sr_penalty, recalculate_race_results, restore_sr_penalty
 
 
 router = APIRouter()
@@ -78,6 +78,8 @@ async def moderate_appeal(
     appeal = await session.get(Appeal, appeal_id)
     if appeal is None:
         raise HTTPException(status_code=404, detail="Appeal not found")
+    if appeal.status != AppealStatus.pending:
+        raise HTTPException(status_code=400, detail="Appeal is already resolved")
     penalty = await session.get(Penalty, appeal.penalty_id)
     race = await session.get(Race, appeal.race_id)
     if penalty is None:
@@ -92,6 +94,8 @@ async def moderate_appeal(
     else:
         appeal.rejection_reason = payload.rejection_reason or "Rejected by marshall"
         penalty.status = PenaltyStatus.active
+        if race is not None and race.status == RaceStatus.finished:
+            await apply_sr_penalty(session, penalty)
 
     if race is not None:
         await recalculate_race_results(session, race)

@@ -13,7 +13,7 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[SetupRead])
-@limiter.limit("3/minute")
+@limiter.limit("600/minute")
 async def list_setups(
     request: Request,
     race_id: int | None = None,

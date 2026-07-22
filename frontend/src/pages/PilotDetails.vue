@@ -1,11 +1,28 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { api } from '../api'
+import UserAvatar from '../components/UserAvatar.vue'
+import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
+import { state } from '../store'
 
+const { t } = useI18n()
 const route = useRoute()
 const pilot = ref(null)
 const error = ref('')
+
+function formatDate(value) {
+  return new Date(value).toLocaleDateString(state.locale, {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric'
+  })
+}
+
+function gameList(user) {
+  return user.games?.length ? user.games.map((game) => gameLabel(t, game)) : [t('common.none')]
+}
 
 onMounted(async () => {
   try {
@@ -17,17 +34,53 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="section card">
+  <section class="section pilot-profile-page">
     <p v-if="error" class="error">{{ error }}</p>
-    <template v-if="pilot">
-      <div class="section-header">
-        <h1>{{ pilot.first_name }} {{ pilot.last_name }}</h1>
-        <span class="pill">SR {{ pilot.sr }}</span>
+    <section v-if="pilot" class="card pilot-profile-card">
+      <UserAvatar class="pilot-profile-avatar" :color="pilot.avatar_color" :label="pilot.nickname || pilot.login" />
+
+      <div class="pilot-profile-main">
+        <div class="section-header pilot-profile-head">
+          <div>
+            <h1>{{ pilot.first_name }} {{ pilot.last_name }}</h1>
+            <p class="muted">{{ pilot.nickname }} - {{ pilot.login }}</p>
+          </div>
+          <span class="pill">SR {{ pilot.sr }}</span>
+        </div>
+
+        <div class="pilot-profile-badges">
+          <span class="pill">#{{ pilot.pilot_number }}</span>
+          <span class="pill">{{ countryLabel(t, pilot.country) }}</span>
+          <span class="status-badge" :class="`status-${pilot.status}`">{{ statusLabel(t, pilot.status) }}</span>
+          <span class="pill">{{ roleLabel(t, pilot.role) }}</span>
+        </div>
+
+        <dl class="pilot-public-grid">
+          <div>
+            <dt>{{ t('fields.steam') }}</dt>
+            <dd>{{ pilot.steam_id }}</dd>
+          </div>
+          <div>
+            <dt>{{ t('fields.discord') }}</dt>
+            <dd>{{ pilot.discord || t('common.none') }}</dd>
+          </div>
+          <div>
+            <dt>{{ t('fields.country') }}</dt>
+            <dd>{{ countryLabel(t, pilot.country) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t('fields.joinedAt') }}</dt>
+            <dd>{{ formatDate(pilot.created_at) }}</dd>
+          </div>
+        </dl>
+
+        <div class="pilot-games">
+          <span>{{ t('fields.games') }}</span>
+          <div>
+            <span v-for="game in gameList(pilot)" :key="game" class="pill">{{ game }}</span>
+          </div>
+        </div>
       </div>
-      <p class="muted">{{ pilot.nickname }} · #{{ pilot.pilot_number }} · {{ pilot.country || 'Global' }}</p>
-      <p>Steam: {{ pilot.steam_id }}</p>
-      <p>Discord: {{ pilot.discord || '—' }}</p>
-    </template>
+    </section>
   </section>
 </template>
-

@@ -1,11 +1,16 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { api } from '../api'
+import { gameOptions } from '../i18nLabels'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const isEdit = route.params.id && route.path.endsWith('/edit')
+const pageTitle = computed(() => t(isEdit ? 'raceEdit.editTitle' : 'raceEdit.createTitle'))
+const gameChoices = computed(() => gameOptions(t))
 const error = ref('')
 const form = ref({
   name: '',
@@ -18,7 +23,7 @@ const form = ref({
   track: '',
   mods_pack: [],
   allowed_cars: [],
-  game: 'Assetto Corsa',
+  game: 'ACC',
   is_official: false
 })
 const modsText = ref('')
@@ -62,33 +67,37 @@ onMounted(async () => {
 
 <template>
   <section class="section card">
-    <h1>RaceEdit</h1>
+    <h1>{{ pageTitle }}</h1>
     <form class="form" @submit.prevent="submit">
       <div class="form-row">
-        <label class="field"><span>Name</span><input v-model="form.name" required /></label>
-        <label class="field"><span>Track</span><input v-model="form.track" required /></label>
+        <label class="field"><span>{{ t('fields.name') }}</span><input v-model="form.name" required /></label>
+        <label class="field"><span>{{ t('fields.track') }}</span><input v-model="form.track" required /></label>
       </div>
-      <label class="field"><span>Description</span><textarea v-model="form.description" required /></label>
+      <label class="field"><span>{{ t('fields.description') }}</span><textarea v-model="form.description" required /></label>
       <div class="form-row">
-        <label class="field"><span>Server link</span><input v-model="form.server_link" required /></label>
-        <label class="field"><span>Class</span><input v-model="form.car_class" required /></label>
-      </div>
-      <div class="form-row">
-        <label class="field"><span>Registration start</span><input v-model="form.datetime_start" type="datetime-local" required /></label>
-        <label class="field"><span>Registration end</span><input v-model="form.datetime_end" type="datetime-local" required /></label>
+        <label class="field"><span>{{ t('fields.serverLink') }}</span><input v-model="form.server_link" required /></label>
+        <label class="field"><span>{{ t('fields.class') }}</span><input v-model="form.car_class" required /></label>
       </div>
       <div class="form-row">
-        <label class="field"><span>Max pilots</span><input v-model.number="form.max_pilots" type="number" min="1" required /></label>
-        <label class="field"><span>Game</span><input v-model="form.game" /></label>
+        <label class="field"><span>{{ t('fields.registrationStart') }}</span><input v-model="form.datetime_start" type="datetime-local" required /></label>
+        <label class="field"><span>{{ t('fields.registrationEnd') }}</span><input v-model="form.datetime_end" type="datetime-local" required /></label>
       </div>
       <div class="form-row">
-        <label class="field"><span>Mods URLs, one per line</span><textarea v-model="modsText" /></label>
-        <label class="field"><span>Allowed cars, one per line</span><textarea v-model="carsText" /></label>
+        <label class="field"><span>{{ t('fields.maxPilots') }}</span><input v-model.number="form.max_pilots" type="number" min="1" required /></label>
+        <label class="field">
+          <span>{{ t('fields.game') }}</span>
+          <select v-model="form.game">
+            <option v-for="option in gameChoices" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+        </label>
       </div>
-      <label><input v-model="form.is_official" type="checkbox" /> Official race</label>
+      <div class="form-row">
+        <label class="field"><span>{{ t('fields.modsUrls') }}</span><textarea v-model="modsText" /></label>
+        <label class="field"><span>{{ t('fields.allowedCars') }}</span><textarea v-model="carsText" /></label>
+      </div>
+      <label><input v-model="form.is_official" type="checkbox" /> {{ t('fields.officialRace') }}</label>
       <p v-if="error" class="error">{{ error }}</p>
-      <button class="button primary" type="submit">Save</button>
+      <button class="button primary" type="submit">{{ t('common.save') }}</button>
     </form>
   </section>
 </template>
-

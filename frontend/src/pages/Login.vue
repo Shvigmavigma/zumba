@@ -23,7 +23,7 @@ async function submit() {
 }
 
 function loginWithSteam() {
-  window.location.href = `${API_BASE}/auth/steam/start`
+  window.location.href = `${API_BASE}/auth/steam/start?flow=login`
 }
 
 onMounted(async () => {
@@ -52,7 +52,7 @@ onMounted(async () => {
       <label class="field"><span>{{ t('auth.password') }}</span><input v-model="form.password" type="password" autocomplete="current-password" required /></label>
       <p v-if="error" class="error">{{ error }}</p>
       <button class="button primary" type="submit">{{ t('auth.submit') }}</button>
-      <button class="button" type="button" @click="loginWithSteam">Steam</button>
+      <button class="button" type="button" @click="loginWithSteam">{{ t('auth.steamLogin') }}</button>
     </form>
   </section>
 </template>

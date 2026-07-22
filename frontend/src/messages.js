@@ -10,12 +10,24 @@ export const messages = {
       admin: 'Пользователи',
       profile: 'Профиль',
       login: 'Вход',
-      logout: 'Выйти'
+      logout: 'Выйти',
+      races: 'Гонки',
+      news: 'Новости'
     },
     common: {
       save: 'Сохранить',
+      saved: 'Сохранено',
       create: 'Создать',
       edit: 'Редактировать',
+      delete: 'Удалить',
+      ban: 'Забанить',
+      unban: 'Разбанить',
+      close: 'Закрыть',
+      clear: 'Очистить',
+      upload: 'Загрузить',
+      uploading: 'Загружаю',
+      saving: 'Сохраняю',
+      clearing: 'Очищаю',
       register: 'Зарегистрироваться',
       unregister: 'Отменить регистрацию',
       loading: 'Загрузка',
@@ -26,7 +38,105 @@ export const messages = {
       car: 'Машина',
       actions: 'Действия',
       approve: 'Одобрить',
-      reject: 'Отклонить'
+      reject: 'Отклонить',
+      apply: 'Применить',
+      reload: 'Обновить',
+      language: 'Язык',
+      lightTheme: 'Светлая тема',
+      darkTheme: 'Темная тема',
+      global: 'Глобально',
+      none: '-',
+      yes: 'Да',
+      no: 'Нет'
+    },
+    fields: {
+      user: 'Пользователь',
+      email: 'Email',
+      login: 'Логин',
+      password: 'Пароль',
+      confirm: 'Подтверждение',
+      firstName: 'Имя',
+      lastName: 'Фамилия',
+      nickname: 'Никнейм',
+      pilotNumber: 'Номер пилота',
+      country: 'Страна',
+      discord: 'Discord',
+      steam: 'Steam',
+      avatarColor: 'Цвет аватара',
+      name: 'Название',
+      title: 'Заголовок',
+      text: 'Текст',
+      track: 'Трасса',
+      description: 'Описание',
+      serverLink: 'Ссылка на сервер',
+      class: 'Класс',
+      registrationStart: 'Начало регистрации',
+      registrationEnd: 'Конец регистрации',
+      maxPilots: 'Максимум пилотов',
+      game: 'Симулятор',
+      modsUrls: 'Ссылки на моды, по одной в строке',
+      allowedCars: 'Разрешенные машины, по одной в строке',
+      officialRace: 'Официальная гонка',
+      proofLink: 'Ссылка на доказательство',
+      rejectionReason: 'Причина отклонения',
+      linkUrl: 'Ссылка',
+      race: 'Гонка',
+      date: 'Дата',
+      registrations: 'Регистрации',
+      participants: 'Участники',
+      server: 'Сервер',
+      mods: 'Моды',
+      target: 'Пилот',
+      issuer: 'Выдал',
+      type: 'Тип',
+      value: 'Значение',
+      applied: 'Применён',
+      games: 'Игры',
+      joinedAt: 'Зарегистрирован'
+    },
+    games: {
+      ACC: 'ACC',
+      AC: 'AC',
+      iRacing: 'iRacing'
+    },
+    raceFilters: {
+      allGames: 'Все игры',
+      myGamesOnly: 'Только мои игры'
+    },
+    roles: {
+      admin: 'Админ',
+      moder: 'Модератор',
+      marshall: 'Маршал',
+      smm: 'SMM',
+      pilot: 'Пилот'
+    },
+    statuses: {
+      active: 'Активен',
+      banned: 'Забанен',
+      timeout: 'Тайм-аут',
+      unapproved: 'Ожидает',
+      pending: 'Ожидает',
+      approved: 'Одобрено',
+      rejected: 'Отклонено',
+      appealed: 'Обжаловано',
+      canceled: 'Отменено',
+      registration_open: 'Регистрация открыта',
+      ongoing: 'Идет',
+      finished: 'Завершена'
+    },
+    auth: {
+      login: 'Логин или email',
+      password: 'Пароль',
+      submit: 'Войти',
+      register: 'Регистрация',
+      pending: 'Ожидает одобрения',
+      steamRequired: 'Авторизация Steam обязательна для регистрации.',
+      steamConnected: 'Подключено: {id}',
+      connectSteam: 'Подключить Steam',
+      reconnectSteam: 'Переподключить Steam',
+      steamLogin: 'Войти через Steam',
+      createAccount: 'Создать аккаунт',
+      steamAuthRequired: 'Необходима авторизация через Steam'
     },
     main: {
       pilots: 'Пилотов',
@@ -37,12 +147,125 @@ export const messages = {
       setups: 'Сетапы',
       contacts: 'Контакты'
     },
-    auth: {
-      login: 'Логин или email',
-      password: 'Пароль',
-      submit: 'Войти',
-      register: 'Регистрация',
-      pending: 'Ожидает одобрения'
+    profile: {
+      waitingApproval: 'Ожидает одобрения',
+      pendingChanges: 'Изменения профиля ожидают модерации',
+      changesAfterModeration: 'Изменения появятся после модерации.'
+    },
+    country: {
+      placeholder: 'Выберите страну',
+      searchPlaceholder: 'Поиск страны',
+      clearLabel: 'Страна не выбрана',
+      emptyLabel: 'Ничего не найдено'
+    },
+    adminUsers: {
+      deleteConfirm: 'Удалить аккаунт {login}? Это действие нельзя отменить.',
+      timeoutTitle: 'Выдать тайм-аут',
+      timeoutUser: 'Пользователь: {login}',
+      timeoutUntil: 'Конец тайм-аута',
+      timeoutHint: 'До этого времени пользователь будет видеть только публичные страницы.',
+      timeoutInvalid: 'Укажите будущую дату и время тайм-аута.',
+      timeoutUntilShort: 'До {date}',
+      issueTimeout: 'Выдать тайм-аут',
+      endTimeout: 'Завершить тайм-аут',
+      empty: 'Пользователи не найдены'
+    },
+    appeals: {
+      proof: 'Доказательство',
+      empty: 'Апелляций нет'
+    },
+    banners: {
+      subtitle: 'Загрузка баннеров по позициям',
+      noImage: 'Нет изображения',
+      positions: {
+        top: {
+          title: 'Верхний баннер',
+          description: 'Горизонтальная реклама над главным меню',
+          badge: 'TOP'
+        },
+        left: {
+          title: 'Левый баннер',
+          description: 'Вертикальная реклама слева от контента',
+          badge: 'LEFT'
+        },
+        right: {
+          title: 'Правый баннер',
+          description: 'Вертикальная реклама справа от контента',
+          badge: 'RIGHT'
+        },
+        bottom: {
+          title: 'Нижний баннер',
+          description: 'Горизонтальная реклама под основными блоками',
+          badge: 'BOTTOM'
+        }
+      }
+    },
+    raceAdmin: {
+      title: 'Управление гонками',
+      loaded: 'Загружено гонок: {count}',
+      allStatuses: 'Все статусы',
+      searchPlaceholder: 'Название, трасса, класс или симулятор',
+      noRacesFound: 'Гонки не найдены',
+      confirmClose: 'Закрыть гонку "{name}"?',
+      confirmDelete: 'Удалить гонку "{name}" навсегда?',
+      exportRegistrations: 'Экспорт регистраций'
+    },
+    calendar: {
+      previousMonth: 'Предыдущий месяц',
+      nextMonth: 'Следующий месяц',
+      noRacesTitle: 'Гонок на этот день нет',
+      noRacesDescription: 'Выбери другой день или создай новую гонку.',
+      raceWordOne: 'гонка',
+      raceWordFew: 'гонки',
+      raceWordMany: 'гонок'
+    },
+    raceDetails: {
+      closeRace: 'Закрыть гонку',
+      alreadyRegistered: 'Уже зарегистрирован',
+      participants: 'Участники',
+      registeredPilots: 'Зарегистрировано пилотов: {count}',
+      noRegisteredPilots: 'Зарегистрированных пилотов пока нет',
+      myPenalties: 'Мои штрафы',
+      penalties: 'Штрафы гонки',
+      penaltiesCount: 'Штрафов: {count}',
+      noPenalties: 'Штрафов пока нет',
+      penalty: 'Штраф',
+      yourPenalty: 'Ваш штраф',
+      timePenalty: 'Штраф по времени',
+      srPenalty: 'Штраф SR',
+      timePenaltyEffect: 'Добавляется к времени: {value}',
+      srPenaltyEffect: 'Снимается SR: {value}',
+      penaltyDetails: 'Информация по штрафу',
+      penaltyEffect: 'Что применяется',
+      appeal: 'Апелляция',
+      confirmClose: 'Закрыть эту гонку? Регистрация будет недоступна.',
+      confirmDelete: 'Удалить эту гонку навсегда?'
+    },
+    raceEdit: {
+      createTitle: 'Создание гонки',
+      editTitle: 'Редактирование гонки'
+    },
+    moderation: {
+      pendingProfileChanges: 'Ожидающие изменения профиля: {changes}'
+    },
+    news: {
+      title: 'Новости',
+      manageTitle: 'Управление новостями',
+      subtitle: 'Новости показываются на главной странице под верхним баннером',
+      addTitle: 'Добавить новость',
+      image: 'Изображение новости',
+      published: 'Опубликовано',
+      hidden: 'Скрыто',
+      publish: 'Опубликовать',
+      hide: 'Скрыть',
+      empty: 'Новости пока не добавлены',
+      confirmDelete: 'Удалить новость "{title}"?',
+      openFullscreen: 'Открыть новость на весь экран',
+      closeFullscreen: 'Закрыть новость',
+      indicators: 'Выбор новости',
+      goTo: 'Новость {number}',
+      scrollLeft: 'Листать новости влево',
+      scrollRight: 'Листать новости вправо'
     }
   },
   en: {
@@ -56,12 +279,24 @@ export const messages = {
       admin: 'Users',
       profile: 'Profile',
       login: 'Login',
-      logout: 'Logout'
+      logout: 'Logout',
+      races: 'Races',
+      news: 'News'
     },
     common: {
       save: 'Save',
+      saved: 'Saved',
       create: 'Create',
       edit: 'Edit',
+      delete: 'Delete',
+      ban: 'Ban',
+      unban: 'Unban',
+      close: 'Close',
+      clear: 'Clear',
+      upload: 'Upload',
+      uploading: 'Uploading',
+      saving: 'Saving',
+      clearing: 'Clearing',
       register: 'Register',
       unregister: 'Unregister',
       loading: 'Loading',
@@ -72,7 +307,105 @@ export const messages = {
       car: 'Car',
       actions: 'Actions',
       approve: 'Approve',
-      reject: 'Reject'
+      reject: 'Reject',
+      apply: 'Apply',
+      reload: 'Reload',
+      language: 'Language',
+      lightTheme: 'Light theme',
+      darkTheme: 'Dark theme',
+      global: 'Global',
+      none: '-',
+      yes: 'Yes',
+      no: 'No'
+    },
+    fields: {
+      user: 'User',
+      email: 'Email',
+      login: 'Login',
+      password: 'Password',
+      confirm: 'Confirm',
+      firstName: 'First name',
+      lastName: 'Last name',
+      nickname: 'Nickname',
+      pilotNumber: 'Pilot number',
+      country: 'Country',
+      discord: 'Discord',
+      steam: 'Steam',
+      avatarColor: 'Avatar color',
+      name: 'Name',
+      title: 'Title',
+      text: 'Text',
+      track: 'Track',
+      description: 'Description',
+      serverLink: 'Server link',
+      class: 'Class',
+      registrationStart: 'Registration start',
+      registrationEnd: 'Registration end',
+      maxPilots: 'Max pilots',
+      game: 'Game',
+      modsUrls: 'Mods URLs, one per line',
+      allowedCars: 'Allowed cars, one per line',
+      officialRace: 'Official race',
+      proofLink: 'Proof link',
+      rejectionReason: 'Rejection reason',
+      linkUrl: 'Link URL',
+      race: 'Race',
+      date: 'Date',
+      registrations: 'Registrations',
+      participants: 'Participants',
+      server: 'Server',
+      mods: 'Mods',
+      target: 'Driver',
+      issuer: 'Issuer',
+      type: 'Type',
+      value: 'Value',
+      applied: 'Applied',
+      games: 'Games',
+      joinedAt: 'Joined'
+    },
+    games: {
+      ACC: 'ACC',
+      AC: 'AC',
+      iRacing: 'iRacing'
+    },
+    raceFilters: {
+      allGames: 'All games',
+      myGamesOnly: 'My games only'
+    },
+    roles: {
+      admin: 'Admin',
+      moder: 'Moderator',
+      marshall: 'Marshall',
+      smm: 'SMM',
+      pilot: 'Pilot'
+    },
+    statuses: {
+      active: 'Active',
+      banned: 'Banned',
+      timeout: 'Timeout',
+      unapproved: 'Pending',
+      pending: 'Pending',
+      approved: 'Approved',
+      rejected: 'Rejected',
+      appealed: 'Appealed',
+      canceled: 'Canceled',
+      registration_open: 'Registration open',
+      ongoing: 'Ongoing',
+      finished: 'Finished'
+    },
+    auth: {
+      login: 'Login or email',
+      password: 'Password',
+      submit: 'Sign in',
+      register: 'Registration',
+      pending: 'Waiting for approval',
+      steamRequired: 'Steam authentication is required for registration.',
+      steamConnected: 'Connected: {id}',
+      connectSteam: 'Connect Steam',
+      reconnectSteam: 'Reconnect Steam',
+      steamLogin: 'Sign in with Steam',
+      createAccount: 'Create account',
+      steamAuthRequired: 'Steam authentication is required'
     },
     main: {
       pilots: 'Pilots',
@@ -83,13 +416,125 @@ export const messages = {
       setups: 'Setups',
       contacts: 'Contacts'
     },
-    auth: {
-      login: 'Login or email',
-      password: 'Password',
-      submit: 'Sign in',
-      register: 'Registration',
-      pending: 'Waiting for approval'
+    profile: {
+      waitingApproval: 'Waiting for approval',
+      pendingChanges: 'Profile changes are waiting for moderation',
+      changesAfterModeration: 'Changes will appear after moderation.'
+    },
+    country: {
+      placeholder: 'Select country',
+      searchPlaceholder: 'Search country',
+      clearLabel: 'No country',
+      emptyLabel: 'Nothing found'
+    },
+    adminUsers: {
+      deleteConfirm: 'Delete account {login}? This action cannot be undone.',
+      timeoutTitle: 'Issue timeout',
+      timeoutUser: 'User: {login}',
+      timeoutUntil: 'Timeout end',
+      timeoutHint: 'Until this time the user can only view public pages.',
+      timeoutInvalid: 'Choose a future timeout date and time.',
+      timeoutUntilShort: 'Until {date}',
+      issueTimeout: 'Issue timeout',
+      endTimeout: 'End timeout',
+      empty: 'No users found'
+    },
+    appeals: {
+      proof: 'Proof',
+      empty: 'No appeals'
+    },
+    banners: {
+      subtitle: 'Upload banners by placement',
+      noImage: 'No image',
+      positions: {
+        top: {
+          title: 'Top banner',
+          description: 'Horizontal ad above the main menu',
+          badge: 'TOP'
+        },
+        left: {
+          title: 'Left banner',
+          description: 'Vertical ad on the left side',
+          badge: 'LEFT'
+        },
+        right: {
+          title: 'Right banner',
+          description: 'Vertical ad on the right side',
+          badge: 'RIGHT'
+        },
+        bottom: {
+          title: 'Bottom banner',
+          description: 'Horizontal ad below the main content',
+          badge: 'BOTTOM'
+        }
+      }
+    },
+    raceAdmin: {
+      title: 'Race Management',
+      loaded: '{count} races loaded',
+      allStatuses: 'All statuses',
+      searchPlaceholder: 'Name, track, class or game',
+      noRacesFound: 'No races found',
+      confirmClose: 'Close race "{name}"?',
+      confirmDelete: 'Delete race "{name}" permanently?',
+      exportRegistrations: 'Export registrations'
+    },
+    calendar: {
+      previousMonth: 'Previous month',
+      nextMonth: 'Next month',
+      noRacesTitle: 'No races this day',
+      noRacesDescription: 'Pick another day or create a new race.',
+      raceWordOne: 'race',
+      raceWordFew: 'races',
+      raceWordMany: 'races'
+    },
+    raceDetails: {
+      closeRace: 'Close race',
+      alreadyRegistered: 'Already registered',
+      participants: 'Participants',
+      registeredPilots: '{count} registered pilots',
+      noRegisteredPilots: 'No registered pilots yet',
+      myPenalties: 'My penalties',
+      penalties: 'Race penalties',
+      penaltiesCount: '{count} penalties',
+      noPenalties: 'No penalties yet',
+      penalty: 'Penalty',
+      yourPenalty: 'Your penalty',
+      timePenalty: 'Time penalty',
+      srPenalty: 'SR penalty',
+      timePenaltyEffect: 'Time added: {value}',
+      srPenaltyEffect: 'SR deducted: {value}',
+      penaltyDetails: 'Penalty details',
+      penaltyEffect: 'Effect',
+      appeal: 'Appeal',
+      confirmClose: 'Close this race? Registration will be unavailable.',
+      confirmDelete: 'Delete this race permanently?'
+    },
+    raceEdit: {
+      createTitle: 'Create race',
+      editTitle: 'Edit race'
+    },
+    moderation: {
+      pendingProfileChanges: 'Pending profile changes: {changes}'
+    },
+    news: {
+      title: 'News',
+      manageTitle: 'News Management',
+      subtitle: 'News appears on the main page below the top banner',
+      addTitle: 'Add news',
+      image: 'News image',
+      published: 'Published',
+      hidden: 'Hidden',
+      publish: 'Publish',
+      hide: 'Hide',
+      empty: 'No news yet',
+      confirmDelete: 'Delete news "{title}"?',
+      openFullscreen: 'Open news fullscreen',
+      closeFullscreen: 'Close news',
+      indicators: 'News selector',
+      goTo: 'News {number}',
+      scrollLeft: 'Scroll news left',
+      scrollRight: 'Scroll news right'
     }
   }
 }
-

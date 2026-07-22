@@ -3,6 +3,7 @@ from enum import StrEnum
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -11,12 +12,20 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Enum as SQLEnum
 
 from app.db import Base
+
+
+DEFAULT_SR = 5.0
+MIN_SR = 0.0
+MAX_SR = 30.0
+RACE_GAMES = ("ACC", "AC", "iRacing")
+DEFAULT_USER_GAMES = list(RACE_GAMES)
 
 
 def utc_now() -> datetime:
@@ -81,6 +90,7 @@ class BannerPosition(StrEnum):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (CheckConstraint(f"sr >= {MIN_SR} AND sr <= {MAX_SR}", name="ck_users_sr_range"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     login: Mapped[str] = mapped_column(String(50), unique=True, index=True)
@@ -91,7 +101,7 @@ class User(Base):
     nickname: Mapped[str] = mapped_column(String(80), index=True)
     pilot_number: Mapped[int] = mapped_column(Integer, unique=True, index=True)
     country: Mapped[str | None] = mapped_column(String(50), index=True)
-    sr: Mapped[float] = mapped_column(Numeric(3, 1), default=5.0)
+    sr: Mapped[float] = mapped_column(Numeric(3, 1), default=DEFAULT_SR, server_default=str(DEFAULT_SR))
     discord: Mapped[str | None] = mapped_column(String(100))
     steam_id: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     role: Mapped[Role] = enum_column(Role)
@@ -102,6 +112,7 @@ class User(Base):
     timeout_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     timeout_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     avatar_color: Mapped[str] = mapped_column(String(7), default="#2563eb")
+    games: Mapped[list[str]] = mapped_column(JSONB, default=lambda: list(DEFAULT_USER_GAMES), server_default=text("""'["ACC", "AC", "iRacing"]'::jsonb"""))
     pending_profile_changes: Mapped[dict | None] = mapped_column(JSONB)
 
     created_races: Mapped[list["Race"]] = relationship(back_populates="creator", foreign_keys="Race.creator_id")
@@ -124,7 +135,7 @@ class Race(Base):
     status: Mapped[RaceStatus] = enum_column(RaceStatus)
     is_passed: Mapped[bool] = mapped_column(Boolean, default=False)
     results: Mapped[dict | list | None] = mapped_column(JSONB)
-    game: Mapped[str] = mapped_column(String(50), default="Assetto Corsa")
+    game: Mapped[str] = mapped_column(String(20), default="ACC", server_default="ACC")
     creator_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     is_official: Mapped[bool] = mapped_column(Boolean, default=False)
     registered_pilots: Mapped[list[dict]] = mapped_column(JSONB, default=list)
@@ -132,8 +143,23 @@ class Race(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
     creator: Mapped[User] = relationship(back_populates="created_races", foreign_keys=[creator_id])
+    registrations: Mapped[list["RaceRegistration"]] = relationship(back_populates="race", cascade="all, delete-orphan")
     penalties: Mapped[list["Penalty"]] = relationship(back_populates="race", cascade="all, delete-orphan")
     appeals: Mapped[list["Appeal"]] = relationship(back_populates="race", cascade="all, delete-orphan")
+
+
+class RaceRegistration(Base):
+    __tablename__ = "race_registrations"
+    __table_args__ = (UniqueConstraint("race_id", "user_id", name="uq_race_registration_race_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    race_id: Mapped[int] = mapped_column(ForeignKey("races.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    car_model: Mapped[str] = mapped_column(String(80))
+    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    race: Mapped[Race] = relationship(back_populates="registrations")
+    user: Mapped[User] = relationship()
 
 
 class Penalty(Base):
@@ -149,6 +175,7 @@ class Penalty(Base):
     status: Mapped[PenaltyStatus] = enum_column(PenaltyStatus)
     description: Mapped[str] = mapped_column(Text)
     is_applied: Mapped[bool] = mapped_column(Boolean, default=False)
+    sr_applied_value: Mapped[float] = mapped_column(Numeric, default=0, server_default="0")
 
     race: Mapped[Race] = relationship(back_populates="penalties")
     issuer: Mapped[User] = relationship(foreign_keys=[issuer_id])
@@ -205,10 +232,30 @@ class Banner(Base):
     editor: Mapped[User | None] = relationship()
 
 
+class NewsItem(Base):
+    __tablename__ = "news_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(120))
+    body: Mapped[str] = mapped_column(Text)
+    image_url: Mapped[str] = mapped_column(String(255))
+    is_published: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+
+    author: Mapped[User | None] = relationship()
+
+
 Index("ix_users_role_status", User.role, User.status)
+Index("ix_users_games_gin", User.games, postgresql_using="gin")
 Index("ix_races_status_dates", Race.status, Race.datetime_start, Race.datetime_end)
+Index("ix_races_game_status_dates", Race.game, Race.status, Race.datetime_start)
 Index("ix_races_registered_pilots_gin", Race.registered_pilots, postgresql_using="gin")
 Index("ix_races_mods_pack_gin", Race.mods_pack, postgresql_using="gin")
+Index("ix_race_registrations_race_registered_at", RaceRegistration.race_id, RaceRegistration.registered_at)
+Index("ix_race_registrations_user_registered_at", RaceRegistration.user_id, RaceRegistration.registered_at)
 Index("ix_penalties_race_target_status", Penalty.race_id, Penalty.target_id, Penalty.status)
 Index("ix_appeals_status_created", Appeal.status, Appeal.created_at)
 Index("uq_banners_position", Banner.position, unique=True)
+Index("ix_news_items_published_created", NewsItem.is_published, NewsItem.created_at)

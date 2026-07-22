@@ -47,6 +47,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - backend_uploads:/app/uploads
     expose:
       - "8000"
 
@@ -60,8 +62,11 @@ services:
     env_file: .env
     depends_on:
       - backend
+    volumes:
+      - backend_uploads:/app/uploads:ro
     ports:
       - "80:80"
 
 volumes:
   postgres_data:
+  backend_uploads:
