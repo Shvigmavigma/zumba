@@ -11,7 +11,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.config import get_settings
 from app.db import SessionLocal, db_initialization_lock, init_db
 from app.rate_limit import limiter
-from app.routers import appeals, auth, banners, dashboard, news, penalties, races, setups, users
+from app.routers import appeals, auth, banners, dashboard, news, penalties, races, setups, teams, users
 from app.seed import seed_defaults
 
 
@@ -64,4 +64,5 @@ app.include_router(appeals.router, prefix="/api/appeals", tags=["appeals"])
 app.include_router(banners.router, prefix="/api/banners", tags=["banners"])
 app.include_router(news.router, prefix="/api/news", tags=["news"])
 app.include_router(setups.router, prefix="/api/setups", tags=["setups"])
+app.include_router(teams.router, prefix="/api/teams", tags=["teams"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])

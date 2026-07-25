@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import as_utc, clear_expired_timeout, require_admin, require_moder_plus, require_pilot_plus
-from app.models import Appeal, Banner, Penalty, Race, RaceRegistration, Role, Setup, User, UserStatus
+from app.models import Appeal, Banner, Penalty, Race, RaceRegistration, Role, Setup, Team, TeamApplication, TeamCreationRequest, User, UserStatus
 from app.rate_limit import limiter
 from app.schemas import RoleUpdate, TimeoutRequest, UserPrivate, UserPublic, UserUpdate
 
@@ -160,6 +160,19 @@ async def delete_user_account(
         if (admin_count or 0) <= 1:
             raise HTTPException(status_code=400, detail="The last admin account cannot be deleted")
 
+    owned_team_ids = list((await session.scalars(select(Team.id).where(Team.owner_id == user.id))).all())
+    for team_id in owned_team_ids:
+        next_owner = await session.scalar(
+            select(User)
+            .where(User.team_id == team_id, User.id != user.id)
+            .order_by(User.created_at.asc(), User.id.asc())
+            .limit(1)
+        )
+        if next_owner is None:
+            await session.execute(delete(Team).where(Team.id == team_id))
+        else:
+            await session.execute(update(Team).where(Team.id == team_id).values(owner_id=next_owner.id))
+
     target_penalty_ids = list((await session.scalars(select(Penalty.id).where(Penalty.target_id == user.id))).all())
     if target_penalty_ids:
         await session.execute(delete(Appeal).where(Appeal.penalty_id.in_(target_penalty_ids)))
@@ -169,6 +182,10 @@ async def delete_user_account(
     await session.execute(update(Appeal).where(Appeal.moderator_id == user.id).values(moderator_id=None))
     await session.execute(delete(RaceRegistration).where(RaceRegistration.user_id == user.id))
     await session.execute(delete(Setup).where(Setup.user_id == user.id))
+    await session.execute(delete(TeamApplication).where(TeamApplication.user_id == user.id))
+    await session.execute(update(TeamApplication).where(TeamApplication.resolved_by == user.id).values(resolved_by=None))
+    await session.execute(delete(TeamCreationRequest).where(TeamCreationRequest.requester_id == user.id))
+    await session.execute(update(TeamCreationRequest).where(TeamCreationRequest.resolved_by == user.id).values(resolved_by=None))
     await session.execute(update(Banner).where(Banner.updated_by == user.id).values(updated_by=None))
     await session.execute(update(Race).where(Race.creator_id == user.id).values(creator_id=admin.id))
     await session.execute(update(Penalty).where(Penalty.issuer_id == user.id).values(issuer_id=admin.id))

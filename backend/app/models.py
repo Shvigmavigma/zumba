@@ -81,6 +81,12 @@ class AppealStatus(StrEnum):
     rejected = "rejected"
 
 
+class TeamApplicationStatus(StrEnum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
 class BannerPosition(StrEnum):
     top = "top"
     bottom = "bottom"
@@ -113,9 +119,71 @@ class User(Base):
     timeout_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     avatar_color: Mapped[str] = mapped_column(String(7), default="#2563eb")
     games: Mapped[list[str]] = mapped_column(JSONB, default=lambda: list(DEFAULT_USER_GAMES), server_default=text("""'["ACC", "AC", "iRacing"]'::jsonb"""))
+    team_id: Mapped[int | None] = mapped_column(
+        ForeignKey("teams.id", ondelete="SET NULL", use_alter=True, name="fk_users_team_id"),
+        index=True,
+    )
     pending_profile_changes: Mapped[dict | None] = mapped_column(JSONB)
 
     created_races: Mapped[list["Race"]] = relationship(back_populates="creator", foreign_keys="Race.creator_id")
+    team: Mapped["Team | None"] = relationship(back_populates="members", foreign_keys=[team_id])
+    owned_teams: Mapped[list["Team"]] = relationship(back_populates="owner", foreign_keys="Team.owner_id")
+
+
+class Team(Base):
+    __tablename__ = "teams"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    avatar_color: Mapped[str] = mapped_column(String(7), default="#dc2626")
+    owner_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL", use_alter=True, name="fk_teams_owner_id"),
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    owner: Mapped[User | None] = relationship(back_populates="owned_teams", foreign_keys=[owner_id])
+    members: Mapped[list[User]] = relationship(back_populates="team", foreign_keys="User.team_id")
+    applications: Mapped[list["TeamApplication"]] = relationship(back_populates="team", cascade="all, delete-orphan")
+
+
+class TeamCreationRequest(Base):
+    __tablename__ = "team_creation_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    requester_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    description: Mapped[str] = mapped_column(Text, default="")
+    avatar_color: Mapped[str] = mapped_column(String(7), default="#dc2626")
+    status: Mapped[TeamApplicationStatus] = enum_column(TeamApplicationStatus)
+    team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id", ondelete="SET NULL"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+
+    requester: Mapped[User] = relationship(foreign_keys=[requester_id])
+    resolver: Mapped[User | None] = relationship(foreign_keys=[resolved_by])
+    team: Mapped[Team | None] = relationship()
+
+
+class TeamApplication(Base):
+    __tablename__ = "team_applications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    status: Mapped[TeamApplicationStatus] = enum_column(TeamApplicationStatus)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+
+    team: Mapped[Team] = relationship(back_populates="applications")
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+    resolver: Mapped[User | None] = relationship(foreign_keys=[resolved_by])
 
 
 class Race(Base):
@@ -247,8 +315,41 @@ class NewsItem(Base):
     author: Mapped[User | None] = relationship()
 
 
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSONB, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
 Index("ix_users_role_status", User.role, User.status)
 Index("ix_users_games_gin", User.games, postgresql_using="gin")
+Index("ix_users_team_status", User.team_id, User.status)
+Index("ix_teams_owner_created", Team.owner_id, Team.created_at)
+Index("ix_team_creation_requests_status_created", TeamCreationRequest.status, TeamCreationRequest.created_at)
+Index("ix_team_creation_requests_requester_status", TeamCreationRequest.requester_id, TeamCreationRequest.status)
+Index(
+    "uq_team_creation_request_pending_user",
+    TeamCreationRequest.requester_id,
+    unique=True,
+    postgresql_where=text("status = 'pending'"),
+)
+Index(
+    "uq_team_creation_request_pending_name",
+    TeamCreationRequest.name,
+    unique=True,
+    postgresql_where=text("status = 'pending'"),
+)
+Index("ix_team_applications_team_status_created", TeamApplication.team_id, TeamApplication.status, TeamApplication.created_at)
+Index("ix_team_applications_user_status", TeamApplication.user_id, TeamApplication.status)
+Index(
+    "uq_team_application_pending_team_user",
+    TeamApplication.team_id,
+    TeamApplication.user_id,
+    unique=True,
+    postgresql_where=text("status = 'pending'"),
+)
 Index("ix_races_status_dates", Race.status, Race.datetime_start, Race.datetime_end)
 Index("ix_races_game_status_dates", Race.game, Race.status, Race.datetime_start)
 Index("ix_races_registered_pilots_gin", Race.registered_pilots, postgresql_using="gin")

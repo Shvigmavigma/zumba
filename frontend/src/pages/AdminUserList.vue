@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Ban, Timer, TimerOff, Trash2, Undo2, X } from 'lucide-vue-next'
+import { Ban, Save, Timer, TimerOff, Trash2, Undo2, X } from 'lucide-vue-next'
 import { api } from '../api'
 import UserAvatar from '../components/UserAvatar.vue'
 import { roleLabel, statusLabel } from '../i18nLabels'
@@ -15,6 +15,9 @@ const busyUsers = ref({})
 const timeoutDialogUser = ref(null)
 const timeoutUntil = ref('')
 const timeoutSaving = ref(false)
+const teamLimit = ref(5)
+const teamLimitSaving = ref(false)
+const settingsSaved = ref(false)
 
 function datetimeLocalValue(date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
@@ -39,9 +42,32 @@ function formatDateTime(value) {
 
 async function load() {
   try {
-    users.value = await api('/users/admin')
+    const [loadedUsers, teamConfig] = await Promise.all([
+      api('/users/admin'),
+      api('/teams/config')
+    ])
+    users.value = loadedUsers
+    teamLimit.value = teamConfig.member_limit
   } catch (err) {
     error.value = err.message
+  }
+}
+
+async function saveTeamLimit() {
+  teamLimitSaving.value = true
+  settingsSaved.value = false
+  error.value = ''
+  try {
+    const config = await api('/teams/config', {
+      method: 'PATCH',
+      body: { member_limit: Number(teamLimit.value) }
+    })
+    teamLimit.value = config.member_limit
+    settingsSaved.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    teamLimitSaving.value = false
   }
 }
 
@@ -156,6 +182,22 @@ onMounted(load)
       <h1>{{ t('nav.admin') }}</h1>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
+
+    <form class="admin-settings-card card" @submit.prevent="saveTeamLimit">
+      <div>
+        <h2>{{ t('adminUsers.teamLimitTitle') }}</h2>
+        <p class="muted">{{ t('adminUsers.teamLimitHint') }}</p>
+      </div>
+      <label class="field admin-team-limit-field">
+        <span>{{ t('adminUsers.teamLimitField') }}</span>
+        <input v-model.number="teamLimit" type="number" min="1" max="100" required />
+      </label>
+      <button class="button primary" type="submit" :disabled="teamLimitSaving">
+        <Save :size="16" />
+        {{ t('common.save') }}
+      </button>
+      <span v-if="settingsSaved" class="pill">{{ t('common.saved') }}</span>
+    </form>
 
     <div class="admin-users-card card">
       <table class="admin-users-table">

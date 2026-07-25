@@ -1,7 +1,7 @@
 <script setup>
 import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CalendarDays, Flag, Home, Languages, ListChecks, LogIn, LogOut, Moon, Newspaper, Shield, Sun, User, Users } from 'lucide-vue-next'
+import { CalendarDays, Flag, Home, Languages, ListChecks, LogIn, LogOut, Moon, Newspaper, Shield, Sun, Trophy, User, Users } from 'lucide-vue-next'
 import { statusLabel } from './i18nLabels'
 import { clearSession, state } from './store'
 
@@ -44,6 +44,7 @@ function setLocale(value) {
       <nav class="nav-links" :aria-label="t('nav.main')">
         <RouterLink to="/"><Home :size="18" />{{ t('nav.main') }}</RouterLink>
         <RouterLink to="/pilots"><Users :size="18" />{{ t('nav.pilots') }}</RouterLink>
+        <RouterLink to="/teams"><Trophy :size="18" />{{ t('nav.teams') }}</RouterLink>
         <RouterLink to="/calendar"><CalendarDays :size="18" />{{ t('nav.calendar') }}</RouterLink>
         <RouterLink v-if="canManageRaces" to="/races/manage"><ListChecks :size="18" />{{ t('nav.races') }}</RouterLink>
         <RouterLink v-if="isStaff" to="/appeals"><Shield :size="18" />{{ t('nav.appeals') }}</RouterLink>

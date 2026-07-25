@@ -1,0 +1,571 @@
+<script setup>
+import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { Bell, Check, Crown, LogOut, Plus, Save, Search, Send, Trash2, UserCheck, UserMinus, Users, X, XCircle } from 'lucide-vue-next'
+import { api } from '../api'
+import TeamAvatar from '../components/TeamAvatar.vue'
+import UserAvatar from '../components/UserAvatar.vue'
+import { state } from '../store'
+
+const { t } = useI18n()
+
+const teams = ref([])
+const selectedTeam = ref(null)
+const config = ref({ member_limit: 5 })
+const search = ref('')
+const error = ref('')
+const saved = ref(false)
+const loading = ref(false)
+const busyTeams = ref({})
+const createOpen = ref(false)
+const createSaving = ref(false)
+const editSaving = ref(false)
+const transferSaving = ref(false)
+const deleteSaving = ref(false)
+const busyApplications = ref({})
+const busyMembers = ref({})
+const createForm = ref({
+  name: '',
+  description: '',
+  avatar_color: '#dc2626'
+})
+const editForm = ref({
+  name: '',
+  description: '',
+  avatar_color: '#dc2626'
+})
+
+const canCreateTeam = computed(() => state.user?.status === 'active' && !state.user?.team_id)
+const selectedIsOwner = computed(() => Boolean(selectedTeam.value?.is_owner))
+const transferOwnerId = ref('')
+const transferCandidates = computed(() => selectedTeam.value?.members?.filter((member) => member.id !== selectedTeam.value.owner_id) || [])
+
+function updateStoredUser(patch) {
+  if (!state.user) return
+  state.user = { ...state.user, ...patch }
+  localStorage.setItem('user', JSON.stringify(state.user))
+}
+
+function setBusy(teamId, value) {
+  busyTeams.value = { ...busyTeams.value, [teamId]: value }
+}
+
+function setApplicationBusy(applicationId, value) {
+  busyApplications.value = { ...busyApplications.value, [applicationId]: value }
+}
+
+function setMemberBusy(userId, value) {
+  busyMembers.value = { ...busyMembers.value, [userId]: value }
+}
+
+function resetCreateForm() {
+  createForm.value = {
+    name: '',
+    description: '',
+    avatar_color: '#dc2626'
+  }
+}
+
+function fillEditForm(team) {
+  editForm.value = {
+    name: team?.name || '',
+    description: team?.description || '',
+    avatar_color: team?.avatar_color || '#dc2626'
+  }
+  transferOwnerId.value = team?.members?.find((member) => member.id !== team.owner_id)?.id || ''
+}
+
+function memberTitle(member) {
+  return member.nickname || member.login
+}
+
+function ownerLabel(team) {
+  return team.owner_nickname || team.owner_login || t('teams.noOwner')
+}
+
+function gamesLabel(games) {
+  return games?.length ? games.map((game) => t(`games.${game}`)).join(', ') : t('common.none')
+}
+
+function requestStatusLabel(status) {
+  if (!status) return ''
+  return t(`teams.applicationStatuses.${status}`)
+}
+
+function pendingApplicationsTitle(team) {
+  return t('teams.pendingApplicationsNotice', { count: team.pending_application_count || 0 })
+}
+
+async function syncCurrentUser() {
+  if (!state.user) return
+  try {
+    const user = await api('/auth/me')
+    updateStoredUser(user)
+  } catch (err) {
+    if (state.user) throw err
+  }
+}
+
+async function load() {
+  loading.value = true
+  error.value = ''
+  try {
+    await syncCurrentUser()
+    const suffix = search.value.trim() ? `?search=${encodeURIComponent(search.value.trim())}` : ''
+    const [loadedTeams, loadedConfig] = await Promise.all([
+      api(`/teams${suffix}`),
+      api('/teams/config')
+    ])
+    teams.value = loadedTeams
+    config.value = loadedConfig
+
+    const selectedId = selectedTeam.value?.id
+    if (selectedId && loadedTeams.some((team) => team.id === selectedId)) {
+      selectedTeam.value = await api(`/teams/${selectedId}`)
+      fillEditForm(selectedTeam.value)
+    } else if (selectedId) {
+      selectedTeam.value = null
+    }
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    loading.value = false
+  }
+}
+
+async function openTeam(team) {
+  setBusy(team.id, true)
+  error.value = ''
+  try {
+    selectedTeam.value = await api(`/teams/${team.id}`)
+    fillEditForm(selectedTeam.value)
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    setBusy(team.id, false)
+  }
+}
+
+async function createTeam() {
+  createSaving.value = true
+  error.value = ''
+  saved.value = false
+  try {
+    const created = await api('/teams', {
+      method: 'POST',
+      body: {
+        name: createForm.value.name.trim(),
+        description: createForm.value.description.trim(),
+        avatar_color: createForm.value.avatar_color
+      }
+    })
+    updateStoredUser({ team_id: created.id })
+    selectedTeam.value = created
+    fillEditForm(created)
+    createOpen.value = false
+    resetCreateForm()
+    saved.value = true
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    createSaving.value = false
+  }
+}
+
+async function saveTeam() {
+  if (!selectedTeam.value) return
+  editSaving.value = true
+  error.value = ''
+  saved.value = false
+  try {
+    selectedTeam.value = await api(`/teams/${selectedTeam.value.id}`, {
+      method: 'PATCH',
+      body: {
+        name: editForm.value.name.trim(),
+        description: editForm.value.description.trim(),
+        avatar_color: editForm.value.avatar_color
+      }
+    })
+    fillEditForm(selectedTeam.value)
+    saved.value = true
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    editSaving.value = false
+  }
+}
+
+async function requestJoin(team) {
+  setBusy(team.id, true)
+  error.value = ''
+  saved.value = false
+  try {
+    selectedTeam.value = await api(`/teams/${team.id}/join`, { method: 'POST' })
+    fillEditForm(selectedTeam.value)
+    saved.value = true
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    setBusy(team.id, false)
+  }
+}
+
+async function leaveTeam() {
+  if (!selectedTeam.value || !window.confirm(t('teams.leaveConfirm', { name: selectedTeam.value.name }))) return
+  const teamId = selectedTeam.value.id
+  setBusy(teamId, true)
+  error.value = ''
+  saved.value = false
+  try {
+    await api(`/teams/${teamId}/leave`, { method: 'DELETE' })
+    if (state.user?.team_id === teamId) {
+      updateStoredUser({ team_id: null })
+    }
+    selectedTeam.value = null
+    saved.value = true
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    setBusy(teamId, false)
+  }
+}
+
+async function transferOwnership() {
+  if (!selectedTeam.value || !transferOwnerId.value) return
+  const teamId = selectedTeam.value.id
+  transferSaving.value = true
+  error.value = ''
+  saved.value = false
+  try {
+    selectedTeam.value = await api(`/teams/${teamId}/owner`, {
+      method: 'PATCH',
+      body: { new_owner_id: Number(transferOwnerId.value) }
+    })
+    fillEditForm(selectedTeam.value)
+    saved.value = true
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    transferSaving.value = false
+  }
+}
+
+async function deleteTeam() {
+  if (!selectedTeam.value || !window.confirm(t('teams.deleteConfirm', { name: selectedTeam.value.name }))) return
+  const teamId = selectedTeam.value.id
+  deleteSaving.value = true
+  setBusy(teamId, true)
+  error.value = ''
+  saved.value = false
+  try {
+    await api(`/teams/${teamId}`, { method: 'DELETE' })
+    if (state.user?.team_id === teamId) {
+      updateStoredUser({ team_id: null })
+    }
+    selectedTeam.value = null
+    saved.value = true
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    deleteSaving.value = false
+    setBusy(teamId, false)
+  }
+}
+
+async function approveApplication(application) {
+  if (!selectedTeam.value) return
+  setApplicationBusy(application.id, true)
+  error.value = ''
+  saved.value = false
+  try {
+    selectedTeam.value = await api(`/teams/${selectedTeam.value.id}/applications/${application.id}/approve`, { method: 'POST' })
+    fillEditForm(selectedTeam.value)
+    saved.value = true
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    setApplicationBusy(application.id, false)
+  }
+}
+
+async function rejectApplication(application) {
+  if (!selectedTeam.value) return
+  setApplicationBusy(application.id, true)
+  error.value = ''
+  saved.value = false
+  try {
+    selectedTeam.value = await api(`/teams/${selectedTeam.value.id}/applications/${application.id}/reject`, { method: 'POST' })
+    fillEditForm(selectedTeam.value)
+    saved.value = true
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    setApplicationBusy(application.id, false)
+  }
+}
+
+async function removeMember(member) {
+  if (!selectedTeam.value || member.id === selectedTeam.value.owner_id) return
+  if (!window.confirm(t('teams.removeMemberConfirm', { name: memberTitle(member) }))) return
+  setMemberBusy(member.id, true)
+  error.value = ''
+  saved.value = false
+  try {
+    selectedTeam.value = await api(`/teams/${selectedTeam.value.id}/members/${member.id}`, { method: 'DELETE' })
+    fillEditForm(selectedTeam.value)
+    saved.value = true
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    setMemberBusy(member.id, false)
+  }
+}
+
+onMounted(load)
+</script>
+
+<template>
+  <section class="section teams-page">
+    <div class="section-header teams-header">
+      <div>
+        <h1>{{ t('teams.title') }}</h1>
+        <p class="muted">{{ t('teams.subtitle', { limit: config.member_limit }) }}</p>
+      </div>
+      <button v-if="canCreateTeam" class="button primary" type="button" @click="createOpen = !createOpen">
+        <X v-if="createOpen" :size="16" />
+        <Plus v-else :size="16" />
+        {{ createOpen ? t('common.close') : t('teams.createTeam') }}
+      </button>
+    </div>
+
+    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="saved" class="pill">{{ t('common.saved') }}</p>
+
+    <div class="teams-toolbar">
+      <label class="field teams-search-field">
+        <span>{{ t('common.search') }}</span>
+        <div class="input-with-icon">
+          <Search :size="16" />
+          <input v-model="search" type="search" :placeholder="t('teams.searchPlaceholder')" @keyup.enter="load" />
+        </div>
+      </label>
+      <button class="button" type="button" :disabled="loading" @click="load">
+        <Search :size="16" />
+        {{ t('common.apply') }}
+      </button>
+    </div>
+
+    <form v-if="createOpen && canCreateTeam" class="team-create-panel card" @submit.prevent="createTeam">
+      <div class="team-form-preview">
+        <TeamAvatar :color="createForm.avatar_color" :label="createForm.name || t('teams.newTeam')" />
+        <div>
+          <h2>{{ t('teams.createTitle') }}</h2>
+          <p class="muted">{{ t('teams.createHint') }}</p>
+        </div>
+      </div>
+      <div class="team-form-grid">
+        <label class="field">
+          <span>{{ t('fields.name') }}</span>
+          <input v-model="createForm.name" type="text" maxlength="80" required />
+        </label>
+        <label class="field">
+          <span>{{ t('fields.avatarColor') }}</span>
+          <input v-model="createForm.avatar_color" type="color" required />
+        </label>
+        <label class="field team-form-description">
+          <span>{{ t('fields.description') }}</span>
+          <textarea v-model="createForm.description" maxlength="1000" :placeholder="t('teams.descriptionPlaceholder')" />
+        </label>
+      </div>
+      <button class="button primary" type="submit" :disabled="createSaving">
+        <Plus :size="16" />
+        {{ t('common.create') }}
+      </button>
+    </form>
+
+    <div class="teams-layout">
+      <div class="teams-list card">
+        <div v-for="team in teams" :key="team.id" class="team-list-item" :class="{ 'is-selected': selectedTeam?.id === team.id, 'is-full': team.member_count >= team.member_limit }">
+          <button class="team-list-open" type="button" :disabled="busyTeams[team.id]" @click="openTeam(team)">
+            <TeamAvatar mini :color="team.avatar_color" :label="team.name" />
+            <span class="team-list-main">
+              <strong>{{ team.name }}</strong>
+              <span>{{ t('teams.ownerLine', { owner: ownerLabel(team) }) }}</span>
+            </span>
+            <span class="team-list-side">
+              <span v-if="team.pending_application_count > 0" class="team-notification-badge" :title="pendingApplicationsTitle(team)" :aria-label="pendingApplicationsTitle(team)">
+                <Bell :size="14" />
+                {{ team.pending_application_count }}
+              </span>
+              <span class="team-capacity" :class="{ 'is-full': team.member_count >= team.member_limit }">
+                <Users :size="15" />
+                {{ team.member_count }}/{{ team.member_limit }}
+              </span>
+            </span>
+          </button>
+        </div>
+        <div v-if="!teams.length" class="empty-row">{{ t('teams.empty') }}</div>
+      </div>
+
+      <article v-if="selectedTeam" class="team-detail-card card">
+        <div class="team-detail-hero">
+          <TeamAvatar :color="selectedTeam.avatar_color" :label="selectedTeam.name" />
+          <div class="team-detail-main">
+            <div class="team-detail-title">
+              <h2>{{ selectedTeam.name }}</h2>
+              <span class="status-badge">{{ selectedTeam.member_count }}/{{ selectedTeam.member_limit }}</span>
+            </div>
+            <p>{{ selectedTeam.description || t('teams.noDescription') }}</p>
+            <div class="team-detail-meta">
+              <span><Crown :size="15" />{{ ownerLabel(selectedTeam) }}</span>
+              <span><Users :size="15" />{{ t('teams.membersCount', { count: selectedTeam.member_count, limit: selectedTeam.member_limit }) }}</span>
+            </div>
+          </div>
+          <div class="team-detail-actions">
+            <button v-if="selectedTeam.can_join" class="button primary" type="button" :disabled="busyTeams[selectedTeam.id]" @click="requestJoin(selectedTeam)">
+              <Send :size="16" />
+              {{ t('teams.requestJoin') }}
+            </button>
+            <span v-else-if="selectedTeam.my_application_status && !selectedTeam.is_member" class="team-request-state" :class="`application-${selectedTeam.my_application_status}`">
+              {{ requestStatusLabel(selectedTeam.my_application_status) }}
+            </span>
+            <button v-if="selectedTeam.is_member && !selectedTeam.is_owner" class="button danger" type="button" :disabled="busyTeams[selectedTeam.id]" @click="leaveTeam">
+              <LogOut :size="16" />
+              {{ t('teams.leave') }}
+            </button>
+          </div>
+        </div>
+
+        <form v-if="selectedIsOwner" class="team-edit-panel" @submit.prevent="saveTeam">
+          <div class="section-header">
+            <h2>{{ t('teams.editTitle') }}</h2>
+            <button class="button primary" type="submit" :disabled="editSaving">
+              <Save :size="16" />
+              {{ t('common.save') }}
+            </button>
+          </div>
+          <div class="team-form-grid">
+            <label class="field">
+              <span>{{ t('fields.name') }}</span>
+              <input v-model="editForm.name" type="text" maxlength="80" required />
+            </label>
+            <label class="field">
+              <span>{{ t('fields.avatarColor') }}</span>
+              <input v-model="editForm.avatar_color" type="color" required />
+            </label>
+            <label class="field team-form-description">
+              <span>{{ t('fields.description') }}</span>
+              <textarea v-model="editForm.description" maxlength="1000" />
+            </label>
+          </div>
+        </form>
+
+        <section v-if="selectedIsOwner" class="team-owner-panel">
+          <div>
+            <h2>{{ t('teams.ownerToolsTitle') }}</h2>
+            <p class="muted">{{ t('teams.ownerLeaveHint') }}</p>
+          </div>
+          <form class="team-owner-tools" @submit.prevent="transferOwnership">
+            <label class="field">
+              <span>{{ t('teams.newOwner') }}</span>
+              <select v-model="transferOwnerId" :disabled="!transferCandidates.length">
+                <option value="">{{ t('teams.chooseMember') }}</option>
+                <option v-for="member in transferCandidates" :key="member.id" :value="member.id">
+                  {{ memberTitle(member) }} · #{{ member.pilot_number }}
+                </option>
+              </select>
+            </label>
+            <button class="button" type="submit" :disabled="transferSaving || !transferOwnerId">
+              <UserCheck :size="16" />
+              {{ t('teams.transferOwner') }}
+            </button>
+            <button class="button danger" type="button" :disabled="deleteSaving" @click="deleteTeam">
+              <Trash2 :size="16" />
+              {{ t('teams.deleteTeam') }}
+            </button>
+          </form>
+          <p v-if="!transferCandidates.length" class="muted team-owner-note">{{ t('teams.noTransferCandidates') }}</p>
+        </section>
+
+        <section v-if="selectedIsOwner" class="team-applications-section">
+          <div class="section-header">
+            <h2>{{ t('teams.applicationsTitle') }}</h2>
+            <span class="pill">{{ selectedTeam.applications.length }}</span>
+          </div>
+          <div class="team-application-list">
+            <div v-for="application in selectedTeam.applications" :key="application.id" class="team-application-row">
+              <UserAvatar mini :color="application.user.avatar_color" :label="application.user.login" />
+              <span class="team-application-main">
+                <strong>{{ memberTitle(application.user) }}</strong>
+                <span>{{ application.user.login }} · #{{ application.user.pilot_number }}</span>
+              </span>
+              <span class="team-member-stat">
+                <strong>{{ application.user.sr.toFixed(1) }}</strong>
+                <span>SR</span>
+              </span>
+              <div class="team-application-actions">
+                <button class="icon-button" type="button" :title="t('teams.approveApplication')" :disabled="busyApplications[application.id]" @click="approveApplication(application)">
+                  <Check :size="16" />
+                </button>
+                <button class="icon-button danger-icon" type="button" :title="t('teams.rejectApplication')" :disabled="busyApplications[application.id]" @click="rejectApplication(application)">
+                  <XCircle :size="16" />
+                </button>
+              </div>
+            </div>
+            <div v-if="!selectedTeam.applications.length" class="empty-row">{{ t('teams.noApplications') }}</div>
+          </div>
+        </section>
+
+        <section class="team-members-section">
+          <div class="section-header">
+            <h2>{{ t('fields.participants') }}</h2>
+          </div>
+          <div class="team-members-list">
+            <div v-for="member in selectedTeam.members" :key="member.id" class="team-member-row">
+              <UserAvatar mini :color="member.avatar_color" :label="member.login" />
+              <RouterLink class="team-member-main" :to="`/pilots/${member.id}`">
+                <strong>{{ memberTitle(member) }}</strong>
+                <span>{{ member.login }} · #{{ member.pilot_number }}</span>
+              </RouterLink>
+              <span class="team-member-stat">
+                <strong>{{ member.sr.toFixed(1) }}</strong>
+                <span>SR</span>
+              </span>
+              <span class="team-member-games">
+                <span v-if="member.id === selectedTeam.owner_id" class="team-owner-chip"><Crown :size="13" />{{ t('teams.owner') }}</span>
+                {{ gamesLabel(member.games) }}
+              </span>
+              <div class="team-member-actions">
+                <button
+                  v-if="selectedIsOwner && member.id !== selectedTeam.owner_id"
+                  class="icon-button danger-icon"
+                  type="button"
+                  :title="t('teams.removeMember')"
+                  :disabled="busyMembers[member.id]"
+                  @click="removeMember(member)"
+                >
+                  <UserMinus :size="16" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </article>
+
+      <div v-else class="team-detail-empty card">
+        <Users :size="34" />
+        <h2>{{ t('teams.pickTeam') }}</h2>
+        <p class="muted">{{ state.user ? t('teams.pickTeamHint') : t('teams.loginToJoin') }}</p>
+      </div>
+    </div>
+  </section>
+</template>

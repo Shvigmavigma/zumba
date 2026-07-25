@@ -46,9 +46,90 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS games JSONB"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS team_id INTEGER"))
         await conn.execute(text("""UPDATE users SET games = '["ACC", "AC", "iRacing"]'::jsonb WHERE games IS NULL OR jsonb_typeof(games) <> 'array'"""))
         await conn.execute(text("""ALTER TABLE users ALTER COLUMN games SET DEFAULT '["ACC", "AC", "iRacing"]'::jsonb"""))
         await conn.execute(text("ALTER TABLE users ALTER COLUMN games SET NOT NULL"))
+        await conn.execute(
+            text(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname = 'fk_users_team_id'
+                    ) THEN
+                        ALTER TABLE users
+                        ADD CONSTRAINT fk_users_team_id
+                        FOREIGN KEY (team_id) REFERENCES teams(id)
+                        ON DELETE SET NULL;
+                    END IF;
+                END $$;
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname = 'fk_teams_owner_id'
+                    ) THEN
+                        ALTER TABLE teams
+                        ADD CONSTRAINT fk_teams_owner_id
+                        FOREIGN KEY (owner_id) REFERENCES users(id)
+                        ON DELETE SET NULL;
+                    END IF;
+                END $$;
+                """
+            )
+        )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_team_id ON users (team_id)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_teams_owner_id ON teams (owner_id)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_team_creation_requests_status_created ON team_creation_requests (status, created_at)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_team_creation_requests_requester_status ON team_creation_requests (requester_id, status)"))
+        await conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_team_creation_request_pending_user
+                ON team_creation_requests (requester_id)
+                WHERE status = 'pending'
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_team_creation_request_pending_name
+                ON team_creation_requests (name)
+                WHERE status = 'pending'
+                """
+            )
+        )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_team_applications_team_status_created ON team_applications (team_id, status, created_at)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_team_applications_user_status ON team_applications (user_id, status)"))
+        await conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_team_application_pending_team_user
+                ON team_applications (team_id, user_id)
+                WHERE status = 'pending'
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                INSERT INTO app_settings (key, value, updated_at)
+                VALUES ('team_member_limit', '{"limit": 5}'::jsonb, NOW())
+                ON CONFLICT (key) DO NOTHING
+                """
+            )
+        )
         await conn.execute(text("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_sr_range"))
         await conn.execute(text("UPDATE users SET sr = LEAST(30.0, GREATEST(0.0, sr)) WHERE sr < 0.0 OR sr > 30.0"))
         await conn.execute(text("ALTER TABLE users ADD CONSTRAINT ck_users_sr_range CHECK (sr >= 0.0 AND sr <= 30.0)"))
