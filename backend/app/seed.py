@@ -20,6 +20,7 @@ from app.models import (
     RaceRegistration,
     RaceStatus,
     Role,
+    Team,
     User,
     UserStatus,
 )
@@ -27,6 +28,7 @@ from app.security import hash_password
 
 
 DEMO_ACCOUNT_PASSWORD = "BmrlDemo2026!"
+DEMO_TEAMLESS_LOGIN = "bmrl_teamless"
 DEMO_ACCOUNTS = [
     {
         "login": "bmrl_admin",
@@ -88,6 +90,19 @@ DEMO_ACCOUNTS = [
         "avatar_color": "#f59e0b",
         "sr": DEFAULT_SR,
     },
+    {
+        "login": DEMO_TEAMLESS_LOGIN,
+        "email": "bmrl.teamless@example.com",
+        "first_name": "BMRL",
+        "last_name": "Solo",
+        "nickname": "BMRL Solo",
+        "pilot_number": 9301,
+        "steam_id": "bmrl-demo-teamless",
+        "role": Role.pilot,
+        "avatar_color": "#64748b",
+        "country": "Global",
+        "sr": DEFAULT_SR,
+    },
 ]
 
 DEMO_SCENARIO_PILOTS = [
@@ -119,6 +134,43 @@ DEMO_SCENARIO_PILOTS = [
 DEMO_ACCOUNTS.extend(DEMO_SCENARIO_PILOTS)
 DEMO_SCENARIO_PARTICIPANT_LOGINS = ["bmrl_pilot"] + [account["login"] for account in DEMO_SCENARIO_PILOTS]
 DEMO_RACE_PREFIX = "BMRL Demo Race"
+DEMO_TEAM_SPECS = [
+    {
+        "name": "BMRL Factory",
+        "description": "System-backed factory team for race control checks and admin-owned scenarios.",
+        "avatar_color": "#dc2626",
+        "owner_login": "admin",
+        "member_logins": ["admin", "bmrl_demo_pilot_01", "bmrl_demo_pilot_02"],
+    },
+    {
+        "name": "Apex Line",
+        "description": "ACC sprint roster focused on clean qualifying pace and stable race starts.",
+        "avatar_color": "#0ea5e9",
+        "owner_login": "bmrl_moder",
+        "member_logins": ["bmrl_moder", "bmrl_demo_pilot_03", "bmrl_demo_pilot_04"],
+    },
+    {
+        "name": "Curb Hunters",
+        "description": "Mixed AC group for track-learning sessions, setups and replay reviews.",
+        "avatar_color": "#22c55e",
+        "owner_login": "bmrl_marshall",
+        "member_logins": ["bmrl_marshall", "bmrl_demo_pilot_05", "bmrl_demo_pilot_06"],
+    },
+    {
+        "name": "Sector Ghosts",
+        "description": "iRacing squad that experiments with endurance strategy and stint consistency.",
+        "avatar_color": "#8b5cf6",
+        "owner_login": "bmrl_smm",
+        "member_logins": ["bmrl_smm", "bmrl_demo_pilot_07"],
+    },
+    {
+        "name": "Redline Union",
+        "description": "Open community team for pilots who want shared practice and race-day support.",
+        "avatar_color": "#f59e0b",
+        "owner_login": "bmrl_pilot",
+        "member_logins": ["bmrl_pilot", "bmrl_demo_pilot_08"],
+    },
+]
 
 
 async def upsert_demo_accounts(session: AsyncSession) -> None:
@@ -166,6 +218,41 @@ async def upsert_demo_accounts(session: AsyncSession) -> None:
         user.timeout_start = None
         user.timeout_end = None
         user.pending_profile_changes = None
+
+
+async def seed_demo_teams(session: AsyncSession) -> None:
+    logins = sorted({login for team in DEMO_TEAM_SPECS for login in team["member_logins"]} | {team["owner_login"] for team in DEMO_TEAM_SPECS})
+    users = (await session.scalars(select(User).where(User.login.in_(logins)))).all()
+    users_by_login = {user.login: user for user in users}
+
+    for spec in DEMO_TEAM_SPECS:
+        owner = users_by_login.get(spec["owner_login"])
+        if owner is None:
+            continue
+
+        team = await session.scalar(select(Team).where(Team.name == spec["name"]))
+        if team is None:
+            team = Team(
+                name=spec["name"],
+                description=spec["description"],
+                avatar_color=spec["avatar_color"],
+                owner_id=owner.id,
+            )
+            session.add(team)
+            await session.flush()
+        else:
+            team.description = spec["description"]
+            team.avatar_color = spec["avatar_color"]
+            team.owner_id = owner.id
+
+        for login in spec["member_logins"]:
+            member = users_by_login.get(login)
+            if member is not None:
+                member.team_id = team.id
+
+    teamless_user = await session.scalar(select(User).where(User.login == DEMO_TEAMLESS_LOGIN))
+    if teamless_user is not None:
+        teamless_user.team_id = None
 
 
 def parse_registered_at(value: str | None) -> datetime:
@@ -486,6 +573,7 @@ async def seed_defaults(session: AsyncSession) -> None:
             session.add(Banner(position=position, image_url=image_url, link_url=link_url))
 
     await upsert_demo_accounts(session)
+    await seed_demo_teams(session)
     await seed_demo_race_scenario(session)
     await normalize_user_sr_values(session)
     await migrate_json_race_registrations(session)

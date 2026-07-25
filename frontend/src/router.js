@@ -14,6 +14,7 @@ import BannerEdit from './pages/BannerEdit.vue'
 import NewsManage from './pages/NewsManage.vue'
 import AdminUserList from './pages/AdminUserList.vue'
 import UserEditModeration from './pages/UserEditModeration.vue'
+import TeamList from './pages/TeamList.vue'
 import { state } from './store'
 
 const router = createRouter({
@@ -22,6 +23,7 @@ const router = createRouter({
     { path: '/', component: MainMenu },
     { path: '/pilots', component: PilotList },
     { path: '/pilots/:id', component: PilotDetails },
+    { path: '/teams', component: TeamList },
     { path: '/login', component: Login },
     { path: '/register', component: Registration },
     { path: '/profile', component: Profile, meta: { auth: true } },

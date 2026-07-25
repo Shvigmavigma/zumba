@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator
 
-from app.models import MAX_SR, MIN_SR, AppealStatus, BannerPosition, PenaltyStatus, PenaltyType, RaceStatus, Role, UserStatus
+from app.models import MAX_SR, MIN_SR, AppealStatus, BannerPosition, PenaltyStatus, PenaltyType, RaceStatus, Role, TeamApplicationStatus, UserStatus
 
 GameCode = Literal["ACC", "AC", "iRacing"]
 
@@ -57,6 +57,7 @@ class UserPublic(BaseModel):
     status: UserStatus
     avatar_color: str
     games: list[str] = Field(default_factory=list)
+    team_id: int | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -80,6 +81,102 @@ class UserUpdate(BaseModel):
     discord: str | None = Field(default=None, max_length=100)
     avatar_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     games: list[GameCode] | None = Field(default=None, min_length=1, max_length=3)
+
+
+class TeamBase(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    description: str = Field(default="", max_length=1000)
+    avatar_color: str = Field(default="#dc2626", pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
+class TeamCreate(TeamBase):
+    pass
+
+
+class TeamUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    description: str | None = Field(default=None, max_length=1000)
+    avatar_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
+class TeamOwnerTransfer(BaseModel):
+    new_owner_id: int = Field(ge=1)
+
+
+class TeamMemberRead(BaseModel):
+    id: int
+    login: str
+    nickname: str
+    pilot_number: int
+    country: str | None
+    sr: float = Field(ge=MIN_SR, le=MAX_SR)
+    avatar_color: str
+    games: list[str] = Field(default_factory=list)
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TeamApplicationRead(BaseModel):
+    id: int
+    team_id: int
+    user_id: int
+    status: TeamApplicationStatus
+    created_at: datetime
+    updated_at: datetime
+    resolved_at: datetime | None
+    resolved_by: int | None
+    user: TeamMemberRead
+
+
+class TeamCreationRequestRead(BaseModel):
+    id: int
+    requester_id: int
+    name: str
+    description: str
+    avatar_color: str
+    status: TeamApplicationStatus
+    team_id: int | None
+    created_at: datetime
+    updated_at: datetime
+    resolved_at: datetime | None
+    resolved_by: int | None
+    requester: TeamMemberRead
+
+
+class TeamRead(BaseModel):
+    id: int
+    name: str
+    description: str
+    avatar_color: str
+    owner_id: int | None
+    owner_login: str | None = None
+    owner_nickname: str | None = None
+    member_count: int
+    member_limit: int
+    can_join: bool
+    is_member: bool
+    is_owner: bool
+    can_manage: bool
+    my_application_status: TeamApplicationStatus | None = None
+    pending_application_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class TeamDetailRead(TeamRead):
+    members: list[TeamMemberRead]
+    applications: list[TeamApplicationRead] = Field(default_factory=list)
+
+
+class TeamConfigRead(BaseModel):
+    member_limit: int
+    my_create_request_status: TeamApplicationStatus | None = None
+    pending_creation_request_count: int = 0
+
+
+class TeamConfigUpdate(BaseModel):
+    member_limit: int = Field(ge=1, le=100)
 
 
 class RoleUpdate(BaseModel):
