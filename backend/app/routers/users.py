@@ -15,37 +15,61 @@ from app.schemas import RoleUpdate, TimeoutRequest, UserPrivate, UserPublic, Use
 router = APIRouter()
 
 
+def user_response(user: User, team_name: str | None = None, private: bool = False) -> dict:
+    schema = UserPrivate if private else UserPublic
+    data = schema.model_validate(user).model_dump()
+    data["team_name"] = team_name
+    return data
+
+
+def user_sort_columns(sort: str) -> tuple:
+    if sort == "alpha_desc":
+        return (func.lower(User.nickname).desc(), func.lower(User.login).desc(), User.id.desc())
+    if sort == "alpha_asc":
+        return (func.lower(User.nickname).asc(), func.lower(User.login).asc(), User.id.asc())
+    if sort == "rating_asc":
+        return (User.rating.asc(), User.sr.desc(), func.lower(User.nickname).asc(), User.id.asc())
+    if sort == "sr_desc":
+        return (User.sr.desc(), User.rating.desc(), func.lower(User.nickname).asc(), User.id.asc())
+    if sort == "sr_asc":
+        return (User.sr.asc(), User.rating.desc(), func.lower(User.nickname).asc(), User.id.asc())
+    return (User.rating.desc(), User.sr.desc(), func.lower(User.nickname).asc(), User.id.asc())
+
+
 @router.get("/pilots", response_model=list[UserPublic])
 @limiter.limit("1200/minute")
 async def list_pilots(
     request: Request,
     search: str | None = None,
     country: str | None = None,
+    sort: str = "rating_desc",
     offset: int = 0,
     limit: int = 50,
     session: AsyncSession = Depends(get_session),
 ):
     limit = min(limit, 100)
-    stmt = select(User).where(User.status == UserStatus.active)
+    stmt = select(User, Team.name).outerjoin(Team, Team.id == User.team_id).where(User.status == UserStatus.active)
     if country:
         stmt = stmt.where(User.country == country)
     if search:
         like = f"%{search}%"
-        stmt = stmt.where(or_(User.login.ilike(like), User.nickname.ilike(like), User.first_name.ilike(like), User.last_name.ilike(like)))
-    stmt = stmt.order_by(User.sr.desc(), User.pilot_number.asc()).offset(offset).limit(limit)
-    return (await session.scalars(stmt)).all()
+        stmt = stmt.where(or_(User.login.ilike(like), User.nickname.ilike(like), User.first_name.ilike(like), User.last_name.ilike(like), Team.name.ilike(like)))
+    rows = (await session.execute(stmt.order_by(*user_sort_columns(sort)).offset(offset).limit(limit))).all()
+    return [user_response(user, team_name) for user, team_name in rows]
 
 
 @router.get("/moderation/pending", response_model=list[UserPrivate])
 @limiter.limit("3/minute")
 async def pending_users(request: Request, _: User = Depends(require_moder_plus), session: AsyncSession = Depends(get_session)):
-    return (
-        await session.scalars(
-            select(User)
+    rows = (
+        await session.execute(
+            select(User, Team.name)
+            .outerjoin(Team, Team.id == User.team_id)
             .where(or_(User.status == UserStatus.unapproved, User.pending_profile_changes.is_not(None)))
             .order_by(User.created_at)
         )
     ).all()
+    return [user_response(user, team_name, private=True) for user, team_name in rows]
 
 
 @router.get("/admin", response_model=list[UserPrivate])
@@ -57,7 +81,16 @@ async def admin_user_list(
     limit: int = 100,
     session: AsyncSession = Depends(get_session),
 ):
-    users = (await session.scalars(select(User).order_by(User.created_at.desc()).offset(offset).limit(min(limit, 200)))).all()
+    rows = (
+        await session.execute(
+            select(User, Team.name)
+            .outerjoin(Team, Team.id == User.team_id)
+            .order_by(User.created_at.desc())
+            .offset(offset)
+            .limit(min(limit, 200))
+        )
+    ).all()
+    users = [user for user, _ in rows]
     now = datetime.now(timezone.utc)
     has_expired_timeouts = False
     for user in users:
@@ -66,16 +99,18 @@ async def admin_user_list(
         await session.commit()
         for user in users:
             await session.refresh(user)
-    return users
+    return [user_response(user, team_name, private=True) for user, team_name in rows]
 
 
 @router.get("/{user_id}", response_model=UserPublic)
 @limiter.limit("600/minute")
 async def get_user(user_id: int, request: Request, session: AsyncSession = Depends(get_session)):
-    user = await session.get(User, user_id)
-    if user is None:
+    row = await session.execute(select(User, Team.name).outerjoin(Team, Team.id == User.team_id).where(User.id == user_id))
+    result = row.first()
+    if result is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    user, team_name = result
+    return user_response(user, team_name)
 
 
 @router.patch("/me", response_model=UserPrivate)

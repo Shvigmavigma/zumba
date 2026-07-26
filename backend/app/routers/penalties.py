@@ -8,7 +8,7 @@ from app.deps import MARSHALL_PLUS, get_current_user, require_marshall_plus
 from app.models import Penalty, PenaltyStatus, Race, RaceStatus, User
 from app.rate_limit import limiter
 from app.schemas import PenaltyCreate, PenaltyDetailRead, PenaltyRead
-from app.services import apply_sr_penalty, recalculate_race_results, restore_sr_penalty
+from app.services import apply_sr_penalty, recalculate_all_ratings, recalculate_race_results, restore_sr_penalty
 
 
 router = APIRouter()
@@ -43,7 +43,11 @@ async def get_penalty(
 ):
     penalty = await session.scalar(
         select(Penalty)
-        .options(selectinload(Penalty.race), selectinload(Penalty.target), selectinload(Penalty.issuer))
+        .options(
+            selectinload(Penalty.race),
+            selectinload(Penalty.target).selectinload(User.team),
+            selectinload(Penalty.issuer).selectinload(User.team),
+        )
         .where(Penalty.id == penalty_id)
     )
     if penalty is None:
@@ -59,8 +63,12 @@ async def get_penalty(
             "target_nickname": penalty.target.nickname if penalty.target else None,
             "target_pilot_number": penalty.target.pilot_number if penalty.target else None,
             "target_avatar_color": penalty.target.avatar_color if penalty.target else None,
+            "target_rating": int(round(float(penalty.target.rating))) if penalty.target else None,
+            "target_team_name": penalty.target.team.name if penalty.target and penalty.target.team else None,
             "issuer_login": penalty.issuer.login if penalty.issuer else None,
             "issuer_nickname": penalty.issuer.nickname if penalty.issuer else None,
+            "issuer_rating": int(round(float(penalty.issuer.rating))) if penalty.issuer else None,
+            "issuer_team_name": penalty.issuer.team.name if penalty.issuer and penalty.issuer.team else None,
         }
     )
     return data
@@ -84,6 +92,8 @@ async def create_penalty(
     if race.status == RaceStatus.finished:
         await apply_sr_penalty(session, penalty)
     await recalculate_race_results(session, race)
+    if race.status == RaceStatus.finished:
+        await recalculate_all_ratings(session)
     await session.commit()
     await session.refresh(penalty)
     return penalty
@@ -105,6 +115,8 @@ async def cancel_penalty(
     race = await session.get(Race, penalty.race_id)
     if race is not None:
         await recalculate_race_results(session, race)
+        if race.status == RaceStatus.finished:
+            await recalculate_all_ratings(session)
     await session.commit()
     await session.refresh(penalty)
     return penalty

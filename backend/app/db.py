@@ -133,7 +133,51 @@ async def init_db() -> None:
         await conn.execute(text("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_sr_range"))
         await conn.execute(text("UPDATE users SET sr = LEAST(30.0, GREATEST(0.0, sr)) WHERE sr < 0.0 OR sr > 30.0"))
         await conn.execute(text("ALTER TABLE users ADD CONSTRAINT ck_users_sr_range CHECK (sr >= 0.0 AND sr <= 30.0)"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS rating NUMERIC(8, 2) DEFAULT 1000"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_race_count INTEGER DEFAULT 0"))
+        await conn.execute(text("UPDATE users SET rating = 1000 WHERE rating IS NULL"))
+        await conn.execute(text("UPDATE users SET rating_race_count = 0 WHERE rating_race_count IS NULL"))
+        await conn.execute(text("ALTER TABLE users ALTER COLUMN rating SET DEFAULT 1000"))
+        await conn.execute(text("ALTER TABLE users ALTER COLUMN rating_race_count SET DEFAULT 0"))
+        await conn.execute(text("ALTER TABLE users ALTER COLUMN rating SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE users ALTER COLUMN rating_race_count SET NOT NULL"))
+        await conn.execute(text("UPDATE users SET rating = ROUND(rating) WHERE rating != ROUND(rating)"))
+        await conn.execute(text("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_rating_range"))
+        await conn.execute(text("UPDATE users SET rating = LEAST(10000.0, GREATEST(10.0, rating)) WHERE rating < 10.0 OR rating > 10000.0"))
+        await conn.execute(text("ALTER TABLE users ADD CONSTRAINT ck_users_rating_range CHECK (rating >= 10.0 AND rating <= 10000.0)"))
+        await conn.execute(text("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_rating_race_count"))
+        await conn.execute(text("UPDATE users SET rating_race_count = 0 WHERE rating_race_count < 0"))
+        await conn.execute(text("ALTER TABLE users ADD CONSTRAINT ck_users_rating_race_count CHECK (rating_race_count >= 0)"))
         await conn.execute(text("ALTER TABLE penalties ADD COLUMN IF NOT EXISTS sr_applied_value NUMERIC DEFAULT 0"))
+        await conn.execute(text("ALTER TABLE penalties DROP CONSTRAINT IF EXISTS penalties_penalty_type_check"))
+        await conn.execute(text("ALTER TABLE penalties ADD COLUMN IF NOT EXISTS time_penalty_ms NUMERIC DEFAULT 0"))
+        await conn.execute(text("ALTER TABLE penalties ADD COLUMN IF NOT EXISTS sr_penalty_value NUMERIC DEFAULT 0"))
+        await conn.execute(text("UPDATE penalties SET time_penalty_ms = 0 WHERE time_penalty_ms IS NULL"))
+        await conn.execute(text("UPDATE penalties SET sr_penalty_value = 0 WHERE sr_penalty_value IS NULL"))
+        await conn.execute(
+            text(
+                """
+                UPDATE penalties
+                SET time_penalty_ms = penalty_value
+                WHERE penalty_type = 'time'
+                    AND COALESCE(time_penalty_ms, 0) = 0
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                UPDATE penalties
+                SET sr_penalty_value = penalty_value
+                WHERE penalty_type = 'sr'
+                    AND COALESCE(sr_penalty_value, 0) = 0
+                """
+            )
+        )
+        await conn.execute(text("ALTER TABLE penalties ALTER COLUMN time_penalty_ms SET DEFAULT 0"))
+        await conn.execute(text("ALTER TABLE penalties ALTER COLUMN sr_penalty_value SET DEFAULT 0"))
+        await conn.execute(text("ALTER TABLE penalties ALTER COLUMN time_penalty_ms SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE penalties ALTER COLUMN sr_penalty_value SET NOT NULL"))
         await conn.execute(text("UPDATE penalties SET sr_applied_value = 0 WHERE sr_applied_value IS NULL"))
         await conn.execute(
             text(
@@ -148,6 +192,14 @@ async def init_db() -> None:
         )
         await conn.execute(text("ALTER TABLE penalties ALTER COLUMN sr_applied_value SET DEFAULT 0"))
         await conn.execute(text("ALTER TABLE penalties ALTER COLUMN sr_applied_value SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS has_qualification BOOLEAN DEFAULT TRUE"))
+        await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS rating_applied BOOLEAN DEFAULT FALSE"))
+        await conn.execute(text("UPDATE races SET has_qualification = TRUE WHERE has_qualification IS NULL"))
+        await conn.execute(text("UPDATE races SET rating_applied = FALSE WHERE rating_applied IS NULL"))
+        await conn.execute(text("ALTER TABLE races ALTER COLUMN has_qualification SET DEFAULT TRUE"))
+        await conn.execute(text("ALTER TABLE races ALTER COLUMN rating_applied SET DEFAULT FALSE"))
+        await conn.execute(text("ALTER TABLE races ALTER COLUMN has_qualification SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE races ALTER COLUMN rating_applied SET NOT NULL"))
         await conn.execute(text("ALTER TABLE races ALTER COLUMN game SET DEFAULT 'ACC'"))
         await conn.execute(
             text(

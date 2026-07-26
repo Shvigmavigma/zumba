@@ -1,10 +1,11 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Ban, Save, Timer, TimerOff, Trash2, Undo2, X } from 'lucide-vue-next'
 import { api } from '../api'
 import UserAvatar from '../components/UserAvatar.vue'
 import { roleLabel, statusLabel } from '../i18nLabels'
+import { filterPilots, formatRating, sortPilots, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
 
 const { t } = useI18n()
@@ -18,6 +19,9 @@ const timeoutSaving = ref(false)
 const teamLimit = ref(5)
 const teamLimitSaving = ref(false)
 const settingsSaved = ref(false)
+const userSearch = ref('')
+const userSort = ref('rating_desc')
+const visibleUsers = computed(() => sortPilots(filterPilots(users.value, userSearch.value), userSort.value))
 
 function datetimeLocalValue(date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
@@ -200,6 +204,17 @@ onMounted(load)
     </form>
 
     <div class="admin-users-card card">
+      <div class="pilot-inline-controls admin-users-controls">
+        <input v-model="userSearch" type="search" :placeholder="t('common.search')" />
+        <select v-model="userSort" :aria-label="t('common.sort')">
+          <option value="rating_desc">{{ t('sort.ratingDesc') }}</option>
+          <option value="rating_asc">{{ t('sort.ratingAsc') }}</option>
+          <option value="sr_desc">{{ t('sort.srDesc') }}</option>
+          <option value="sr_asc">{{ t('sort.srAsc') }}</option>
+          <option value="alpha_asc">{{ t('sort.alphaAsc') }}</option>
+          <option value="alpha_desc">{{ t('sort.alphaDesc') }}</option>
+        </select>
+      </div>
       <table class="admin-users-table">
         <thead>
           <tr>
@@ -210,13 +225,13 @@ onMounted(load)
           </tr>
         </thead>
         <tbody>
-          <tr v-for="user in users" :key="user.id">
+          <tr v-for="user in visibleUsers" :key="user.id">
             <td>
               <div class="admin-user-cell">
                 <UserAvatar mini :color="user.avatar_color" :label="user.login" />
                 <div class="admin-user-info">
                   <strong>{{ user.login }}</strong>
-                  <span>#{{ user.pilot_number }}</span>
+                  <span>#{{ user.pilot_number }} · RER {{ formatRating(user.rating) }} · {{ teamShortName(user.team_name) }}</span>
                 </div>
               </div>
             </td>

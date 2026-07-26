@@ -457,18 +457,22 @@ async def seed_demo_race_scenario(session: AsyncSession) -> None:
                 race_id=race.id,
                 issuer_id=issuer.id,
                 target_id=participants[0].id,
-                penalty_type=PenaltyType.time,
+                penalty_type=PenaltyType.combined,
                 penalty_value=5_000 + race_index * 500,
+                time_penalty_ms=5_000 + race_index * 500,
+                sr_penalty_value=0.5,
                 status=PenaltyStatus.appealed,
-                description="Unsafe rejoin after off-track exit.",
+                description="Unsafe rejoin after off-track exit: time and SR penalty.",
                 is_applied=False,
             ),
             Penalty(
                 race_id=race.id,
                 issuer_id=issuer.id,
                 target_id=participants[1].id,
-                penalty_type=PenaltyType.sr,
-                penalty_value=0.5,
+                penalty_type=PenaltyType.combined,
+                penalty_value=5_000,
+                time_penalty_ms=5_000,
+                sr_penalty_value=0.5,
                 status=PenaltyStatus.canceled,
                 description="Contact reviewed after appeal and canceled.",
                 is_applied=False,
@@ -477,20 +481,24 @@ async def seed_demo_race_scenario(session: AsyncSession) -> None:
                 race_id=race.id,
                 issuer_id=issuer.id,
                 target_id=participants[2].id,
-                penalty_type=PenaltyType.time,
+                penalty_type=PenaltyType.combined,
                 penalty_value=10_000 + race_index * 750,
+                time_penalty_ms=10_000 + race_index * 750,
+                sr_penalty_value=1.0,
                 status=PenaltyStatus.active,
-                description="Avoidable contact in braking zone.",
+                description="Avoidable contact in braking zone: time and SR penalty.",
                 is_applied=False,
             ),
             Penalty(
                 race_id=race.id,
                 issuer_id=issuer.id,
                 target_id=participants[3].id,
-                penalty_type=PenaltyType.sr,
-                penalty_value=1.0,
+                penalty_type=PenaltyType.combined,
+                penalty_value=5_000,
+                time_penalty_ms=5_000,
+                sr_penalty_value=1.0,
                 status=PenaltyStatus.active,
-                description="Track limits warning escalated to SR penalty.",
+                description="Track limits warning escalated to time and SR penalty.",
                 is_applied=False,
             ),
         ]
@@ -572,9 +580,6 @@ async def seed_defaults(session: AsyncSession) -> None:
         if exists is None:
             session.add(Banner(position=position, image_url=image_url, link_url=link_url))
 
-    await upsert_demo_accounts(session)
-    await seed_demo_teams(session)
-    await seed_demo_race_scenario(session)
     await normalize_user_sr_values(session)
     await migrate_json_race_registrations(session)
     await session.commit()
