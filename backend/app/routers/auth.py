@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.db import get_session
 from app.deps import clear_expired_timeout, get_current_user
-from app.models import DEFAULT_SR, Role, User, UserStatus
+from app.models import DEFAULT_SR, Role, Team, User, UserStatus
 from app.rate_limit import limiter
 from app.schemas import LoginRequest, TokenResponse, UserPrivate, UserRegister
 from app.security import (
@@ -24,6 +24,13 @@ from app.security import (
 
 router = APIRouter()
 settings = get_settings()
+
+
+async def private_user_response(session: AsyncSession, user: User) -> UserPrivate:
+    team = await session.get(Team, user.team_id) if user.team_id is not None else None
+    data = UserPrivate.model_validate(user).model_dump()
+    data["team_name"] = team.name if team else None
+    return UserPrivate(**data)
 
 
 def login_redirect(**params: str) -> RedirectResponse:
@@ -84,7 +91,7 @@ async def register(payload: UserRegister, request: Request, session: AsyncSessio
     session.add(user)
     await session.commit()
     await session.refresh(user)
-    return user
+    return await private_user_response(session, user)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -96,7 +103,7 @@ async def login(payload: LoginRequest, request: Request, session: AsyncSession =
     if clear_expired_timeout(user):
         await session.commit()
         await session.refresh(user)
-    return TokenResponse(access_token=create_access_token(user), user=UserPrivate.model_validate(user))
+    return TokenResponse(access_token=create_access_token(user), user=await private_user_response(session, user))
 
 
 @router.get("/steam/start")
@@ -176,5 +183,5 @@ async def steam_callback(request: Request, flow: str = "login", session: AsyncSe
 
 
 @router.get("/me", response_model=UserPrivate)
-async def me(user: User = Depends(get_current_user)):
-    return user
+async def me(user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    return await private_user_response(session, user)

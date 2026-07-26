@@ -5,13 +5,15 @@ import { Bell, Check, Crown, LogOut, Plus, Save, Search, Send, Trash2, UserCheck
 import { api } from '../api'
 import TeamAvatar from '../components/TeamAvatar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
+import { filterPilots, formatRating, sortPilots, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
 
 const { t } = useI18n()
 
 const teams = ref([])
 const selectedTeam = ref(null)
-const config = ref({ member_limit: 5 })
+const createRequests = ref([])
+const config = ref({ member_limit: 5, my_create_request_status: null, pending_creation_request_count: 0 })
 const search = ref('')
 const error = ref('')
 const saved = ref(false)
@@ -24,6 +26,9 @@ const transferSaving = ref(false)
 const deleteSaving = ref(false)
 const busyApplications = ref({})
 const busyMembers = ref({})
+const busyCreateRequests = ref({})
+const memberSearch = ref('')
+const memberSort = ref('rating_desc')
 const createForm = ref({
   name: '',
   description: '',
@@ -35,10 +40,13 @@ const editForm = ref({
   avatar_color: '#dc2626'
 })
 
-const canCreateTeam = computed(() => state.user?.status === 'active' && !state.user?.team_id)
+const canModerateTeams = computed(() => ['admin', 'moder'].includes(state.user?.role))
+const canCreateTeam = computed(() => state.user?.status === 'active' && !state.user?.team_id && config.value.my_create_request_status !== 'pending')
 const selectedIsOwner = computed(() => Boolean(selectedTeam.value?.is_owner))
+const selectedCanManage = computed(() => Boolean(selectedTeam.value?.can_manage))
 const transferOwnerId = ref('')
 const transferCandidates = computed(() => selectedTeam.value?.members?.filter((member) => member.id !== selectedTeam.value.owner_id) || [])
+const visibleTeamMembers = computed(() => sortPilots(filterPilots(selectedTeam.value?.members || [], memberSearch.value), memberSort.value))
 
 function updateStoredUser(patch) {
   if (!state.user) return
@@ -56,6 +64,10 @@ function setApplicationBusy(applicationId, value) {
 
 function setMemberBusy(userId, value) {
   busyMembers.value = { ...busyMembers.value, [userId]: value }
+}
+
+function setCreateRequestBusy(requestId, value) {
+  busyCreateRequests.value = { ...busyCreateRequests.value, [requestId]: value }
 }
 
 function resetCreateForm() {
@@ -77,6 +89,10 @@ function fillEditForm(team) {
 
 function memberTitle(member) {
   return member.nickname || member.login
+}
+
+function memberTeamName(member) {
+  return member.team_name || selectedTeam.value?.name || ''
 }
 
 function ownerLabel(team) {
@@ -118,6 +134,7 @@ async function load() {
     ])
     teams.value = loadedTeams
     config.value = loadedConfig
+    createRequests.value = canModerateTeams.value ? await api('/teams/create-requests') : []
 
     const selectedId = selectedTeam.value?.id
     if (selectedId && loadedTeams.some((team) => team.id === selectedId)) {
@@ -151,7 +168,7 @@ async function createTeam() {
   error.value = ''
   saved.value = false
   try {
-    const created = await api('/teams', {
+    const createdRequest = await api('/teams', {
       method: 'POST',
       body: {
         name: createForm.value.name.trim(),
@@ -159,9 +176,7 @@ async function createTeam() {
         avatar_color: createForm.value.avatar_color
       }
     })
-    updateStoredUser({ team_id: created.id })
-    selectedTeam.value = created
-    fillEditForm(created)
+    config.value = { ...config.value, my_create_request_status: createdRequest.status }
     createOpen.value = false
     resetCreateForm()
     saved.value = true
@@ -170,6 +185,36 @@ async function createTeam() {
     error.value = err.message
   } finally {
     createSaving.value = false
+  }
+}
+
+async function approveCreateRequest(requestItem) {
+  setCreateRequestBusy(requestItem.id, true)
+  error.value = ''
+  saved.value = false
+  try {
+    await api(`/teams/create-requests/${requestItem.id}/approve`, { method: 'POST' })
+    saved.value = true
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    setCreateRequestBusy(requestItem.id, false)
+  }
+}
+
+async function rejectCreateRequest(requestItem) {
+  setCreateRequestBusy(requestItem.id, true)
+  error.value = ''
+  saved.value = false
+  try {
+    await api(`/teams/create-requests/${requestItem.id}/reject`, { method: 'POST' })
+    saved.value = true
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    setCreateRequestBusy(requestItem.id, false)
   }
 }
 
@@ -345,6 +390,9 @@ onMounted(load)
         <Plus v-else :size="16" />
         {{ createOpen ? t('common.close') : t('teams.createTeam') }}
       </button>
+      <span v-else-if="config.my_create_request_status === 'pending'" class="team-request-state application-pending">
+        {{ t('teams.createRequestSent') }}
+      </span>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -388,9 +436,41 @@ onMounted(load)
       </div>
       <button class="button primary" type="submit" :disabled="createSaving">
         <Plus :size="16" />
-        {{ t('common.create') }}
+        {{ t('teams.sendCreateRequest') }}
       </button>
     </form>
+
+    <section v-if="canModerateTeams" class="team-applications-section card">
+      <div class="section-header">
+        <div>
+          <h2>{{ t('teams.creationRequestsTitle') }}</h2>
+          <p class="muted">{{ t('teams.creationRequestsHint') }}</p>
+        </div>
+        <span class="pill">{{ createRequests.length }}</span>
+      </div>
+      <div class="team-application-list">
+        <div v-for="requestItem in createRequests" :key="requestItem.id" class="team-application-row">
+          <TeamAvatar mini :color="requestItem.avatar_color" :label="requestItem.name" />
+          <span class="team-application-main">
+            <strong>{{ requestItem.name }}</strong>
+            <span>{{ t('teams.requestedBy', { name: memberTitle(requestItem.requester) }) }}</span>
+          </span>
+          <span class="team-member-stat">
+            <strong>#{{ requestItem.requester.pilot_number }}</strong>
+            <span>RER {{ formatRating(requestItem.requester.rating) }}</span>
+          </span>
+          <div class="team-application-actions">
+            <button class="icon-button" type="button" :title="t('teams.approveCreateRequest')" :disabled="busyCreateRequests[requestItem.id]" @click="approveCreateRequest(requestItem)">
+              <Check :size="16" />
+            </button>
+            <button class="icon-button danger-icon" type="button" :title="t('teams.rejectCreateRequest')" :disabled="busyCreateRequests[requestItem.id]" @click="rejectCreateRequest(requestItem)">
+              <XCircle :size="16" />
+            </button>
+          </div>
+        </div>
+        <div v-if="!createRequests.length" class="empty-row">{{ t('teams.noCreationRequests') }}</div>
+      </div>
+    </section>
 
     <div class="teams-layout">
       <div class="teams-list card">
@@ -399,7 +479,7 @@ onMounted(load)
             <TeamAvatar mini :color="team.avatar_color" :label="team.name" />
             <span class="team-list-main">
               <strong>{{ team.name }}</strong>
-              <span>{{ t('teams.ownerLine', { owner: ownerLabel(team) }) }}</span>
+              <span>{{ t('teams.ownerLine', { owner: ownerLabel(team) }) }} · RER {{ formatRating(team.average_rating) }}</span>
             </span>
             <span class="team-list-side">
               <span v-if="team.pending_application_count > 0" class="team-notification-badge" :title="pendingApplicationsTitle(team)" :aria-label="pendingApplicationsTitle(team)">
@@ -428,6 +508,7 @@ onMounted(load)
             <div class="team-detail-meta">
               <span><Crown :size="15" />{{ ownerLabel(selectedTeam) }}</span>
               <span><Users :size="15" />{{ t('teams.membersCount', { count: selectedTeam.member_count, limit: selectedTeam.member_limit }) }}</span>
+              <span>RER {{ formatRating(selectedTeam.average_rating) }}</span>
             </div>
           </div>
           <div class="team-detail-actions">
@@ -445,7 +526,7 @@ onMounted(load)
           </div>
         </div>
 
-        <form v-if="selectedIsOwner" class="team-edit-panel" @submit.prevent="saveTeam">
+        <form v-if="selectedCanManage" class="team-edit-panel" @submit.prevent="saveTeam">
           <div class="section-header">
             <h2>{{ t('teams.editTitle') }}</h2>
             <button class="button primary" type="submit" :disabled="editSaving">
@@ -469,7 +550,7 @@ onMounted(load)
           </div>
         </form>
 
-        <section v-if="selectedIsOwner" class="team-owner-panel">
+        <section v-if="selectedCanManage" class="team-owner-panel">
           <div>
             <h2>{{ t('teams.ownerToolsTitle') }}</h2>
             <p class="muted">{{ t('teams.ownerLeaveHint') }}</p>
@@ -480,7 +561,7 @@ onMounted(load)
               <select v-model="transferOwnerId" :disabled="!transferCandidates.length">
                 <option value="">{{ t('teams.chooseMember') }}</option>
                 <option v-for="member in transferCandidates" :key="member.id" :value="member.id">
-                  {{ memberTitle(member) }} · #{{ member.pilot_number }}
+                  {{ memberTitle(member) }} · #{{ member.pilot_number }} · RER {{ formatRating(member.rating) }}
                 </option>
               </select>
             </label>
@@ -496,7 +577,7 @@ onMounted(load)
           <p v-if="!transferCandidates.length" class="muted team-owner-note">{{ t('teams.noTransferCandidates') }}</p>
         </section>
 
-        <section v-if="selectedIsOwner" class="team-applications-section">
+        <section v-if="selectedCanManage" class="team-applications-section">
           <div class="section-header">
             <h2>{{ t('teams.applicationsTitle') }}</h2>
             <span class="pill">{{ selectedTeam.applications.length }}</span>
@@ -506,7 +587,7 @@ onMounted(load)
               <UserAvatar mini :color="application.user.avatar_color" :label="application.user.login" />
               <span class="team-application-main">
                 <strong>{{ memberTitle(application.user) }}</strong>
-                <span>{{ application.user.login }} · #{{ application.user.pilot_number }}</span>
+                <span>{{ application.user.login }} · #{{ application.user.pilot_number }} · RER {{ formatRating(application.user.rating) }} · {{ teamShortName(application.user.team_name) }}</span>
               </span>
               <span class="team-member-stat">
                 <strong>{{ application.user.sr.toFixed(1) }}</strong>
@@ -528,14 +609,30 @@ onMounted(load)
         <section class="team-members-section">
           <div class="section-header">
             <h2>{{ t('fields.participants') }}</h2>
+            <span class="pill">RER {{ formatRating(selectedTeam.average_rating) }}</span>
+          </div>
+          <div class="pilot-inline-controls">
+            <input v-model="memberSearch" type="search" :placeholder="t('teams.memberSearch')" />
+            <select v-model="memberSort" :aria-label="t('common.sort')">
+              <option value="rating_desc">{{ t('sort.ratingDesc') }}</option>
+              <option value="rating_asc">{{ t('sort.ratingAsc') }}</option>
+              <option value="sr_desc">{{ t('sort.srDesc') }}</option>
+              <option value="sr_asc">{{ t('sort.srAsc') }}</option>
+              <option value="alpha_asc">{{ t('sort.alphaAsc') }}</option>
+              <option value="alpha_desc">{{ t('sort.alphaDesc') }}</option>
+            </select>
           </div>
           <div class="team-members-list">
-            <div v-for="member in selectedTeam.members" :key="member.id" class="team-member-row">
+            <div v-for="member in visibleTeamMembers" :key="member.id" class="team-member-row">
               <UserAvatar mini :color="member.avatar_color" :label="member.login" />
               <RouterLink class="team-member-main" :to="`/pilots/${member.id}`">
                 <strong>{{ memberTitle(member) }}</strong>
-                <span>{{ member.login }} · #{{ member.pilot_number }}</span>
+                <span>{{ member.login }} · #{{ member.pilot_number }} · {{ teamShortName(memberTeamName(member)) }}</span>
               </RouterLink>
+              <span class="team-member-stat">
+                <strong>{{ formatRating(member.rating) }}</strong>
+                <span>RER</span>
+              </span>
               <span class="team-member-stat">
                 <strong>{{ member.sr.toFixed(1) }}</strong>
                 <span>SR</span>
@@ -546,7 +643,7 @@ onMounted(load)
               </span>
               <div class="team-member-actions">
                 <button
-                  v-if="selectedIsOwner && member.id !== selectedTeam.owner_id"
+                  v-if="selectedCanManage && member.id !== selectedTeam.owner_id"
                   class="icon-button danger-icon"
                   type="button"
                   :title="t('teams.removeMember')"
@@ -557,6 +654,7 @@ onMounted(load)
                 </button>
               </div>
             </div>
+            <div v-if="!visibleTeamMembers.length" class="empty-row">{{ selectedTeam.members.length ? t('common.noMatches') : t('teams.noMembers') }}</div>
           </div>
         </section>
       </article>

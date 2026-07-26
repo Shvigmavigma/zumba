@@ -4,15 +4,20 @@ import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import UserAvatar from '../components/UserAvatar.vue'
 import { gameLabel } from '../i18nLabels'
+import { formatRating, teamShortName } from '../pilotDisplay'
 
 const { t } = useI18n()
 const pilots = ref([])
 const search = ref('')
+const sort = ref('rating_desc')
 const error = ref('')
 
 async function load() {
   try {
-    pilots.value = await api(`/users/pilots?search=${encodeURIComponent(search.value)}`)
+    const params = new URLSearchParams()
+    if (search.value.trim()) params.set('search', search.value.trim())
+    params.set('sort', sort.value)
+    pilots.value = await api(`/users/pilots?${params.toString()}`)
   } catch (err) {
     error.value = err.message
   }
@@ -20,6 +25,7 @@ async function load() {
 
 onMounted(load)
 watch(search, load)
+watch(sort, load)
 
 function pilotGames(pilot) {
   return pilot.games?.length ? pilot.games.map((game) => gameLabel(t, game)).join(' / ') : t('common.none')
@@ -30,12 +36,22 @@ function pilotGames(pilot) {
   <section class="section pilot-list-page">
     <div class="section-header pilot-list-header">
       <h1>{{ t('nav.pilots') }}</h1>
-      <input v-model="search" class="pilot-list-search" :placeholder="t('common.search')" />
+      <div class="pilot-list-controls">
+        <input v-model="search" class="pilot-list-search" :placeholder="t('common.search')" />
+        <select v-model="sort" class="pilot-list-sort" :aria-label="t('common.sort')">
+          <option value="rating_desc">{{ t('sort.ratingDesc') }}</option>
+          <option value="rating_asc">{{ t('sort.ratingAsc') }}</option>
+          <option value="sr_desc">{{ t('sort.srDesc') }}</option>
+          <option value="sr_asc">{{ t('sort.srAsc') }}</option>
+          <option value="alpha_asc">{{ t('sort.alphaAsc') }}</option>
+          <option value="alpha_desc">{{ t('sort.alphaDesc') }}</option>
+        </select>
+      </div>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
     <table class="table card">
       <thead>
-        <tr><th>#</th><th>{{ t('roles.pilot') }}</th><th>{{ t('fields.country') }}</th><th>SR</th></tr>
+        <tr><th>#</th><th>{{ t('roles.pilot') }}</th><th>{{ t('fields.team') }}</th><th>{{ t('fields.country') }}</th><th>RER</th><th>SR</th><th>{{ t('fields.ratingRaces') }}</th></tr>
       </thead>
       <tbody>
         <tr v-for="pilot in pilots" :key="pilot.id">
@@ -49,8 +65,11 @@ function pilotGames(pilot) {
               </RouterLink>
             </div>
           </td>
+          <td><span class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name) }}</span></td>
           <td>{{ pilot.country || '-' }}</td>
+          <td>{{ formatRating(pilot.rating) }}</td>
           <td>{{ pilot.sr }}</td>
+          <td>{{ pilot.rating_race_count ?? 0 }}</td>
         </tr>
       </tbody>
     </table>

@@ -11,6 +11,7 @@ const races = ref([])
 const cursor = ref(new Date())
 const selected = ref(dateKey(new Date()))
 const gameFilter = ref('all')
+const statusFilter = ref('not_finished')
 const myGamesOnly = ref(false)
 
 function dateKey(date) {
@@ -73,7 +74,7 @@ function shiftMonth(delta) {
 }
 
 async function loadRaces() {
-  const params = new URLSearchParams({ limit: '100', game_filter: gameFilter.value })
+  const params = new URLSearchParams({ limit: '100', game_filter: gameFilter.value, status_filter: statusFilter.value })
   if (myGamesOnly.value && canFilterMyGames.value) {
     params.set('my_games_only', 'true')
   }
@@ -81,7 +82,7 @@ async function loadRaces() {
 }
 
 onMounted(loadRaces)
-watch([gameFilter, myGamesOnly], loadRaces)
+watch([gameFilter, statusFilter, myGamesOnly], loadRaces)
 </script>
 
 <template>
@@ -96,6 +97,14 @@ watch([gameFilter, myGamesOnly], loadRaces)
     </div>
 
     <div class="race-filter-bar card">
+      <div class="race-status-toggle" role="group" :aria-label="t('raceFilters.statusGroup')">
+        <button type="button" :class="{ active: statusFilter === 'not_finished' }" @click="statusFilter = 'not_finished'">
+          {{ t('raceFilters.notFinished') }}
+        </button>
+        <button type="button" :class="{ active: statusFilter === 'finished' }" @click="statusFilter = 'finished'">
+          {{ t('raceFilters.finished') }}
+        </button>
+      </div>
       <label class="field">
         <span>{{ t('fields.game') }}</span>
         <select v-model="gameFilter">

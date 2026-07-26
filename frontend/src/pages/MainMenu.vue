@@ -17,6 +17,7 @@ const activeNewsIndex = ref(0)
 const isNewsViewerOpen = ref(false)
 const error = ref('')
 const raceGameFilter = ref('all')
+const raceStatusFilter = ref('not_finished')
 const myGamesOnly = ref(false)
 const currentNews = computed(() => news.value[activeNewsIndex.value] || null)
 const raceGameOptions = computed(() => gameOptions(t, true))
@@ -102,7 +103,7 @@ function handleNewsKeydown(event) {
 }
 
 async function loadRaces() {
-  const params = new URLSearchParams({ limit: '8', game_filter: raceGameFilter.value })
+  const params = new URLSearchParams({ limit: '100', game_filter: raceGameFilter.value, status_filter: raceStatusFilter.value })
   if (myGamesOnly.value && canFilterMyGames.value) {
     params.set('my_games_only', 'true')
   }
@@ -129,7 +130,7 @@ onMounted(async () => {
   }
 })
 
-watch([raceGameFilter, myGamesOnly], async () => {
+watch([raceGameFilter, raceStatusFilter, myGamesOnly], async () => {
   try {
     await loadRaces()
   } catch (err) {
@@ -214,6 +215,14 @@ onBeforeUnmount(() => {
             <RouterLink v-if="['admin', 'moder'].includes(state.user?.role)" class="button primary" to="/races/new"><Plus :size="16" />{{ t('common.create') }}</RouterLink>
           </div>
           <div class="race-filter-bar card">
+            <div class="race-status-toggle" role="group" :aria-label="t('raceFilters.statusGroup')">
+              <button type="button" :class="{ active: raceStatusFilter === 'not_finished' }" @click="raceStatusFilter = 'not_finished'">
+                {{ t('raceFilters.notFinished') }}
+              </button>
+              <button type="button" :class="{ active: raceStatusFilter === 'finished' }" @click="raceStatusFilter = 'finished'">
+                {{ t('raceFilters.finished') }}
+              </button>
+            </div>
             <label class="field">
               <span>{{ t('fields.game') }}</span>
               <select v-model="raceGameFilter">

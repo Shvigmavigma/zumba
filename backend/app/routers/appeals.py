@@ -8,7 +8,7 @@ from app.deps import MARSHALL_PLUS, require_marshall_plus, require_pilot_plus
 from app.models import Appeal, AppealStatus, Penalty, PenaltyStatus, Race, RaceStatus, User
 from app.rate_limit import limiter
 from app.schemas import AppealCreate, AppealModerationRequest, AppealRead
-from app.services import apply_sr_penalty, recalculate_race_results, restore_sr_penalty
+from app.services import apply_sr_penalty, recalculate_all_ratings, recalculate_race_results, restore_sr_penalty
 
 
 router = APIRouter()
@@ -55,6 +55,11 @@ async def create_appeal(
     )
     penalty.status = PenaltyStatus.appealed
     session.add(appeal)
+    race = await session.get(Race, payload.race_id)
+    if race is not None:
+        await recalculate_race_results(session, race)
+        if race.status == RaceStatus.finished:
+            await recalculate_all_ratings(session)
     try:
         await session.commit()
     except IntegrityError as exc:
@@ -99,6 +104,8 @@ async def moderate_appeal(
 
     if race is not None:
         await recalculate_race_results(session, race)
+        if race.status == RaceStatus.finished:
+            await recalculate_all_ratings(session)
     await session.commit()
     await session.refresh(appeal)
     return appeal

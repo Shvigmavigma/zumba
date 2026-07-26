@@ -24,6 +24,9 @@ from app.db import Base
 DEFAULT_SR = 5.0
 MIN_SR = 0.0
 MAX_SR = 30.0
+DEFAULT_RATING = 1000.0
+MIN_RATING = 10.0
+MAX_RATING = 10000.0
 RACE_GAMES = ("ACC", "AC", "iRacing")
 DEFAULT_USER_GAMES = list(RACE_GAMES)
 
@@ -67,6 +70,7 @@ class RaceStatus(StrEnum):
 class PenaltyType(StrEnum):
     time = "time"
     sr = "sr"
+    combined = "combined"
 
 
 class PenaltyStatus(StrEnum):
@@ -96,7 +100,11 @@ class BannerPosition(StrEnum):
 
 class User(Base):
     __tablename__ = "users"
-    __table_args__ = (CheckConstraint(f"sr >= {MIN_SR} AND sr <= {MAX_SR}", name="ck_users_sr_range"),)
+    __table_args__ = (
+        CheckConstraint(f"sr >= {MIN_SR} AND sr <= {MAX_SR}", name="ck_users_sr_range"),
+        CheckConstraint(f"rating >= {MIN_RATING} AND rating <= {MAX_RATING}", name="ck_users_rating_range"),
+        CheckConstraint("rating_race_count >= 0", name="ck_users_rating_race_count"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     login: Mapped[str] = mapped_column(String(50), unique=True, index=True)
@@ -108,6 +116,8 @@ class User(Base):
     pilot_number: Mapped[int] = mapped_column(Integer, unique=True, index=True)
     country: Mapped[str | None] = mapped_column(String(50), index=True)
     sr: Mapped[float] = mapped_column(Numeric(3, 1), default=DEFAULT_SR, server_default=str(DEFAULT_SR))
+    rating: Mapped[float] = mapped_column(Numeric(8, 2), default=DEFAULT_RATING, server_default=str(DEFAULT_RATING), index=True)
+    rating_race_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     discord: Mapped[str | None] = mapped_column(String(100))
     steam_id: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     role: Mapped[Role] = enum_column(Role)
@@ -203,7 +213,9 @@ class Race(Base):
     status: Mapped[RaceStatus] = enum_column(RaceStatus)
     is_passed: Mapped[bool] = mapped_column(Boolean, default=False)
     results: Mapped[dict | list | None] = mapped_column(JSONB)
+    rating_applied: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     game: Mapped[str] = mapped_column(String(20), default="ACC", server_default="ACC")
+    has_qualification: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     creator_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     is_official: Mapped[bool] = mapped_column(Boolean, default=False)
     registered_pilots: Mapped[list[dict]] = mapped_column(JSONB, default=list)
@@ -240,6 +252,8 @@ class Penalty(Base):
     target_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     penalty_type: Mapped[PenaltyType] = enum_column(PenaltyType, length=10)
     penalty_value: Mapped[float] = mapped_column(Numeric)
+    time_penalty_ms: Mapped[float] = mapped_column(Numeric, default=0, server_default="0")
+    sr_penalty_value: Mapped[float] = mapped_column(Numeric, default=0, server_default="0")
     status: Mapped[PenaltyStatus] = enum_column(PenaltyStatus)
     description: Mapped[str] = mapped_column(Text)
     is_applied: Mapped[bool] = mapped_column(Boolean, default=False)

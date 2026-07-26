@@ -17,6 +17,7 @@ const raceGameOptions = computed(() => gameOptions(t, true))
 
 const statusOptions = computed(() => [
   { value: 'all', label: t('raceAdmin.allStatuses') },
+  { value: 'not_finished', label: t('raceFilters.notFinished') },
   { value: 'registration_open', label: statusLabel(t, 'registration_open') },
   { value: 'ongoing', label: statusLabel(t, 'ongoing') },
   { value: 'finished', label: statusLabel(t, 'finished') }
@@ -93,7 +94,7 @@ async function exportRegistrations(race) {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `race-${race.id}-registered-pilots.json`
+    link.download = race.game === 'ACC' ? `race-${race.id}-entrylist.json` : `race-${race.id}-registered-pilots.json`
     link.click()
     URL.revokeObjectURL(url)
   } catch (err) {
@@ -162,7 +163,7 @@ onMounted(load)
             <td>
               <div class="race-admin-title">
                 <RouterLink :to="`/races/${race.id}`">{{ race.name }}</RouterLink>
-                <p class="muted">{{ gameLabel(t, race.game) }} - {{ race.track }} - {{ race.car_class }}</p>
+                <p class="muted">{{ gameLabel(t, race.game) }} - {{ race.track }} - {{ race.car_class }} - {{ race.has_qualification ? t('raceDetails.withQualification') : t('raceDetails.withoutQualification') }}</p>
                 <p>{{ race.description }}</p>
               </div>
             </td>

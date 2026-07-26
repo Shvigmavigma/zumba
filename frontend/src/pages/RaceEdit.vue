@@ -24,6 +24,7 @@ const form = ref({
   mods_pack: [],
   allowed_cars: [],
   game: 'ACC',
+  has_qualification: true,
   is_official: false
 })
 const modsText = ref('')
@@ -95,6 +96,7 @@ onMounted(async () => {
         <label class="field"><span>{{ t('fields.modsUrls') }}</span><textarea v-model="modsText" /></label>
         <label class="field"><span>{{ t('fields.allowedCars') }}</span><textarea v-model="carsText" /></label>
       </div>
+      <label><input v-model="form.has_qualification" type="checkbox" /> {{ t('fields.qualification') }}</label>
       <label><input v-model="form.is_official" type="checkbox" /> {{ t('fields.officialRace') }}</label>
       <p v-if="error" class="error">{{ error }}</p>
       <button class="button primary" type="submit">{{ t('common.save') }}</button>

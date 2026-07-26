@@ -1,9 +1,9 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator
+from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator, model_validator
 
-from app.models import MAX_SR, MIN_SR, AppealStatus, BannerPosition, PenaltyStatus, PenaltyType, RaceStatus, Role, TeamApplicationStatus, UserStatus
+from app.models import MAX_RATING, MAX_SR, MIN_RATING, MIN_SR, AppealStatus, BannerPosition, PenaltyStatus, PenaltyType, RaceStatus, Role, TeamApplicationStatus, UserStatus
 
 GameCode = Literal["ACC", "AC", "iRacing"]
 
@@ -51,6 +51,8 @@ class UserPublic(BaseModel):
     pilot_number: int
     country: str | None
     sr: float = Field(ge=MIN_SR, le=MAX_SR)
+    rating: int = Field(ge=int(MIN_RATING), le=int(MAX_RATING))
+    rating_race_count: int = Field(ge=0)
     discord: str | None
     steam_id: str
     role: Role
@@ -58,6 +60,7 @@ class UserPublic(BaseModel):
     avatar_color: str
     games: list[str] = Field(default_factory=list)
     team_id: int | None = None
+    team_name: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -110,6 +113,10 @@ class TeamMemberRead(BaseModel):
     pilot_number: int
     country: str | None
     sr: float = Field(ge=MIN_SR, le=MAX_SR)
+    rating: int = Field(ge=int(MIN_RATING), le=int(MAX_RATING))
+    rating_race_count: int = Field(ge=0)
+    team_id: int | None = None
+    team_name: str | None = None
     avatar_color: str
     games: list[str] = Field(default_factory=list)
     created_at: datetime
@@ -154,6 +161,7 @@ class TeamRead(BaseModel):
     owner_nickname: str | None = None
     member_count: int
     member_limit: int
+    average_rating: int = Field(ge=0)
     can_join: bool
     is_member: bool
     is_owner: bool
@@ -205,6 +213,7 @@ class RaceBase(BaseModel):
     mods_pack: list[str] = Field(default_factory=list)
     allowed_cars: list[str] = Field(default_factory=list)
     game: GameCode = "ACC"
+    has_qualification: bool = True
     is_official: bool = False
 
 
@@ -226,6 +235,7 @@ class RaceUpdate(BaseModel):
     status: RaceStatus | None = None
     results: dict | list | None = None
     game: GameCode | None = None
+    has_qualification: bool | None = None
     is_official: bool | None = None
 
 
@@ -234,6 +244,7 @@ class RaceRead(RaceBase):
     status: RaceStatus
     is_passed: bool
     results: dict | list | None
+    rating_applied: bool
     creator_id: int
     registered_pilots: list[dict]
     created_at: datetime
@@ -254,6 +265,8 @@ class RaceManageRead(BaseModel):
     car_class: str
     track: str
     game: str
+    has_qualification: bool
+    rating_applied: bool
     creator_id: int
     is_official: bool
     created_at: datetime
@@ -268,12 +281,42 @@ class ResultsUpload(BaseModel):
     results: dict | list
 
 
+class AccResultsUpload(BaseModel):
+    qualification_results: dict | None = None
+    race_results: dict
+
+
+class ManualResultRow(BaseModel):
+    user_id: int
+    finish_ms: int = Field(ge=0)
+    lap_count: int = Field(default=0, ge=0)
+    best_lap_ms: int | None = Field(default=None, ge=0)
+
+
+class ManualResultsUpload(BaseModel):
+    rows: list[ManualResultRow] = Field(min_length=1)
+
+
 class PenaltyCreate(BaseModel):
     race_id: int
     target_id: int
     penalty_type: PenaltyType
     penalty_value: float = Field(gt=0)
+    time_penalty_ms: float | None = Field(default=None, ge=0)
+    sr_penalty_value: float | None = Field(default=None, ge=0)
     description: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def normalize_penalty_impacts(self):
+        if self.time_penalty_ms is None:
+            self.time_penalty_ms = self.penalty_value if self.penalty_type == PenaltyType.time else 0
+        if self.sr_penalty_value is None:
+            self.sr_penalty_value = self.penalty_value if self.penalty_type == PenaltyType.sr else 0
+        if self.time_penalty_ms <= 0 or self.sr_penalty_value <= 0:
+            raise ValueError("time_penalty_ms and sr_penalty_value must both be greater than zero")
+        self.penalty_type = PenaltyType.combined
+        self.penalty_value = self.time_penalty_ms
+        return self
 
 
 class PenaltyRead(PenaltyCreate):
@@ -293,8 +336,12 @@ class PenaltyDetailRead(PenaltyRead):
     target_nickname: str | None = None
     target_pilot_number: int | None = None
     target_avatar_color: str | None = None
+    target_rating: int | None = None
+    target_team_name: str | None = None
     issuer_login: str | None = None
     issuer_nickname: str | None = None
+    issuer_rating: int | None = None
+    issuer_team_name: str | None = None
 
 
 class AppealCreate(BaseModel):
@@ -377,6 +424,48 @@ class NewsItemUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=120)
     body: str | None = Field(default=None, min_length=1, max_length=1000)
     is_published: bool | None = None
+
+
+class HallOfFamePilotRead(BaseModel):
+    id: int
+    login: str
+    first_name: str
+    last_name: str
+    nickname: str
+    pilot_number: int
+    country: str | None
+    sr: float = Field(ge=MIN_SR, le=MAX_SR)
+    rating: int = Field(ge=int(MIN_RATING), le=int(MAX_RATING))
+    rating_race_count: int = Field(ge=0)
+    avatar_color: str
+    team_id: int | None = None
+    team_name: str | None = None
+    points: int = Field(ge=0)
+    gold: int = Field(ge=0)
+    silver: int = Field(ge=0)
+    bronze: int = Field(ge=0)
+    podiums: int = Field(ge=0)
+
+
+class HallOfFameTeamRead(BaseModel):
+    id: int
+    name: str
+    description: str
+    avatar_color: str
+    owner_id: int | None
+    member_count: int = Field(ge=0)
+    average_rating: int = Field(ge=0)
+    points: int = Field(ge=0)
+    gold: int = Field(ge=0)
+    silver: int = Field(ge=0)
+    bronze: int = Field(ge=0)
+    podiums: int = Field(ge=0)
+    best_pilot: HallOfFamePilotRead | None = None
+
+
+class HallOfFameRead(BaseModel):
+    pilots: list[HallOfFamePilotRead]
+    teams: list[HallOfFameTeamRead]
 
 
 class DashboardStats(BaseModel):

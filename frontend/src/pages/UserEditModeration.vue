@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import UserAvatar from '../components/UserAvatar.vue'
+import { formatRating, teamShortName } from '../pilotDisplay'
 
 const { t } = useI18n()
 const users = ref([])
@@ -45,7 +46,7 @@ onMounted(async () => {
           </div>
         </div>
         <div class="user-moderation-meta">
-          <p class="muted">#{{ user.pilot_number }} - {{ user.email }} - {{ t('fields.steam') }} {{ user.steam_id }}</p>
+          <p class="muted">#{{ user.pilot_number }} - RER {{ formatRating(user.rating) }} - {{ teamShortName(user.team_name) }} - {{ user.email }} - {{ t('fields.steam') }} {{ user.steam_id }}</p>
           <p v-if="user.pending_profile_changes" class="muted">{{ t('moderation.pendingProfileChanges', { changes: user.pending_profile_changes }) }}</p>
         </div>
         <div class="toolbar">

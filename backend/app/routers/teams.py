@@ -69,6 +69,17 @@ async def load_member_counts(session: AsyncSession, team_ids: list[int]) -> dict
     return {int(team_id): int(count) for team_id, count in rows if team_id is not None}
 
 
+async def load_average_ratings(session: AsyncSession, team_ids: list[int]) -> dict[int, int]:
+    if not team_ids:
+        return {}
+    rows = await session.execute(
+        select(User.team_id, func.avg(User.rating))
+        .where(User.team_id.in_(team_ids))
+        .group_by(User.team_id)
+    )
+    return {int(team_id): int(round(float(average or 0))) for team_id, average in rows if team_id is not None}
+
+
 async def load_owners(session: AsyncSession, teams: list[Team]) -> dict[int, User]:
     owner_ids = sorted({team.owner_id for team in teams if team.owner_id is not None})
     if not owner_ids:
@@ -150,6 +161,7 @@ def team_payload(
     member_limit: int,
     current_user: User | None,
     owner: User | None,
+    average_rating: int = 0,
     my_application_status: TeamApplicationStatus | None = None,
     pending_application_count: int = 0,
 ) -> dict:
@@ -167,6 +179,7 @@ def team_payload(
         "owner_nickname": owner.nickname if owner else None,
         "member_count": member_count,
         "member_limit": member_limit,
+        "average_rating": int(round(float(average_rating or 0))),
         "can_join": current_user is not None and current_user.team_id is None and member_count < member_limit and not has_pending_application,
         "is_member": is_member,
         "is_owner": is_owner,
@@ -250,16 +263,21 @@ async def build_team_detail(
     ).all()
     my_applications = await load_current_user_applications(session, [team.id], current_user)
     pending_applications = await load_pending_applications(session, team) if can_manage_team(current_user, team) else []
+    average_rating = sum(float(member.rating or 0) for member in members) / len(members) if members else 0
     payload = team_payload(
         team,
         member_count,
         resolved_limit,
         current_user,
         owner,
+        average_rating,
         my_applications.get(team.id),
         len(pending_applications),
     )
-    payload["members"] = [TeamMemberRead.model_validate(member) for member in members]
+    payload["members"] = [
+        TeamMemberRead(**{**TeamMemberRead.model_validate(member).model_dump(), "team_name": team.name})
+        for member in members
+    ]
     payload["applications"] = pending_applications
     return TeamDetailRead(**payload)
 
@@ -335,6 +353,7 @@ async def list_teams(
     teams = (await session.scalars(stmt.order_by(Team.created_at.desc(), Team.id.desc()))).all()
     member_limit = await get_team_member_limit(session)
     counts = await load_member_counts(session, [team.id for team in teams])
+    averages = await load_average_ratings(session, [team.id for team in teams])
     owners = await load_owners(session, teams)
     applications = await load_current_user_applications(session, [team.id for team in teams], current_user)
     application_counts = await load_pending_application_counts(session, [team.id for team in teams], current_user)
@@ -346,6 +365,7 @@ async def list_teams(
                 member_limit,
                 current_user,
                 owners.get(team.owner_id),
+                averages.get(team.id, 0),
                 applications.get(team.id),
                 application_counts.get(team.id, 0),
             )
