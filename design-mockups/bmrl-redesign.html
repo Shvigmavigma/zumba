@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BMRL Redesign Concept</title>
+    <style>
+      :root {
+        --paper: #f6f8fc;
+        --panel: #ffffff;
+        --panel-2: #eef3fa;
+        --ink: #111827;
+        --muted: #667085;
+        --line: #d8e0ec;
+        --red: #e02828;
+        --blue: #2563eb;
+        --green: #16a34a;
+        --amber: #f59e0b;
+        --shadow: 0 22px 48px rgba(15, 23, 42, 0.12);
+        --radius: 8px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #dbe3ef;
+        color: var(--ink);
+        font-family: Inter, "Segoe UI", Arial, sans-serif;
+      }
+
+      .shot {
+        position: relative;
+        width: 1280px;
+        height: 900px;
+        margin: 0 auto 64px;
+        overflow: hidden;
+        background:
+          linear-gradient(115deg, transparent 0 58%, rgba(224, 40, 40, 0.07) 58% calc(58% + 3px), transparent calc(58% + 3px)),
+          repeating-linear-gradient(90deg, transparent 0 128px, rgba(37, 99, 235, 0.055) 128px 130px),
+          linear-gradient(180deg, #ffffff 0%, #f7faff 45%, #eaf1fb 100%);
+      }
+
+      .shot::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(circle at 82% 12%, rgba(224, 40, 40, 0.12), transparent 23%),
+          linear-gradient(122deg, transparent 0 64%, rgba(17, 24, 39, 0.075) 64% calc(64% + 48px), transparent calc(64% + 48px));
+        opacity: 0.85;
+      }
+
+      .topbar {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        grid-template-columns: 126px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 16px;
+        height: 64px;
+        padding: 0 30px;
+        background: rgba(255, 255, 255, 0.92);
+        border-bottom: 1px solid var(--line);
+        backdrop-filter: blur(16px);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 21px;
+        font-weight: 950;
+        letter-spacing: 0.03em;
+      }
+
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 999px;
+        background: conic-gradient(from 45deg, var(--red), var(--ink), var(--blue), var(--red));
+        color: #fff;
+        font-size: 12px;
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .nav span,
+      .chip,
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 36px;
+        border-radius: 6px;
+        white-space: nowrap;
+      }
+
+      .nav span {
+        padding: 0 10px;
+        font-size: 14px;
+        color: var(--muted);
+        font-weight: 850;
+      }
+
+      .nav .active {
+        color: var(--ink);
+        background: var(--panel-2);
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .button {
+        gap: 7px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        background: #fff;
+        font-weight: 900;
+      }
+
+      .button.primary {
+        color: #fff;
+        border-color: var(--red);
+        background: linear-gradient(135deg, var(--red), #b91c1c);
+      }
+
+      .chip {
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .chip.red {
+        color: var(--red);
+        border-color: rgba(224, 40, 40, 0.34);
+        background: rgba(224, 40, 40, 0.08);
+      }
+
+      .chip.blue {
+        color: var(--blue);
+        border-color: rgba(37, 99, 235, 0.34);
+        background: rgba(37, 99, 235, 0.09);
+      }
+
+      .chip.green {
+        color: var(--green);
+        border-color: rgba(22, 163, 74, 0.34);
+        background: rgba(22, 163, 74, 0.09);
+      }
+
+      .shell {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: 160px minmax(0, 1fr) 160px;
+        gap: 14px;
+        width: 1220px;
+        margin: 16px auto 0;
+      }
+
+      .ad,
+      .panel,
+      .race-row,
+      .news-card,
+      .metric,
+      .table-shell {
+        border: 1px solid rgba(216, 224, 236, 0.94);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.94);
+        box-shadow: var(--shadow);
+      }
+
+      .ad {
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        color: rgba(255, 255, 255, 0.92);
+        background:
+          linear-gradient(135deg, rgba(17, 24, 39, 0.82), rgba(224, 40, 40, 0.62)),
+          repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0 12px, transparent 12px 24px);
+        font-size: 13px;
+        font-weight: 950;
+        text-align: center;
+        text-transform: uppercase;
+      }
+
+      .ad.top {
+        grid-column: 1 / -1;
+        height: 90px;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+      }
+
+      .ad.side {
+        min-height: 672px;
+        padding: 18px;
+        writing-mode: vertical-rl;
+      }
+
+      .main {
+        display: grid;
+        gap: 16px;
+      }
+
+      .news-card {
+        position: relative;
+        min-height: 158px;
+        overflow: hidden;
+        background:
+          linear-gradient(90deg, rgba(8, 12, 18, 0.82), rgba(8, 12, 18, 0.18) 58%, rgba(224, 40, 40, 0.28)),
+          radial-gradient(circle at 82% 28%, rgba(255, 255, 255, 0.42), transparent 22%),
+          linear-gradient(135deg, #111827 0%, #26364c 54%, #c62828 100%);
+        color: #fff;
+      }
+
+      .news-card::after {
+        content: "";
+        position: absolute;
+        right: 40px;
+        bottom: -44px;
+        width: 420px;
+        height: 150px;
+        border: 18px solid rgba(255, 255, 255, 0.32);
+        border-radius: 50%;
+        transform: skewX(-18deg);
+      }
+
+      .news-copy {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        align-content: end;
+        gap: 12px;
+        width: 620px;
+        height: 100%;
+        padding: 22px 24px;
+      }
+
+      .eyebrow {
+        color: var(--red);
+        font-size: 12px;
+        font-weight: 950;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .news-copy .eyebrow {
+        color: #ffb3b3;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 30px;
+        line-height: 1.05;
+      }
+
+      h2 {
+        font-size: 23px;
+      }
+
+      h3 {
+        font-size: 18px;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .filter-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px;
+      }
+
+      .segmented {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 280px;
+        height: 40px;
+        padding: 4px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--panel-2);
+      }
+
+      .segmented span {
+        display: grid;
+        place-items: center;
+        border-radius: 5px;
+        color: var(--muted);
+        font-weight: 900;
+      }
+
+      .segmented .active {
+        background: #fff;
+        color: var(--red);
+        box-shadow: 0 6px 14px rgba(15, 23, 42, 0.1);
+      }
+
+      .selects {
+        display: flex;
+        gap: 8px;
+      }
+
+      .selects span {
+        display: inline-flex;
+        align-items: center;
+        height: 40px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        color: var(--muted);
+        font-weight: 850;
+      }
+
+      .race-list {
+        display: grid;
+        grid-template-rows: repeat(5, 58px);
+        gap: 7px;
+        max-height: 500px;
+        padding-right: 4px;
+        overflow: hidden;
+      }
+
+      .race-row {
+        display: grid;
+        grid-template-columns: 62px minmax(0, 1fr) 128px 112px;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 10px;
+      }
+
+      .date-box {
+        display: grid;
+        place-items: center;
+        height: 44px;
+        border-radius: 7px;
+        background: #111827;
+        color: #fff;
+        font-weight: 950;
+      }
+
+      .date-box small {
+        color: #b9c2cf;
+        font-size: 11px;
+      }
+
+      .race-main {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .race-main p {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 750;
+      }
+
+      .meter {
+        height: 8px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #e7edf6;
+      }
+
+      .meter span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--red), var(--blue));
+      }
+
+      .stats-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .metric {
+        min-height: 68px;
+        padding: 11px 14px;
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 850;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 6px;
+        font-size: 27px;
+        line-height: 1;
+      }
+
+      .detail-shell {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 330px;
+        gap: 14px;
+        width: 1220px;
+        margin: 16px auto 0;
+      }
+
+      .hero-panel {
+        min-height: 220px;
+        overflow: hidden;
+        padding: 22px;
+        color: #fff;
+        background:
+          linear-gradient(90deg, rgba(17, 24, 39, 0.95), rgba(17, 24, 39, 0.54)),
+          radial-gradient(circle at 78% 22%, rgba(37, 99, 235, 0.5), transparent 25%),
+          linear-gradient(135deg, #0b1018, #283247 58%, #d32828);
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 260px;
+        gap: 18px;
+        height: 100%;
+      }
+
+      .track-map {
+        position: relative;
+        min-height: 176px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+      }
+
+      .track-map::before {
+        content: "";
+        position: absolute;
+        inset: 42px 38px;
+        border: 16px solid rgba(255, 255, 255, 0.72);
+        border-left-color: rgba(224, 40, 40, 0.92);
+        border-radius: 52% 38% 48% 42%;
+        transform: rotate(-10deg);
+      }
+
+      .info-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .info-tile {
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .info-tile span,
+      .table-shell th {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 950;
+        text-transform: uppercase;
+      }
+
+      .info-tile strong {
+        display: block;
+        margin-top: 7px;
+        font-size: 17px;
+      }
+
+      .tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        height: 48px;
+        padding: 4px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel-2);
+      }
+
+      .tabs span {
+        display: grid;
+        place-items: center;
+        border-radius: 6px;
+        color: var(--muted);
+        font-weight: 950;
+      }
+
+      .tabs .active {
+        background: #fff;
+        color: var(--red);
+      }
+
+      .content-stack {
+        display: grid;
+        gap: 16px;
+      }
+
+      .side-stack {
+        display: grid;
+        align-content: start;
+        gap: 16px;
+      }
+
+      .panel {
+        padding: 14px;
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .driver-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .driver {
+        display: grid;
+        grid-template-columns: 38px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        min-height: 52px;
+        padding: 8px;
+        border-radius: 7px;
+        background: var(--panel-2);
+      }
+
+      .avatar {
+        display: grid;
+        place-items: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #111827, #64748b);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 950;
+      }
+
+      .driver strong,
+      .driver small {
+        display: block;
+      }
+
+      .driver small {
+        margin-top: 2px;
+        color: var(--muted);
+        font-weight: 800;
+      }
+
+      .results-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .results-table th,
+      .results-table td {
+        padding: 12px 10px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+      }
+
+      .results-table tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .position {
+        display: inline-grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 999px;
+        background: var(--panel-2);
+        font-weight: 950;
+      }
+
+      .position.top {
+        color: var(--red);
+        background: rgba(224, 40, 40, 0.09);
+      }
+
+      .admin-shell {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: 285px minmax(0, 1fr);
+        gap: 14px;
+        width: 1220px;
+        margin: 16px auto 0;
+      }
+
+      .admin-nav {
+        display: grid;
+        align-content: start;
+        gap: 10px;
+      }
+
+      .admin-nav .panel {
+        min-height: 78px;
+      }
+
+      .admin-main {
+        display: grid;
+        gap: 16px;
+      }
+
+      .ops-row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .action-icons {
+        display: flex;
+        gap: 6px;
+      }
+
+      .icon {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--blue);
+        font-weight: 950;
+      }
+
+      .compact-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .compact-table th,
+      .compact-table td {
+        padding: 13px 12px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: middle;
+      }
+
+      .compact-table tbody tr:nth-child(odd) td {
+        background: #f8fbff;
+      }
+
+      .queue {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="shot" id="screen-main">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">BM</span>BMRL</div>
+        <nav class="nav">
+          <span class="active">Главная</span><span>Гонки</span><span>Пилоты</span><span>Команды</span><span>Зал славы</span><span>Календарь</span>
+        </nav>
+        <div class="top-actions"><span class="chip blue">RER 1240</span><span class="chip green">SR 8.4</span><span class="button primary">Создать гонку</span></div>
+      </header>
+      <div class="shell">
+        <div class="ad top">Sponsor banner · 1240x170</div>
+        <aside class="ad side">Teamwear / Sim gear / Partner slot</aside>
+        <main class="main">
+          <article class="news-card">
+            <div class="news-copy">
+              <span class="eyebrow">Race Control News</span>
+              <h1>Ночной этап Spa 90: регистрация открыта для классов GT3 и Cup</h1>
+              <p>Большая картинка, текст поверх, один новостной слот на всю ширину секции и точки навигации снизу.</p>
+            </div>
+          </article>
+          <section class="stats-strip">
+            <div class="metric"><span>Пилотов</span><strong>200</strong></div>
+            <div class="metric"><span>Команд</span><strong>30</strong></div>
+            <div class="metric"><span>Завершено</span><strong>36</strong></div>
+            <div class="metric"><span>Открытых</span><strong>7</strong></div>
+          </section>
+          <section class="panel">
+            <div class="section-head">
+              <div><span class="eyebrow">Next events</span><h2>Гонки</h2></div>
+              <span class="button">Все гонки</span>
+            </div>
+            <div class="filter-bar">
+              <div class="segmented"><span class="active">Активные</span><span>Завершенные</span></div>
+              <div class="selects"><span>ACC</span><span>Только мои игры</span><span>По рейтингу</span></div>
+            </div>
+            <div class="race-list">
+              <article class="race-row"><div class="date-box"><small>JUL</small>31</div><div class="race-main"><h3>Spa 90 Night Sprint</h3><p>ACC · Spa-Francorchamps · GT3 · 21:00 MSK</p><div class="meter"><span style="width: 72%"></span></div></div><span class="chip green">Регистрация</span><span class="button primary">Открыть</span></article>
+              <article class="race-row"><div class="date-box"><small>AUG</small>03</div><div class="race-main"><h3>Monza Rookie Cup</h3><p>ACC · Monza · GT4 · 20:30 MSK</p><div class="meter"><span style="width: 48%"></span></div></div><span class="chip blue">Квалификация</span><span class="button">Открыть</span></article>
+              <article class="race-row"><div class="date-box"><small>AUG</small>08</div><div class="race-main"><h3>Nürburgring Endurance</h3><p>iRacing · Nürburgring · Multi-class · 19:00 MSK</p><div class="meter"><span style="width: 88%"></span></div></div><span class="chip red">Почти полная</span><span class="button">Открыть</span></article>
+              <article class="race-row"><div class="date-box"><small>AUG</small>12</div><div class="race-main"><h3>Imola Summer Heat</h3><p>AC · Imola · GT3 · 22:00 MSK</p><div class="meter"><span style="width: 40%"></span></div></div><span class="chip green">Открыта</span><span class="button">Открыть</span></article>
+              <article class="race-row"><div class="date-box"><small>AUG</small>18</div><div class="race-main"><h3>Brands Hatch Battle</h3><p>ACC · Brands Hatch · TCX · 20:00 MSK</p><div class="meter"><span style="width: 60%"></span></div></div><span class="chip blue">В работе</span><span class="button">Открыть</span></article>
+            </div>
+          </section>
+        </main>
+        <aside class="ad side">Broadcast / Discord / Academy slot</aside>
+      </div>
+    </section>
+
+    <section class="shot" id="screen-race">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">BM</span>BMRL</div>
+        <nav class="nav"><span>Главная</span><span class="active">Гонки</span><span>Пилоты</span><span>Команды</span><span>Зал славы</span><span>Календарь</span></nav>
+        <div class="top-actions"><span class="button">Штрафы · 4</span><span class="button primary">Зарегистрироваться</span></div>
+      </header>
+      <div class="detail-shell">
+        <main class="content-stack">
+          <section class="panel hero-panel">
+            <div class="hero-grid">
+              <div>
+                <span class="eyebrow">ACC · Official race</span>
+                <h1>Spa 90 Night Sprint</h1>
+                <p style="margin-top: 14px; max-width: 600px; color: #dce6f5; font-weight: 750">Геро-блок гонки сразу показывает статус, игру, трассу, сервер, регламент и основные действия. Кнопка штрафов находится в карточке гонки.</p>
+                <div style="display: flex; gap: 8px; margin-top: 22px"><span class="chip green">Регистрация открыта</span><span class="chip blue">Квалификация включена</span><span class="chip red">GT3</span></div>
+              </div>
+              <div class="track-map"></div>
+            </div>
+          </section>
+          <section class="info-grid">
+            <div class="info-tile"><span>Старт</span><strong>31 июля · 21:00</strong></div>
+            <div class="info-tile"><span>Пилоты</span><strong>24 / 32</strong></div>
+            <div class="info-tile"><span>Сервер</span><strong>BMRL GT3 #1</strong></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><div><span class="eyebrow">Results</span><h2>Итоги события</h2></div><div class="tabs"><span class="active">Гонка</span><span>Квалификация</span></div></div>
+            <table class="results-table">
+              <thead><tr><th>#</th><th>Пилот</th><th>Команда</th><th>Время</th><th>Штраф</th><th>RER</th></tr></thead>
+              <tbody>
+                <tr><td><span class="position top">1</span></td><td>Max Raven</td><td>RDX</td><td>1:32:11.402</td><td>+5s / -0.2 SR</td><td>+18</td></tr>
+                <tr><td><span class="position top">2</span></td><td>Sen Yavas</td><td>APX</td><td>1:32:18.100</td><td>-</td><td>+11</td></tr>
+                <tr><td><span class="position top">3</span></td><td>Ivan Miles</td><td>BMRL</td><td>1:32:44.802</td><td>+10s / -0.4 SR</td><td>+7</td></tr>
+                <tr><td><span class="position">4</span></td><td>Alex Teamless</td><td>-</td><td>1:33:02.220</td><td>-</td><td>+2</td></tr>
+              </tbody>
+            </table>
+          </section>
+        </main>
+        <aside class="side-stack">
+          <section class="panel">
+            <div class="panel-head"><h3>Регистрация</h3><span class="chip green">Открыта</span></div>
+            <div class="meter"><span style="width: 75%"></span></div>
+            <p style="margin-top: 12px; color: var(--muted); font-weight: 800">24 из 32 мест занято. Только пилоты с SR 5.0+.</p>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h3>Участники</h3><span class="button">Свернуть</span></div>
+            <div class="driver-list">
+              <div class="driver"><span class="avatar">MR</span><div><strong>Max Raven</strong><small>RDX · RER 1432 · SR 9.1</small></div><span class="chip blue">GT3</span></div>
+              <div class="driver"><span class="avatar">SY</span><div><strong>Sen Yavas</strong><small>APX · RER 1288 · SR 7.8</small></div><span class="chip blue">GT3</span></div>
+              <div class="driver"><span class="avatar">IM</span><div><strong>Ivan Miles</strong><small>BMRL · RER 1210 · SR 8.2</small></div><span class="chip blue">GT3</span></div>
+              <div class="driver"><span class="avatar">AT</span><div><strong>Alex Teamless</strong><small>- · RER 1004 · SR 6.4</small></div><span class="chip blue">GT3</span></div>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h3>Штрафы</h3><span class="button primary">Открыть</span></div>
+            <p style="color: var(--muted); font-weight: 800">Единый штраф: время + SR за один инцидент. Апелляции пересчитывают результат только после решения.</p>
+          </section>
+        </aside>
+      </div>
+    </section>
+
+    <section class="shot" id="screen-admin">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">BM</span>BMRL</div>
+        <nav class="nav"><span>Главная</span><span>Гонки</span><span>Команды</span><span class="active">Админ</span><span>Новости</span><span>Баннеры</span></nav>
+        <div class="top-actions"><span class="chip blue">admin</span><span class="button primary">Новая гонка</span></div>
+      </header>
+      <div class="admin-shell">
+        <aside class="admin-nav">
+          <section class="panel"><span class="eyebrow">Ops</span><h3>Управление гонками</h3></section>
+          <section class="panel"><span class="eyebrow">Teams</span><h3>Заявки команд</h3></section>
+          <section class="panel"><span class="eyebrow">Users</span><h3>Пилоты и роли</h3></section>
+          <section class="panel"><span class="eyebrow">Media</span><h3>Новости и баннеры</h3></section>
+        </aside>
+        <main class="admin-main">
+          <section class="ops-row">
+            <div class="metric"><span>Активные гонки</span><strong>14</strong></div>
+            <div class="metric"><span>Завершенные</span><strong>36</strong></div>
+            <div class="metric"><span>Апелляции</span><strong>31</strong></div>
+            <div class="metric"><span>Заявки команд</span><strong>5</strong></div>
+          </section>
+          <section class="table-shell panel">
+            <div class="panel-head"><div><span class="eyebrow">Race management</span><h2>Список гонок</h2></div><div class="segmented"><span class="active">Активные</span><span>Завершенные</span></div></div>
+            <table class="compact-table">
+              <thead><tr><th>Гонка</th><th>Игра</th><th>Статус</th><th>Рег.</th><th>Штрафы</th><th>Действия</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Spa 90 Night Sprint</strong><br><span style="color: var(--muted)">31 Jul · GT3</span></td><td>ACC</td><td><span class="chip green">Регистрация</span></td><td>24/32</td><td>4</td><td><div class="action-icons"><span class="icon">↗</span><span class="icon">✎</span><span class="icon">⚑</span><span class="icon">×</span></div></td></tr>
+                <tr><td><strong>Monza Rookie Cup</strong><br><span style="color: var(--muted)">03 Aug · GT4</span></td><td>ACC</td><td><span class="chip blue">Идет</span></td><td>18/26</td><td>1</td><td><div class="action-icons"><span class="icon">↗</span><span class="icon">✎</span><span class="icon">⚑</span><span class="icon">×</span></div></td></tr>
+                <tr><td><strong>Nürburgring Endurance</strong><br><span style="color: var(--muted)">08 Aug · Multi</span></td><td>iRacing</td><td><span class="chip red">Проверка</span></td><td>46/50</td><td>7</td><td><div class="action-icons"><span class="icon">↗</span><span class="icon">✎</span><span class="icon">⚑</span><span class="icon">×</span></div></td></tr>
+              </tbody>
+            </table>
+          </section>
+          <section class="queue">
+            <div class="panel"><div class="panel-head"><h3>Заявки команд</h3><span class="chip red">5 новых</span></div><div class="driver-list"><div class="driver"><span class="avatar">NR</span><div><strong>Nova Racing</strong><small>Владелец: sim_user_088</small></div><span class="button primary">OK</span></div><div class="driver"><span class="avatar">TR</span><div><strong>Tachyon Run</strong><small>Владелец: sim_user_142</small></div><span class="button">Откл.</span></div></div></div>
+            <div class="panel"><div class="panel-head"><h3>Медиа</h3><span class="chip blue">Баннеры</span></div><p style="color: var(--muted); font-weight: 800">Новый редактор баннеров: загрузка, обрезка в нужную рамку, подсказка размера, быстрый предпросмотр изображения.</p></div>
+          </section>
+        </main>
+      </div>
+    </section>
+  </body>
+</html>

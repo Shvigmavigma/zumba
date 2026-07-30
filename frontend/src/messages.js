@@ -255,25 +255,36 @@ export const messages = {
     banners: {
       subtitle: 'Загрузка баннеров по позициям',
       noImage: 'Нет изображения',
+      crop: 'Обрезать',
+      cropTitle: 'Обрезка: {title}',
+      cropSize: 'Итоговый размер',
+      cropZoom: 'Масштаб',
+      cropSave: 'Применить обрезку',
+      cropCancel: 'Отмена',
+      cropSaveError: 'Не удалось сохранить обрезанный баннер',
       positions: {
         top: {
           title: 'Верхний баннер',
           description: 'Горизонтальная реклама над главным меню',
+          sizeHint: 'Рекомендовано: 1240x170 px, пропорция 7.3:1',
           badge: 'TOP'
         },
         left: {
           title: 'Левый баннер',
           description: 'Вертикальная реклама слева от контента',
+          sizeHint: 'Рекомендовано: ширина 210 px, пропорция 1:3-1:4',
           badge: 'LEFT'
         },
         right: {
           title: 'Правый баннер',
           description: 'Вертикальная реклама справа от контента',
+          sizeHint: 'Рекомендовано: ширина 210 px, пропорция 1:3-1:4',
           badge: 'RIGHT'
         },
         bottom: {
           title: 'Нижний баннер',
           description: 'Горизонтальная реклама под основными блоками',
+          sizeHint: 'Рекомендовано: 788x110 px, пропорция 7.2:1',
           badge: 'BOTTOM'
         }
       }
@@ -651,25 +662,36 @@ export const messages = {
     banners: {
       subtitle: 'Upload banners by placement',
       noImage: 'No image',
+      crop: 'Crop',
+      cropTitle: 'Crop: {title}',
+      cropSize: 'Output size',
+      cropZoom: 'Zoom',
+      cropSave: 'Apply crop',
+      cropCancel: 'Cancel',
+      cropSaveError: 'Could not save cropped banner',
       positions: {
         top: {
           title: 'Top banner',
           description: 'Horizontal ad above the main menu',
+          sizeHint: 'Recommended: 1240x170 px, 7.3:1 ratio',
           badge: 'TOP'
         },
         left: {
           title: 'Left banner',
           description: 'Vertical ad on the left side',
+          sizeHint: 'Recommended: 210 px wide, 1:3-1:4 ratio',
           badge: 'LEFT'
         },
         right: {
           title: 'Right banner',
           description: 'Vertical ad on the right side',
+          sizeHint: 'Recommended: 210 px wide, 1:3-1:4 ratio',
           badge: 'RIGHT'
         },
         bottom: {
           title: 'Bottom banner',
           description: 'Horizontal ad below the main content',
+          sizeHint: 'Recommended: 788x110 px, 7.2:1 ratio',
           badge: 'BOTTOM'
         }
       }

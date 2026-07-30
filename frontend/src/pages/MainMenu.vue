@@ -223,9 +223,9 @@ onBeforeUnmount(() => {
                 {{ t('raceFilters.finished') }}
               </button>
             </div>
-            <label class="field">
-              <span>{{ t('fields.game') }}</span>
-              <select v-model="raceGameFilter">
+            <label class="field race-game-filter">
+              <span class="visually-hidden">{{ t('fields.game') }}</span>
+              <select v-model="raceGameFilter" :aria-label="t('fields.game')">
                 <option v-for="option in raceGameOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
               </select>
             </label>
