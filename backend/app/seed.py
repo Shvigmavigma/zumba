@@ -583,3 +583,4 @@ async def seed_defaults(session: AsyncSession) -> None:
     await normalize_user_sr_values(session)
     await migrate_json_race_registrations(session)
     await session.commit()
+# degenerat
