@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     rate_limit_storage_uri: str | None = None
     steam_openid_url: str = "https://steamcommunity.com/openid/login"
     upload_dir: str = "/app/uploads"
-    max_banner_upload_mb: int = 8
+    max_banner_upload_mb: int = 20
     max_user_avatar_upload_mb: int = 5
     max_team_avatar_upload_mb: int = 30
 
