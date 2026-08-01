@@ -50,7 +50,7 @@ watch(users, () => {
     <div class="grid">
       <article v-for="user in pagedUsers" :key="user.id" class="card user-moderation-card">
         <div class="user-list-cell">
-          <UserAvatar :color="user.avatar_color" :label="user.nickname || user.login" />
+          <UserAvatar :src="user.avatar_url" :color="user.avatar_color" :label="user.nickname || user.login" />
           <div class="user-moderation-main">
             <strong>{{ user.first_name }} {{ user.last_name }}</strong>
             <span>{{ user.nickname }}</span>

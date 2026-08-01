@@ -1,13 +1,17 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Ban, Save, Timer, TimerOff, Trash2, Undo2, X } from 'lucide-vue-next'
+import { Ban, Edit3, Save, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
 import { api } from '../api'
+import AvatarViewer from '../components/AvatarViewer.vue'
+import CountryCombobox from '../components/CountryCombobox.vue'
+import GameCheckboxGroup from '../components/GameCheckboxGroup.vue'
 import PaginationControls from '../components/PaginationControls.vue'
 import UserAvatar from '../components/UserAvatar.vue'
+import { countryOptionsWithCurrent } from '../countries'
 import { roleLabel, statusLabel } from '../i18nLabels'
 import { formatRating, teamShortName } from '../pilotDisplay'
-import { state } from '../store'
+import { setSession, state } from '../store'
 
 const { t } = useI18n()
 const users = ref([])
@@ -17,6 +21,12 @@ const busyUsers = ref({})
 const timeoutDialogUser = ref(null)
 const timeoutUntil = ref('')
 const timeoutSaving = ref(false)
+const editDialogUser = ref(null)
+const editForm = ref({})
+const editSaving = ref(false)
+const editAvatarFile = ref(null)
+const editAvatarSaving = ref(false)
+const editAvatarViewerOpen = ref(false)
 const teamLimit = ref(5)
 const teamLimitSaving = ref(false)
 const settingsSaved = ref(false)
@@ -26,6 +36,7 @@ const page = ref(1)
 const pageSize = 25
 const visibleUsers = computed(() => users.value)
 const hasNextPage = computed(() => users.value.length === pageSize)
+const editCountries = computed(() => countryOptionsWithCurrent(state.locale, editForm.value.country || ''))
 
 function datetimeLocalValue(date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
@@ -145,6 +156,89 @@ function closeTimeoutDialog() {
   timeoutUntil.value = ''
 }
 
+function openEditDialog(user) {
+  editDialogUser.value = user
+  editForm.value = {
+    login: user.login || '',
+    email: user.email || '',
+    first_name: user.first_name || '',
+    last_name: user.last_name || '',
+    nickname: user.nickname || '',
+    pilot_number: user.pilot_number || 1,
+    country: user.country || '',
+    discord: user.discord || '',
+    games: user.games?.length ? [...user.games] : ['ACC']
+  }
+  editAvatarFile.value = null
+}
+
+function closeEditDialog() {
+  if (editSaving.value || editAvatarSaving.value) return
+  editDialogUser.value = null
+  editAvatarViewerOpen.value = false
+  editAvatarFile.value = null
+}
+
+function setEditAvatarFile(event) {
+  editAvatarFile.value = event.target.files?.[0] || null
+}
+
+function updateUserInList(updatedUser) {
+  users.value = users.value.map((item) => (item.id === updatedUser.id ? updatedUser : item))
+  if (updatedUser.id === state.user?.id) {
+    setSession(state.token, updatedUser)
+  }
+}
+
+async function saveUserProfile() {
+  if (!editDialogUser.value) return
+  editSaving.value = true
+  error.value = ''
+  try {
+    const updatedUser = await api(`/users/${editDialogUser.value.id}`, {
+      method: 'PATCH',
+      body: {
+        login: editForm.value.login,
+        email: editForm.value.email,
+        first_name: editForm.value.first_name,
+        last_name: editForm.value.last_name,
+        nickname: editForm.value.nickname,
+        pilot_number: Number(editForm.value.pilot_number),
+        country: editForm.value.country || null,
+        discord: editForm.value.discord || null,
+        games: editForm.value.games
+      }
+    })
+    updateUserInList(updatedUser)
+    editDialogUser.value = updatedUser
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    editSaving.value = false
+  }
+}
+
+async function uploadEditAvatar() {
+  if (!editDialogUser.value || !editAvatarFile.value) return
+  editAvatarSaving.value = true
+  error.value = ''
+  try {
+    const payload = new FormData()
+    payload.append('file', editAvatarFile.value)
+    const updatedUser = await api(`/users/${editDialogUser.value.id}/avatar`, {
+      method: 'POST',
+      body: payload
+    })
+    updateUserInList(updatedUser)
+    editDialogUser.value = updatedUser
+    editAvatarFile.value = null
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    editAvatarSaving.value = false
+  }
+}
+
 async function issueTimeout() {
   const user = timeoutDialogUser.value
   if (!user) return
@@ -248,7 +342,7 @@ watch([userSearch, userSort], resetUserPageAndLoad)
           <tr v-for="user in visibleUsers" :key="user.id">
             <td>
               <div class="admin-user-cell">
-                <UserAvatar mini :color="user.avatar_color" :label="user.login" />
+                <UserAvatar mini :src="user.avatar_url" :color="user.avatar_color" :label="user.login" />
                 <div class="admin-user-info">
                   <strong>{{ user.login }}</strong>
                   <span>#{{ user.pilot_number }} · RER {{ formatRating(user.rating) }} · {{ teamShortName(user.team_name) }}</span>
@@ -282,6 +376,16 @@ watch([userSearch, userSort], resetUserPageAndLoad)
             </td>
             <td>
               <div class="admin-actions">
+                <button
+                  class="icon-button"
+                  type="button"
+                  :title="t('common.edit')"
+                  :aria-label="t('common.edit')"
+                  :disabled="busyUsers[user.id]"
+                  @click="openEditDialog(user)"
+                >
+                  <Edit3 :size="16" />
+                </button>
                 <button
                   class="icon-button danger-icon"
                   type="button"
@@ -367,6 +471,94 @@ watch([userSearch, userSort], resetUserPageAndLoad)
           </button>
         </div>
       </form>
+    </div>
+
+    <div v-if="editDialogUser" class="penalty-modal-backdrop" @click.self="closeEditDialog">
+      <form class="penalty-modal admin-profile-modal card" @submit.prevent="saveUserProfile">
+        <div class="penalty-modal-head section-header">
+          <div>
+            <h2>{{ t('adminUsers.editProfileTitle') }}</h2>
+            <p>{{ editDialogUser.login }} · #{{ editDialogUser.pilot_number }}</p>
+          </div>
+          <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="closeEditDialog">
+            <X :size="18" />
+          </button>
+        </div>
+
+        <div class="avatar-edit-panel">
+          <button class="avatar-open-button" type="button" :title="t('avatar.open')" @click="editAvatarViewerOpen = true">
+            <UserAvatar :src="editDialogUser.avatar_url" :color="editDialogUser.avatar_color" :label="editDialogUser.nickname || editDialogUser.login" />
+          </button>
+          <div class="avatar-edit-main">
+            <strong>{{ t('avatar.userTitle') }}</strong>
+            <p class="muted">{{ t('avatar.userHint') }}</p>
+            <div class="avatar-upload-row">
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="setEditAvatarFile" />
+              <button class="button" type="button" :disabled="editAvatarSaving || !editAvatarFile" @click="uploadEditAvatar">
+                <Upload :size="16" />
+                {{ t('common.upload') }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-profile-edit-grid">
+          <label class="field">
+            <span>{{ t('fields.login') }}</span>
+            <input v-model="editForm.login" maxlength="50" required />
+          </label>
+          <label class="field">
+            <span>{{ t('fields.email') }}</span>
+            <input v-model="editForm.email" type="email" required />
+          </label>
+          <label class="field">
+            <span>{{ t('fields.firstName') }}</span>
+            <input v-model="editForm.first_name" maxlength="50" required />
+          </label>
+          <label class="field">
+            <span>{{ t('fields.lastName') }}</span>
+            <input v-model="editForm.last_name" maxlength="50" required />
+          </label>
+          <label class="field">
+            <span>{{ t('fields.nickname') }}</span>
+            <input v-model="editForm.nickname" maxlength="80" required />
+          </label>
+          <label class="field">
+            <span>{{ t('fields.pilotNumber') }}</span>
+            <input v-model.number="editForm.pilot_number" type="number" min="1" max="9999" required />
+          </label>
+          <div class="field">
+            <span>{{ t('fields.country') }}</span>
+            <CountryCombobox v-model="editForm.country" :options="editCountries" />
+          </div>
+          <label class="field">
+            <span>{{ t('fields.discord') }}</span>
+            <input v-model="editForm.discord" maxlength="100" />
+          </label>
+          <div class="field admin-profile-games">
+            <span>{{ t('fields.games') }}</span>
+            <GameCheckboxGroup v-model="editForm.games" />
+          </div>
+        </div>
+
+        <div class="admin-timeout-actions">
+          <button class="button" type="button" :disabled="editSaving" @click="closeEditDialog">
+            <X :size="16" />
+            {{ t('common.close') }}
+          </button>
+          <button class="button primary" type="submit" :disabled="editSaving">
+            <Save :size="16" />
+            {{ t('common.save') }}
+          </button>
+        </div>
+      </form>
+      <AvatarViewer
+        :open="editAvatarViewerOpen"
+        :src="editDialogUser.avatar_url"
+        :label="editDialogUser.nickname || editDialogUser.login"
+        :fallback-color="editDialogUser.avatar_color"
+        @close="editAvatarViewerOpen = false"
+      />
     </div>
   </section>
 </template>

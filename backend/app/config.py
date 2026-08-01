@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     steam_openid_url: str = "https://steamcommunity.com/openid/login"
     upload_dir: str = "/app/uploads"
     max_banner_upload_mb: int = 8
+    max_user_avatar_upload_mb: int = 5
+    max_team_avatar_upload_mb: int = 30
 
     @property
     def cors_origin_list(self) -> list[str]:

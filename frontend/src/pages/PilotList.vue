@@ -72,7 +72,7 @@ function pilotGames(pilot) {
           <td>{{ pilot.pilot_number }}</td>
           <td>
             <div class="user-list-cell">
-              <UserAvatar mini :color="pilot.avatar_color" :label="pilot.nickname || pilot.login" />
+              <UserAvatar mini :src="pilot.avatar_url" :color="pilot.avatar_color" :label="pilot.nickname || pilot.login" />
               <RouterLink class="user-list-main" :to="`/pilots/${pilot.id}`">
                 <strong>{{ pilot.first_name }} {{ pilot.last_name }}</strong>
                 <span>{{ pilot.nickname }} - {{ pilotGames(pilot) }}</span>

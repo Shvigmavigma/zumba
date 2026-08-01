@@ -1,8 +1,9 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Bell, Check, Crown, LogOut, Plus, Save, Search, Send, Trash2, UserCheck, UserMinus, Users, X, XCircle } from 'lucide-vue-next'
+import { Bell, Check, Crown, LogOut, Plus, Save, Search, Send, Trash2, Upload, UserCheck, UserMinus, Users, X, XCircle } from 'lucide-vue-next'
 import { api } from '../api'
+import AvatarViewer from '../components/AvatarViewer.vue'
 import PaginationControls from '../components/PaginationControls.vue'
 import TeamAvatar from '../components/TeamAvatar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
@@ -25,6 +26,9 @@ const createSaving = ref(false)
 const editSaving = ref(false)
 const transferSaving = ref(false)
 const deleteSaving = ref(false)
+const teamAvatarFile = ref(null)
+const teamAvatarSaving = ref(false)
+const teamAvatarViewerOpen = ref(false)
 const busyApplications = ref({})
 const busyMembers = ref({})
 const busyCreateRequests = ref({})
@@ -94,6 +98,10 @@ function fillEditForm(team) {
     avatar_color: team?.avatar_color || '#dc2626'
   }
   transferOwnerId.value = team?.members?.find((member) => member.id !== team.owner_id)?.id || ''
+}
+
+function setTeamAvatarFile(event) {
+  teamAvatarFile.value = event.target.files?.[0] || null
 }
 
 function memberTitle(member) {
@@ -249,6 +257,29 @@ async function saveTeam() {
     error.value = err.message
   } finally {
     editSaving.value = false
+  }
+}
+
+async function uploadTeamAvatar() {
+  if (!selectedTeam.value || !teamAvatarFile.value) return
+  teamAvatarSaving.value = true
+  error.value = ''
+  saved.value = false
+  try {
+    const payload = new FormData()
+    payload.append('file', teamAvatarFile.value)
+    selectedTeam.value = await api(`/teams/${selectedTeam.value.id}/avatar`, {
+      method: 'POST',
+      body: payload
+    })
+    fillEditForm(selectedTeam.value)
+    teamAvatarFile.value = null
+    saved.value = true
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    teamAvatarSaving.value = false
   }
 }
 
@@ -451,10 +482,6 @@ watch(visibleTeamMembers, () => {
           <span>{{ t('fields.name') }}</span>
           <input v-model="createForm.name" type="text" maxlength="80" required />
         </label>
-        <label class="field">
-          <span>{{ t('fields.avatarColor') }}</span>
-          <input v-model="createForm.avatar_color" type="color" required />
-        </label>
         <label class="field team-form-description">
           <span>{{ t('fields.description') }}</span>
           <textarea v-model="createForm.description" maxlength="1000" :placeholder="t('teams.descriptionPlaceholder')" />
@@ -476,7 +503,7 @@ watch(visibleTeamMembers, () => {
       </div>
       <div class="team-application-list">
         <div v-for="requestItem in createRequests" :key="requestItem.id" class="team-application-row">
-          <TeamAvatar mini :color="requestItem.avatar_color" :label="requestItem.name" />
+          <TeamAvatar mini :src="requestItem.avatar_url" :color="requestItem.avatar_color" :label="requestItem.name" />
           <span class="team-application-main">
             <strong>{{ requestItem.name }}</strong>
             <span>{{ t('teams.requestedBy', { name: memberTitle(requestItem.requester) }) }}</span>
@@ -502,7 +529,7 @@ watch(visibleTeamMembers, () => {
       <div class="teams-list card">
         <div v-for="team in pagedTeams" :key="team.id" class="team-list-item" :class="{ 'is-selected': selectedTeam?.id === team.id, 'is-full': team.member_count >= team.member_limit }">
           <button class="team-list-open" type="button" :disabled="busyTeams[team.id]" @click="openTeam(team)">
-            <TeamAvatar mini :color="team.avatar_color" :label="team.name" />
+            <TeamAvatar mini :src="team.avatar_url" :color="team.avatar_color" :label="team.name" />
             <span class="team-list-main">
               <strong>{{ team.name }}</strong>
               <span>{{ t('teams.ownerLine', { owner: ownerLabel(team) }) }} · RER {{ formatRating(team.average_rating) }}</span>
@@ -525,7 +552,9 @@ watch(visibleTeamMembers, () => {
 
       <article v-if="selectedTeam" class="team-detail-card card">
         <div class="team-detail-hero">
-          <TeamAvatar :color="selectedTeam.avatar_color" :label="selectedTeam.name" />
+          <button class="avatar-open-button" type="button" :title="t('avatar.open')" @click="teamAvatarViewerOpen = true">
+            <TeamAvatar :src="selectedTeam.avatar_url" :color="selectedTeam.avatar_color" :label="selectedTeam.name" />
+          </button>
           <div class="team-detail-main">
             <div class="team-detail-title">
               <h2>{{ selectedTeam.name }}</h2>
@@ -566,14 +595,26 @@ watch(visibleTeamMembers, () => {
               <span>{{ t('fields.name') }}</span>
               <input v-model="editForm.name" type="text" maxlength="80" required />
             </label>
-            <label class="field">
-              <span>{{ t('fields.avatarColor') }}</span>
-              <input v-model="editForm.avatar_color" type="color" required />
-            </label>
             <label class="field team-form-description">
               <span>{{ t('fields.description') }}</span>
               <textarea v-model="editForm.description" maxlength="1000" />
             </label>
+          </div>
+          <div class="avatar-edit-panel team-avatar-upload-panel">
+            <button class="avatar-open-button" type="button" :title="t('avatar.open')" @click="teamAvatarViewerOpen = true">
+              <TeamAvatar :src="selectedTeam.avatar_url" :color="selectedTeam.avatar_color" :label="selectedTeam.name" />
+            </button>
+            <div class="avatar-edit-main">
+              <strong>{{ t('avatar.teamTitle') }}</strong>
+              <p class="muted">{{ t('avatar.teamHint') }}</p>
+              <div class="avatar-upload-row">
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="setTeamAvatarFile" />
+                <button class="button" type="button" :disabled="teamAvatarSaving || !teamAvatarFile" @click="uploadTeamAvatar">
+                  <Upload :size="16" />
+                  {{ t('common.upload') }}
+                </button>
+              </div>
+            </div>
           </div>
         </form>
 
@@ -611,7 +652,7 @@ watch(visibleTeamMembers, () => {
           </div>
           <div class="team-application-list">
             <div v-for="application in selectedTeam.applications" :key="application.id" class="team-application-row">
-              <UserAvatar mini :color="application.user.avatar_color" :label="application.user.login" />
+              <UserAvatar mini :src="application.user.avatar_url" :color="application.user.avatar_color" :label="application.user.login" />
               <span class="team-application-main">
                 <strong>{{ memberTitle(application.user) }}</strong>
                 <span>{{ application.user.login }} · #{{ application.user.pilot_number }} · RER {{ formatRating(application.user.rating) }} · {{ teamShortName(application.user.team_name) }}</span>
@@ -651,7 +692,7 @@ watch(visibleTeamMembers, () => {
           </div>
           <div class="team-members-list">
             <div v-for="member in pagedTeamMembers" :key="member.id" class="team-member-row">
-              <UserAvatar mini :color="member.avatar_color" :label="member.login" />
+              <UserAvatar mini :src="member.avatar_url" :color="member.avatar_color" :label="member.login" />
               <RouterLink class="team-member-main" :to="`/pilots/${member.id}`">
                 <strong>{{ memberTitle(member) }}</strong>
                 <span>{{ member.login }} · #{{ member.pilot_number }} · {{ teamShortName(memberTeamName(member)) }}</span>
@@ -693,5 +734,13 @@ watch(visibleTeamMembers, () => {
         <p class="muted">{{ state.user ? t('teams.pickTeamHint') : t('teams.loginToJoin') }}</p>
       </div>
     </div>
+    <AvatarViewer
+      :open="teamAvatarViewerOpen"
+      :src="selectedTeam?.avatar_url"
+      :label="selectedTeam?.name || t('teams.newTeam')"
+      :fallback-color="selectedTeam?.avatar_color"
+      team
+      @close="teamAvatarViewerOpen = false"
+    />
   </section>
 </template>

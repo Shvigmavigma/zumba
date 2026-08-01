@@ -8,6 +8,10 @@ defineProps({
     type: String,
     default: 'Avatar'
   },
+  src: {
+    type: String,
+    default: ''
+  },
   mini: {
     type: Boolean,
     default: false
@@ -16,7 +20,7 @@ defineProps({
 </script>
 
 <template>
-  <div class="user-avatar" :class="{ 'is-mini': mini }" :style="{ '--avatar-color': color || '#2563eb' }" role="img" :aria-label="label">
-    <img src="/assets/avatar-template.jpg" alt="" aria-hidden="true" />
+  <div class="user-avatar" :class="{ 'is-mini': mini, 'has-upload': !!src }" :style="{ '--avatar-color': color || '#2563eb' }" role="img" :aria-label="label">
+    <img :src="src || '/assets/avatar-template.jpg'" alt="" aria-hidden="true" />
   </div>
 </template>

@@ -1,10 +1,12 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.avatar_uploads import ensure_avatar_upload_allowed, mark_avatar_uploaded, remove_avatar_file, save_avatar_file
+from app.config import get_settings
 from app.db import get_session
 from app.deps import get_optional_user, require_admin, require_moder_plus, require_pilot_plus
 from app.models import AppSetting, Role, Team, TeamApplication, TeamApplicationStatus, TeamCreationRequest, User
@@ -24,6 +26,7 @@ from app.schemas import (
 
 
 router = APIRouter()
+settings = get_settings()
 
 TEAM_MEMBER_LIMIT_KEY = "team_member_limit"
 DEFAULT_TEAM_MEMBER_LIMIT = 5
@@ -174,6 +177,7 @@ def team_payload(
         "name": team.name,
         "description": team.description or "",
         "avatar_color": team.avatar_color,
+        "avatar_url": team.avatar_url,
         "owner_id": team.owner_id,
         "owner_login": owner.login if owner else None,
         "owner_nickname": owner.nickname if owner else None,
@@ -541,6 +545,28 @@ async def update_team(
         await session.rollback()
         raise HTTPException(status_code=409, detail="Team name already exists") from exc
     await session.refresh(team)
+    return await build_team_detail(session, team, user)
+
+
+@router.post("/{team_id}/avatar", response_model=TeamDetailRead)
+@limiter.limit("20/minute")
+async def upload_team_avatar(
+    team_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    user: User = Depends(require_pilot_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    team = await get_team_or_404(session, team_id)
+    if not can_manage_team(user, team):
+        raise HTTPException(status_code=403, detail="Only the team owner or moderators can edit this team")
+    ensure_avatar_upload_allowed(team)
+    previous_avatar_url = team.avatar_url
+    team.avatar_url = await save_avatar_file(file, "teams", team.id, settings.max_team_avatar_upload_mb)
+    mark_avatar_uploaded(team)
+    await session.commit()
+    await session.refresh(team)
+    remove_avatar_file(previous_avatar_url)
     return await build_team_detail(session, team, user)
 
 

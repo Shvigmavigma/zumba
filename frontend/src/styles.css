@@ -1951,6 +1951,31 @@ textarea {
     0 6px 14px color-mix(in srgb, var(--avatar-color) 20%, transparent);
 }
 
+.avatar-open-button {
+  display: inline-grid;
+  place-items: center;
+  width: max-content;
+  max-width: 100%;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.avatar-open-button:hover .user-avatar,
+.avatar-open-button:hover .team-avatar {
+  border-color: color-mix(in srgb, var(--primary) 58%, var(--border));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+    0 10px 22px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+.pilot-profile-avatar-button {
+  justify-self: center;
+}
+
 .user-avatar.is-mini {
   width: 34px;
   height: 34px;
@@ -1967,6 +1992,92 @@ textarea {
   width: 40px;
   height: 40px;
   border-radius: 8px;
+}
+
+.avatar-edit-panel {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: var(--card-radius);
+  background: color-mix(in srgb, var(--panel-muted) 58%, transparent);
+}
+
+.avatar-edit-main {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.avatar-edit-main strong,
+.avatar-edit-main p {
+  margin: 0;
+}
+
+.avatar-upload-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.avatar-upload-row input[type='file'] {
+  min-width: 0;
+}
+
+.avatar-viewer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 8, 14, 0.68);
+  backdrop-filter: blur(10px);
+}
+
+.avatar-viewer {
+  display: grid;
+  gap: 14px;
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  padding: 18px;
+}
+
+.avatar-viewer-head {
+  margin-bottom: 0;
+}
+
+.avatar-viewer-head h2 {
+  margin: 0;
+}
+
+.avatar-viewer-frame {
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+  max-height: 70vh;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: var(--card-radius);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--avatar-color) 14%, transparent), transparent 56%),
+    color-mix(in srgb, var(--panel-muted) 72%, var(--panel));
+}
+
+.avatar-viewer-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.avatar-viewer-empty {
+  color: var(--muted);
+  font-weight: 900;
 }
 
 .hall-page {
@@ -2714,6 +2825,20 @@ textarea {
   width: min(520px, calc(100vw - 48px));
 }
 
+.admin-profile-modal {
+  width: min(900px, calc(100vw - 48px));
+}
+
+.admin-profile-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-profile-games {
+  grid-column: 1 / -1;
+}
+
 .admin-timeout-hint {
   margin: -4px 0 0;
   color: var(--muted);
@@ -2798,13 +2923,17 @@ textarea {
 
 .team-form-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 112px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   min-width: 0;
 }
 
 .team-form-description {
   grid-column: 1 / -1;
+}
+
+.team-avatar-upload-panel {
+  margin-top: 12px;
 }
 
 .teams-layout {
@@ -3798,6 +3927,13 @@ textarea {
   mix-blend-mode: multiply;
 }
 
+.user-avatar.has-upload img,
+.pilot-avatar-slot.has-upload img,
+.team-avatar.has-upload img {
+  filter: none;
+  mix-blend-mode: normal;
+}
+
 .race-participant-main,
 .race-participant-stat,
 .race-participant-country,
@@ -4365,6 +4501,7 @@ textarea {
   .pilot-profile-card,
   .pilot-public-grid,
   .race-admin-filters,
+  .admin-profile-edit-grid,
   .admin-settings-card,
   .team-create-panel,
   .teams-layout,
@@ -4405,6 +4542,10 @@ textarea {
   .team-application-actions {
     grid-column: 2 / -1;
     justify-content: flex-start;
+  }
+
+  .avatar-upload-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
