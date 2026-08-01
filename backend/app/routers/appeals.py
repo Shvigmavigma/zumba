@@ -8,7 +8,7 @@ from app.deps import MARSHALL_PLUS, require_marshall_plus, require_pilot_plus
 from app.models import Appeal, AppealStatus, Penalty, PenaltyStatus, Race, RaceStatus, User
 from app.rate_limit import limiter
 from app.schemas import AppealCreate, AppealModerationRequest, AppealRead
-from app.services import apply_sr_penalty, recalculate_all_ratings, recalculate_race_results, restore_sr_penalty
+from app.services import apply_sr_penalties, recalculate_all_ratings, recalculate_race_results, restore_sr_penalty
 
 
 router = APIRouter()
@@ -100,7 +100,7 @@ async def moderate_appeal(
         appeal.rejection_reason = payload.rejection_reason or "Rejected by marshall"
         penalty.status = PenaltyStatus.active
         if race is not None and race.status == RaceStatus.finished:
-            await apply_sr_penalty(session, penalty)
+            await apply_sr_penalties(session, race)
 
     if race is not None:
         await recalculate_race_results(session, race)

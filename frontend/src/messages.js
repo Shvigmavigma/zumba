@@ -168,9 +168,24 @@ export const messages = {
       contacts: 'Контакты'
     },
     profile: {
+      editTitle: 'Редактирование профиля',
       waitingApproval: 'Ожидает одобрения',
       pendingChanges: 'Изменения профиля ожидают модерации',
-      changesAfterModeration: 'Изменения появятся после модерации.'
+      changesAfterModeration: 'Изменения появятся после модерации.',
+      updatedAt: 'Обновлен',
+      banEnd: 'Бан до',
+      timeoutStart: 'Тайм-аут с',
+      timeoutEnd: 'Тайм-аут до',
+      pendingChangesTitle: 'Ожидающие изменения'
+    },
+    pagination: {
+      label: 'Пагинация',
+      previous: 'Назад',
+      next: 'Вперед',
+      page: 'Страница {page}',
+      pageOf: 'Страница {page} из {total}',
+      items: 'Всего: {count}',
+      loaded: 'На странице: {count}'
     },
     country: {
       placeholder: 'Выберите страну',
@@ -575,9 +590,24 @@ export const messages = {
       contacts: 'Contacts'
     },
     profile: {
+      editTitle: 'Edit profile',
       waitingApproval: 'Waiting for approval',
       pendingChanges: 'Profile changes are waiting for moderation',
-      changesAfterModeration: 'Changes will appear after moderation.'
+      changesAfterModeration: 'Changes will appear after moderation.',
+      updatedAt: 'Updated',
+      banEnd: 'Ban until',
+      timeoutStart: 'Timeout from',
+      timeoutEnd: 'Timeout until',
+      pendingChangesTitle: 'Pending changes'
+    },
+    pagination: {
+      label: 'Pagination',
+      previous: 'Previous',
+      next: 'Next',
+      page: 'Page {page}',
+      pageOf: 'Page {page} of {total}',
+      items: 'Total: {count}',
+      loaded: 'On page: {count}'
     },
     country: {
       placeholder: 'Select country',

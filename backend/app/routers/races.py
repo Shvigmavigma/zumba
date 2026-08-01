@@ -11,7 +11,7 @@ from app.deps import get_optional_user, require_moder_plus, require_pilot_plus
 from app.models import RACE_GAMES, Penalty, Race, RaceRegistration, RaceStatus, Role, Setup, Team, User
 from app.rate_limit import limiter
 from app.schemas import AccResultsUpload, ManualResultsUpload, RaceCreate, RaceManageRead, RaceRead, RaceRegisterRequest, RaceUpdate, ResultsUpload
-from app.services import apply_sr_penalties, recalculate_all_ratings, recalculate_race_results, restore_sr_penalty
+from app.services import apply_sr_penalties, recalculate_all_ratings, recalculate_race_results, restore_race_sr_bonus, restore_sr_penalty
 
 
 router = APIRouter()
@@ -566,6 +566,8 @@ async def update_race(
     data = payload.model_dump(exclude_unset=True)
     requested_status = data.get("status")
     requested_results = data.get("results")
+    was_finished = race.status == RaceStatus.finished
+    will_be_finished = data.get("status", race.status) == RaceStatus.finished
     if "datetime_end" in data or "datetime_start" in data:
         start = data.get("datetime_start", race.datetime_start)
         end = data.get("datetime_end", race.datetime_end)
@@ -573,6 +575,8 @@ async def update_race(
             raise HTTPException(status_code=400, detail="Registration end must be after start")
     if requested_status == RaceStatus.finished and requested_results is None and race.results is None:
         raise HTTPException(status_code=400, detail="Upload race results before finishing the race")
+    if was_finished and (requested_results is not None or not will_be_finished):
+        await restore_race_sr_bonus(session, race)
     for field, value in data.items():
         setattr(race, field, value)
     if race.status == RaceStatus.finished:
@@ -623,6 +627,7 @@ async def delete_race(
     penalties = (await session.scalars(select(Penalty).where(Penalty.race_id == race.id))).all()
     for penalty in penalties:
         await restore_sr_penalty(session, penalty)
+    await restore_race_sr_bonus(session, race)
     setups = (await session.scalars(select(Setup).where(Setup.race_id == race.id))).all()
     for setup in setups:
         setup.race_id = None
@@ -737,6 +742,8 @@ async def upload_results(
     ensure_can_manage_race(user, race, "upload results to")
     if race.game == "ACC":
         raise HTTPException(status_code=400, detail="Use ACC qualification and race JSON upload for ACC races")
+    if race.status == RaceStatus.finished:
+        await restore_race_sr_bonus(session, race)
     race.results = payload.results
     race.status = RaceStatus.finished
     race.is_passed = True
@@ -763,6 +770,8 @@ async def upload_acc_results(
     if race.game != "ACC":
         raise HTTPException(status_code=400, detail="ACC result JSON can only be uploaded for ACC races")
     registration_rows = await get_registration_rows(session, race.id)
+    if race.status == RaceStatus.finished:
+        await restore_race_sr_bonus(session, race)
     race.results = build_acc_results_payload(race, payload.qualification_results, payload.race_results, registration_rows)
     race.status = RaceStatus.finished
     race.is_passed = True
@@ -789,6 +798,8 @@ async def upload_manual_results(
     if race.game == "ACC":
         raise HTTPException(status_code=400, detail="Use ACC result JSON upload for ACC races")
     registered = await get_registered_pilots(session, race.id)
+    if race.status == RaceStatus.finished:
+        await restore_race_sr_bonus(session, race)
     race.results = build_manual_results_payload(race, payload, registered)
     race.status = RaceStatus.finished
     race.is_passed = True

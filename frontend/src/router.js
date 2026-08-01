@@ -5,6 +5,7 @@ import PilotDetails from './pages/PilotDetails.vue'
 import Login from './pages/Login.vue'
 import Registration from './pages/Registration.vue'
 import Profile from './pages/Profile.vue'
+import ProfileEdit from './pages/ProfileEdit.vue'
 import RaceDetails from './pages/RaceDetails.vue'
 import RaceEdit from './pages/RaceEdit.vue'
 import RaceAdminList from './pages/RaceAdminList.vue'
@@ -29,6 +30,7 @@ const router = createRouter({
     { path: '/login', component: Login },
     { path: '/register', component: Registration },
     { path: '/profile', component: Profile, meta: { auth: true } },
+    { path: '/profile/edit', component: ProfileEdit, meta: { auth: true } },
     { path: '/races/new', component: RaceEdit, meta: { roles: ['admin', 'moder'] } },
     { path: '/races/manage', component: RaceAdminList, meta: { roles: ['admin', 'moder'] } },
     { path: '/races/:id', component: RaceDetails, meta: { auth: true } },

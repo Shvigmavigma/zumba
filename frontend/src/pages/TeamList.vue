@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Bell, Check, Crown, LogOut, Plus, Save, Search, Send, Trash2, UserCheck, UserMinus, Users, X, XCircle } from 'lucide-vue-next'
 import { api } from '../api'
+import PaginationControls from '../components/PaginationControls.vue'
 import TeamAvatar from '../components/TeamAvatar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { filterPilots, formatRating, sortPilots, teamShortName } from '../pilotDisplay'
@@ -29,6 +30,10 @@ const busyMembers = ref({})
 const busyCreateRequests = ref({})
 const memberSearch = ref('')
 const memberSort = ref('rating_desc')
+const teamPage = ref(1)
+const teamPageSize = 12
+const memberPage = ref(1)
+const memberPageSize = 10
 const createForm = ref({
   name: '',
   description: '',
@@ -46,7 +51,11 @@ const selectedIsOwner = computed(() => Boolean(selectedTeam.value?.is_owner))
 const selectedCanManage = computed(() => Boolean(selectedTeam.value?.can_manage))
 const transferOwnerId = ref('')
 const transferCandidates = computed(() => selectedTeam.value?.members?.filter((member) => member.id !== selectedTeam.value.owner_id) || [])
+const teamTotalPages = computed(() => Math.max(1, Math.ceil(teams.value.length / teamPageSize)))
+const pagedTeams = computed(() => teams.value.slice((teamPage.value - 1) * teamPageSize, teamPage.value * teamPageSize))
 const visibleTeamMembers = computed(() => sortPilots(filterPilots(selectedTeam.value?.members || [], memberSearch.value), memberSort.value))
+const memberTotalPages = computed(() => Math.max(1, Math.ceil(visibleTeamMembers.value.length / memberPageSize)))
+const pagedTeamMembers = computed(() => visibleTeamMembers.value.slice((memberPage.value - 1) * memberPageSize, memberPage.value * memberPageSize))
 
 function updateStoredUser(patch) {
   if (!state.user) return
@@ -155,6 +164,7 @@ async function openTeam(team) {
   error.value = ''
   try {
     selectedTeam.value = await api(`/teams/${team.id}`)
+    memberPage.value = 1
     fillEditForm(selectedTeam.value)
   } catch (err) {
     error.value = err.message
@@ -376,6 +386,22 @@ async function removeMember(member) {
 }
 
 onMounted(load)
+watch(search, () => {
+  teamPage.value = 1
+})
+watch(teams, () => {
+  if (teamPage.value > teamTotalPages.value) {
+    teamPage.value = teamTotalPages.value
+  }
+})
+watch([memberSearch, memberSort], () => {
+  memberPage.value = 1
+})
+watch(visibleTeamMembers, () => {
+  if (memberPage.value > memberTotalPages.value) {
+    memberPage.value = memberTotalPages.value
+  }
+})
 </script>
 
 <template>
@@ -474,7 +500,7 @@ onMounted(load)
 
     <div class="teams-layout">
       <div class="teams-list card">
-        <div v-for="team in teams" :key="team.id" class="team-list-item" :class="{ 'is-selected': selectedTeam?.id === team.id, 'is-full': team.member_count >= team.member_limit }">
+        <div v-for="team in pagedTeams" :key="team.id" class="team-list-item" :class="{ 'is-selected': selectedTeam?.id === team.id, 'is-full': team.member_count >= team.member_limit }">
           <button class="team-list-open" type="button" :disabled="busyTeams[team.id]" @click="openTeam(team)">
             <TeamAvatar mini :color="team.avatar_color" :label="team.name" />
             <span class="team-list-main">
@@ -494,6 +520,7 @@ onMounted(load)
           </button>
         </div>
         <div v-if="!teams.length" class="empty-row">{{ t('teams.empty') }}</div>
+        <PaginationControls v-model:page="teamPage" :page-size="teamPageSize" :total-items="teams.length" />
       </div>
 
       <article v-if="selectedTeam" class="team-detail-card card">
@@ -623,7 +650,7 @@ onMounted(load)
             </select>
           </div>
           <div class="team-members-list">
-            <div v-for="member in visibleTeamMembers" :key="member.id" class="team-member-row">
+            <div v-for="member in pagedTeamMembers" :key="member.id" class="team-member-row">
               <UserAvatar mini :color="member.avatar_color" :label="member.login" />
               <RouterLink class="team-member-main" :to="`/pilots/${member.id}`">
                 <strong>{{ memberTitle(member) }}</strong>
@@ -656,6 +683,7 @@ onMounted(load)
             </div>
             <div v-if="!visibleTeamMembers.length" class="empty-row">{{ selectedTeam.members.length ? t('common.noMatches') : t('teams.noMembers') }}</div>
           </div>
+          <PaginationControls v-model:page="memberPage" :page-size="memberPageSize" :total-items="visibleTeamMembers.length" />
         </section>
       </article>
 

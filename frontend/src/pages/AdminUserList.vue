@@ -1,11 +1,12 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Ban, Save, Timer, TimerOff, Trash2, Undo2, X } from 'lucide-vue-next'
 import { api } from '../api'
+import PaginationControls from '../components/PaginationControls.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { roleLabel, statusLabel } from '../i18nLabels'
-import { filterPilots, formatRating, sortPilots, teamShortName } from '../pilotDisplay'
+import { formatRating, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
 
 const { t } = useI18n()
@@ -21,7 +22,10 @@ const teamLimitSaving = ref(false)
 const settingsSaved = ref(false)
 const userSearch = ref('')
 const userSort = ref('rating_desc')
-const visibleUsers = computed(() => sortPilots(filterPilots(users.value, userSearch.value), userSort.value))
+const page = ref(1)
+const pageSize = 25
+const visibleUsers = computed(() => users.value)
+const hasNextPage = computed(() => users.value.length === pageSize)
 
 function datetimeLocalValue(date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
@@ -46,8 +50,14 @@ function formatDateTime(value) {
 
 async function load() {
   try {
+    const params = new URLSearchParams({
+      limit: String(pageSize),
+      offset: String((page.value - 1) * pageSize),
+      sort: userSort.value
+    })
+    if (userSearch.value.trim()) params.set('search', userSearch.value.trim())
     const [loadedUsers, teamConfig] = await Promise.all([
-      api('/users/admin'),
+      api(`/users/admin?${params.toString()}`),
       api('/teams/config')
     ])
     users.value = loadedUsers
@@ -55,6 +65,14 @@ async function load() {
   } catch (err) {
     error.value = err.message
   }
+}
+
+function resetUserPageAndLoad() {
+  if (page.value === 1) {
+    load()
+    return
+  }
+  page.value = 1
 }
 
 async function saveTeamLimit() {
@@ -178,6 +196,8 @@ async function deleteAccount(user) {
 }
 
 onMounted(load)
+watch(page, load)
+watch([userSearch, userSort], resetUserPageAndLoad)
 </script>
 
 <template>
@@ -315,7 +335,7 @@ onMounted(load)
               </div>
             </td>
           </tr>
-          <tr v-if="!users.length">
+          <tr v-if="!visibleUsers.length">
             <td colspan="4">
               <div class="empty-row">{{ t('adminUsers.empty') }}</div>
             </td>
@@ -323,6 +343,7 @@ onMounted(load)
         </tbody>
       </table>
     </div>
+    <PaginationControls v-model:page="page" :page-size="pageSize" :loaded-count="visibleUsers.length" :has-next="hasNextPage" />
 
     <div v-if="timeoutDialogUser" class="penalty-modal-backdrop" @click.self="closeTimeoutDialog">
       <form class="penalty-modal admin-timeout-modal card" @submit.prevent="issueTimeout">

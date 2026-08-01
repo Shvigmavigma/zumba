@@ -8,7 +8,7 @@ from app.deps import MARSHALL_PLUS, get_current_user, require_marshall_plus
 from app.models import Penalty, PenaltyStatus, Race, RaceStatus, User
 from app.rate_limit import limiter
 from app.schemas import PenaltyCreate, PenaltyDetailRead, PenaltyRead
-from app.services import apply_sr_penalty, recalculate_all_ratings, recalculate_race_results, restore_sr_penalty
+from app.services import apply_sr_penalties, recalculate_all_ratings, recalculate_race_results, restore_sr_penalty
 
 
 router = APIRouter()
@@ -90,7 +90,7 @@ async def create_penalty(
     session.add(penalty)
     await session.flush()
     if race.status == RaceStatus.finished:
-        await apply_sr_penalty(session, penalty)
+        await apply_sr_penalties(session, race)
     await recalculate_race_results(session, race)
     if race.status == RaceStatus.finished:
         await recalculate_all_ratings(session)

@@ -1711,6 +1711,11 @@ textarea {
   gap: 14px;
 }
 
+.profile-overview-header h1,
+.profile-overview-header p {
+  margin: 0;
+}
+
 .pilot-profile-card {
   display: grid;
   grid-template-columns: 168px minmax(0, 1fr);
@@ -1753,6 +1758,12 @@ textarea {
   min-width: 0;
 }
 
+.profile-alerts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .pilot-public-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1785,6 +1796,43 @@ textarea {
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.profile-info-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.profile-pending-changes {
+  display: grid;
+  gap: 8px;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px;
+}
+
+.pagination-state {
+  display: grid;
+  min-width: 150px;
+  gap: 2px;
+  text-align: center;
+}
+
+.pagination-state strong {
+  font-size: var(--small-text-size);
+  font-weight: 900;
+}
+
+.pagination-state span {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-weight: 800;
 }
 
 .pilot-list-page {
