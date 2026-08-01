@@ -1,7 +1,8 @@
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
+import PaginationControls from '../components/PaginationControls.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { gameLabel } from '../i18nLabels'
 import { formatRating, teamShortName } from '../pilotDisplay'
@@ -11,21 +12,34 @@ const pilots = ref([])
 const search = ref('')
 const sort = ref('rating_desc')
 const error = ref('')
+const page = ref(1)
+const pageSize = 20
+const hasNextPage = computed(() => pilots.value.length === pageSize)
 
 async function load() {
   try {
     const params = new URLSearchParams()
     if (search.value.trim()) params.set('search', search.value.trim())
     params.set('sort', sort.value)
+    params.set('limit', String(pageSize))
+    params.set('offset', String((page.value - 1) * pageSize))
     pilots.value = await api(`/users/pilots?${params.toString()}`)
   } catch (err) {
     error.value = err.message
   }
 }
 
+function resetPageAndLoad() {
+  if (page.value === 1) {
+    load()
+    return
+  }
+  page.value = 1
+}
+
 onMounted(load)
-watch(search, load)
-watch(sort, load)
+watch(page, load)
+watch([search, sort], resetPageAndLoad)
 
 function pilotGames(pilot) {
   return pilot.games?.length ? pilot.games.map((game) => gameLabel(t, game)).join(' / ') : t('common.none')
@@ -73,5 +87,6 @@ function pilotGames(pilot) {
         </tr>
       </tbody>
     </table>
+    <PaginationControls v-model:page="page" :page-size="pageSize" :loaded-count="pilots.length" :has-next="hasNextPage" />
   </section>
 </template>

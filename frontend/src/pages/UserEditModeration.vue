@@ -1,13 +1,18 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
+import PaginationControls from '../components/PaginationControls.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { formatRating, teamShortName } from '../pilotDisplay'
 
 const { t } = useI18n()
 const users = ref([])
 const error = ref('')
+const page = ref(1)
+const pageSize = 8
+const totalPages = computed(() => Math.max(1, Math.ceil(users.value.length / pageSize)))
+const pagedUsers = computed(() => users.value.slice((page.value - 1) * pageSize, page.value * pageSize))
 
 async function load() {
   users.value = await api('/users/moderation/pending')
@@ -30,6 +35,12 @@ onMounted(async () => {
     error.value = err.message
   }
 })
+
+watch(users, () => {
+  if (page.value > totalPages.value) {
+    page.value = totalPages.value
+  }
+})
 </script>
 
 <template>
@@ -37,7 +48,7 @@ onMounted(async () => {
     <h1>{{ t('nav.moderation') }}</h1>
     <p v-if="error" class="error">{{ error }}</p>
     <div class="grid">
-      <article v-for="user in users" :key="user.id" class="card user-moderation-card">
+      <article v-for="user in pagedUsers" :key="user.id" class="card user-moderation-card">
         <div class="user-list-cell">
           <UserAvatar :color="user.avatar_color" :label="user.nickname || user.login" />
           <div class="user-moderation-main">
@@ -55,5 +66,6 @@ onMounted(async () => {
         </div>
       </article>
     </div>
+    <PaginationControls v-model:page="page" :page-size="pageSize" :total-items="users.length" />
   </section>
 </template>

@@ -10,6 +10,8 @@ RATING_K_DEFAULT = 32
 RATING_K_VETERAN = 16
 RATING_DELTA_SCALE = 1.5
 RATING_ROW_KEYS = ("rating_old", "rating_new", "rating_delta", "rating_expected", "rating_score", "rating_k")
+SR_FINISH_BONUS = 0.3
+SR_BONUS_META_KEY = "sr_bonus"
 
 
 def penalty_time_ms(penalty: Penalty) -> float:
@@ -28,6 +30,10 @@ def penalty_sr_value(penalty: Penalty) -> float:
 
 def clamp_rating(value: float) -> int:
     return int(round(min(MAX_RATING, max(MIN_RATING, value))))
+
+
+def clamp_sr(value: float) -> float:
+    return round(min(MAX_SR, max(MIN_SR, value)), 1)
 
 
 def rating_k_factor(race_count: int) -> int:
@@ -91,6 +97,50 @@ def update_result_rows(results: dict | list | None, rows: list[dict]) -> dict | 
         updated["rows"] = rows
         return updated
     return results
+
+
+def set_sr_bonus_meta(results: dict | list | None, meta: dict | None) -> dict | list | None:
+    if isinstance(results, dict):
+        updated = dict(results)
+    elif isinstance(results, list):
+        updated = {"format": "legacy", "rows": results}
+    else:
+        return results
+    if meta is None:
+        updated.pop(SR_BONUS_META_KEY, None)
+    else:
+        updated[SR_BONUS_META_KEY] = meta
+    return updated
+
+
+def sr_bonus_meta(results: dict | list | None) -> dict | None:
+    if not isinstance(results, dict):
+        return None
+    meta = results.get(SR_BONUS_META_KEY)
+    return meta if isinstance(meta, dict) else None
+
+
+def sr_bonus_user_ids(results: dict | list | None) -> list[int]:
+    user_ids: list[int] = []
+    seen: set[int] = set()
+    for row in result_rows(results):
+        user_id = row.get("user_id")
+        if user_id is None or row.get("status") == "missing":
+            continue
+        lap_count = row.get("lap_count")
+        has_activity = (
+            isinstance(row.get("finish_ms"), (int, float))
+            or isinstance(row.get("best_lap_ms"), (int, float))
+            or (isinstance(lap_count, (int, float)) and lap_count > 0)
+        )
+        if not has_activity:
+            continue
+        normalized_user_id = int(user_id)
+        if normalized_user_id in seen:
+            continue
+        seen.add(normalized_user_id)
+        user_ids.append(normalized_user_id)
+    return user_ids
 
 
 def rating_time_ms(row: dict) -> float | None:
@@ -349,6 +399,65 @@ async def recalculate_race_results(session: AsyncSession, race: Race) -> None:
     race.results = recalculate_results(race.results, penalties)
 
 
+async def restore_race_sr_bonus(session: AsyncSession, race: Race) -> None:
+    meta = sr_bonus_meta(race.results)
+    changes = meta.get("changes", []) if meta else []
+    if not isinstance(changes, list) or not changes:
+        race.results = set_sr_bonus_meta(race.results, None)
+        return
+    user_ids = [int(change["user_id"]) for change in changes if change.get("user_id") is not None]
+    users = {user.id: user for user in (await session.scalars(select(User).where(User.id.in_(user_ids)))).all()} if user_ids else {}
+    for change in changes:
+        user = users.get(int(change.get("user_id") or 0))
+        if user is None:
+            continue
+        applied_value = float(change.get("applied_value") or 0)
+        user.sr = clamp_sr(float(user.sr or 0) - applied_value)
+    race.results = set_sr_bonus_meta(race.results, None)
+
+
+async def award_race_sr_bonus(session: AsyncSession, race: Race) -> None:
+    if race.status != RaceStatus.finished or race.results is None:
+        return
+    user_ids = sr_bonus_user_ids(race.results)
+    if not user_ids:
+        race.results = set_sr_bonus_meta(race.results, None)
+        return
+    users = {user.id: user for user in (await session.scalars(select(User).where(User.id.in_(user_ids)))).all()}
+    changes: list[dict] = []
+    for user_id in user_ids:
+        user = users.get(user_id)
+        if user is None:
+            continue
+        old_sr = clamp_sr(float(user.sr or 0))
+        applied_value = min(SR_FINISH_BONUS, max(0, MAX_SR - old_sr))
+        new_sr = clamp_sr(old_sr + applied_value)
+        user.sr = new_sr
+        changes.append(
+            {
+                "user_id": user_id,
+                "old_sr": old_sr,
+                "new_sr": new_sr,
+                "bonus_value": SR_FINISH_BONUS,
+                "applied_value": round(applied_value, 1),
+            }
+        )
+    race.results = set_sr_bonus_meta(
+        race.results,
+        {
+            "system": "SR",
+            "bonus_value": SR_FINISH_BONUS,
+            "participants": len(changes),
+            "changes": changes,
+        },
+    )
+
+
+async def apply_race_sr_bonus(session: AsyncSession, race: Race) -> None:
+    await restore_race_sr_bonus(session, race)
+    await award_race_sr_bonus(session, race)
+
+
 async def apply_sr_penalty(session: AsyncSession, penalty: Penalty) -> None:
     if penalty.status not in APPLIED_PENALTY_STATUSES or penalty.is_applied:
         return
@@ -360,12 +469,13 @@ async def apply_sr_penalty(session: AsyncSession, penalty: Penalty) -> None:
         return
     current_sr = float(target.sr)
     applied_value = min(penalty_value, max(0, current_sr - MIN_SR))
-    target.sr = max(MIN_SR, current_sr - applied_value)
+    target.sr = clamp_sr(current_sr - applied_value)
     penalty.sr_applied_value = applied_value
     penalty.is_applied = True
 
 
 async def apply_sr_penalties(session: AsyncSession, race: Race) -> None:
+    await restore_race_sr_bonus(session, race)
     penalties = (
         await session.scalars(
             select(Penalty).where(
@@ -378,6 +488,7 @@ async def apply_sr_penalties(session: AsyncSession, race: Race) -> None:
     ).all()
     for penalty in penalties:
         await apply_sr_penalty(session, penalty)
+    await award_race_sr_bonus(session, race)
 
 
 async def restore_sr_penalty(session: AsyncSession, penalty: Penalty) -> None:
@@ -386,6 +497,6 @@ async def restore_sr_penalty(session: AsyncSession, penalty: Penalty) -> None:
     target = await session.get(User, penalty.target_id)
     if target is not None:
         applied_value = float(penalty.sr_applied_value or 0)
-        target.sr = min(MAX_SR, float(target.sr) + applied_value)
+        target.sr = clamp_sr(float(target.sr) + applied_value)
     penalty.sr_applied_value = 0
     penalty.is_applied = False

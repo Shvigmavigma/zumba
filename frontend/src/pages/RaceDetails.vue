@@ -1,9 +1,10 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown, ChevronUp, Scale } from 'lucide-vue-next'
 import { api } from '../api'
+import PaginationControls from '../components/PaginationControls.vue'
 import RacePenaltyListModal from '../components/RacePenaltyListModal.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, statusLabel } from '../i18nLabels'
@@ -27,9 +28,13 @@ const penaltiesOpen = ref(false)
 const resultsTab = ref('race')
 const participantSearch = ref('')
 const participantSort = ref('rating_desc')
+const participantPage = ref(1)
+const participantPageSize = 12
 
 const participants = computed(() => race.value?.registered_pilots || [])
 const visibleParticipants = computed(() => sortPilots(filterPilots(participants.value, participantSearch.value), participantSort.value))
+const participantTotalPages = computed(() => Math.max(1, Math.ceil(visibleParticipants.value.length / participantPageSize)))
+const pagedParticipants = computed(() => visibleParticipants.value.slice((participantPage.value - 1) * participantPageSize, participantPage.value * participantPageSize))
 const registered = computed(() => participants.value.some((item) => item.user_id === state.user?.id))
 const canManageRace = computed(() => ['admin', 'moder'].includes(state.user?.role))
 const resultRows = computed(() => {
@@ -341,6 +346,14 @@ async function createAppeal(penalty, form) {
 }
 
 onMounted(load)
+watch([participantSearch, participantSort], () => {
+  participantPage.value = 1
+})
+watch(visibleParticipants, () => {
+  if (participantPage.value > participantTotalPages.value) {
+    participantPage.value = participantTotalPages.value
+  }
+})
 </script>
 
 <template>
@@ -424,7 +437,7 @@ onMounted(load)
         </div>
 
         <div v-if="participantsExpanded && visibleParticipants.length" class="race-participant-list">
-          <article v-for="item in visibleParticipants" :key="item.user_id" class="race-participant-row">
+          <article v-for="item in pagedParticipants" :key="item.user_id" class="race-participant-row">
             <UserAvatar class="pilot-avatar-slot" :color="item.avatar_color" :label="participantName(item)" />
             <div class="race-participant-main">
               <strong>{{ participantName(item) }}</strong>
@@ -449,7 +462,9 @@ onMounted(load)
           </article>
         </div>
 
-        <div v-else-if="participantsExpanded" class="empty-row">{{ participants.length ? t('common.noMatches') : t('raceDetails.noRegisteredPilots') }}</div>
+        <PaginationControls v-if="participantsExpanded && visibleParticipants.length" v-model:page="participantPage" :page-size="participantPageSize" :total-items="visibleParticipants.length" />
+
+        <div v-if="participantsExpanded && !visibleParticipants.length" class="empty-row">{{ participants.length ? t('common.noMatches') : t('raceDetails.noRegisteredPilots') }}</div>
       </section>
 
       <section class="card race-results-panel">

@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Medal, RefreshCw, Search, Trophy, Users } from 'lucide-vue-next'
 import { api } from '../api'
+import PaginationControls from '../components/PaginationControls.vue'
 import TeamAvatar from '../components/TeamAvatar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { formatRating, pilotName, teamShortName } from '../pilotDisplay'
@@ -14,6 +15,9 @@ const activeTab = ref('pilots')
 const search = ref('')
 const loading = ref(false)
 const error = ref('')
+const pilotPage = ref(1)
+const teamPage = ref(1)
+const pageSize = 20
 
 const tabs = computed(() => [
   { id: 'pilots', label: t('hallOfFame.pilotsTab'), count: data.value.pilots.length },
@@ -21,6 +25,10 @@ const tabs = computed(() => [
 ])
 const visiblePilots = computed(() => filterItems(data.value.pilots, pilotSearchText))
 const visibleTeams = computed(() => filterItems(data.value.teams, teamSearchText))
+const pagedPilots = computed(() => visiblePilots.value.slice((pilotPage.value - 1) * pageSize, pilotPage.value * pageSize))
+const pagedTeams = computed(() => visibleTeams.value.slice((teamPage.value - 1) * pageSize, teamPage.value * pageSize))
+const pilotTotalPages = computed(() => Math.max(1, Math.ceil(visiblePilots.value.length / pageSize)))
+const teamTotalPages = computed(() => Math.max(1, Math.ceil(visibleTeams.value.length / pageSize)))
 const totalMedals = computed(() => data.value.pilots.reduce((sum, pilot) => sum + Number(pilot.podiums || 0), 0))
 
 function filterItems(items, textFactory) {
@@ -90,6 +98,24 @@ async function load() {
 }
 
 onMounted(load)
+watch(search, () => {
+  pilotPage.value = 1
+  teamPage.value = 1
+})
+watch(activeTab, () => {
+  pilotPage.value = 1
+  teamPage.value = 1
+})
+watch(visiblePilots, () => {
+  if (pilotPage.value > pilotTotalPages.value) {
+    pilotPage.value = pilotTotalPages.value
+  }
+})
+watch(visibleTeams, () => {
+  if (teamPage.value > teamTotalPages.value) {
+    teamPage.value = teamTotalPages.value
+  }
+})
 </script>
 
 <template>
@@ -162,8 +188,8 @@ onMounted(load)
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(pilot, index) in visiblePilots" :key="pilot.id">
-            <td><span class="hall-rank" :class="rankClass(index)">{{ index + 1 }}</span></td>
+          <tr v-for="(pilot, index) in pagedPilots" :key="pilot.id">
+            <td><span class="hall-rank" :class="rankClass((pilotPage - 1) * pageSize + index)">{{ (pilotPage - 1) * pageSize + index + 1 }}</span></td>
             <td>
               <div class="hall-person-cell">
                 <UserAvatar mini :color="pilot.avatar_color" :label="pilotTitle(pilot)" />
@@ -184,6 +210,7 @@ onMounted(load)
         </tbody>
       </table>
       <div v-if="!visiblePilots.length" class="hall-empty">{{ t('hallOfFame.emptyPilots') }}</div>
+      <PaginationControls v-model:page="pilotPage" :page-size="pageSize" :total-items="visiblePilots.length" />
     </div>
 
     <div v-else class="hall-table-wrap card">
@@ -202,8 +229,8 @@ onMounted(load)
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(team, index) in visibleTeams" :key="team.id">
-            <td><span class="hall-rank" :class="rankClass(index)">{{ index + 1 }}</span></td>
+          <tr v-for="(team, index) in pagedTeams" :key="team.id">
+            <td><span class="hall-rank" :class="rankClass((teamPage - 1) * pageSize + index)">{{ (teamPage - 1) * pageSize + index + 1 }}</span></td>
             <td>
               <div class="hall-person-cell">
                 <TeamAvatar mini :color="team.avatar_color" :label="team.name" />
@@ -233,6 +260,7 @@ onMounted(load)
         </tbody>
       </table>
       <div v-if="!visibleTeams.length" class="hall-empty">{{ t('hallOfFame.emptyTeams') }}</div>
+      <PaginationControls v-model:page="teamPage" :page-size="pageSize" :total-items="visibleTeams.length" />
     </div>
   </section>
 </template>

@@ -1,7 +1,7 @@
 ﻿from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import String, cast, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -73,19 +73,34 @@ async def pending_users(request: Request, _: User = Depends(require_moder_plus),
 
 
 @router.get("/admin", response_model=list[UserPrivate])
-@limiter.limit("3/minute")
+@limiter.limit("600/minute")
 async def admin_user_list(
     request: Request,
     _: User = Depends(require_admin),
+    search: str | None = None,
+    sort: str = "rating_desc",
     offset: int = 0,
     limit: int = 100,
     session: AsyncSession = Depends(get_session),
 ):
+    stmt = select(User, Team.name).outerjoin(Team, Team.id == User.team_id)
+    if search:
+        like = f"%{search}%"
+        stmt = stmt.where(
+            or_(
+                User.login.ilike(like),
+                User.email.ilike(like),
+                User.nickname.ilike(like),
+                User.first_name.ilike(like),
+                User.last_name.ilike(like),
+                cast(User.pilot_number, String).ilike(like),
+                Team.name.ilike(like),
+            )
+        )
     rows = (
         await session.execute(
-            select(User, Team.name)
-            .outerjoin(Team, Team.id == User.team_id)
-            .order_by(User.created_at.desc())
+            stmt
+            .order_by(*user_sort_columns(sort))
             .offset(offset)
             .limit(min(limit, 200))
         )

@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Download, Eye, Pencil, Plus, RotateCw, SquareCheckBig, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
+import PaginationControls from '../components/PaginationControls.vue'
 import { gameLabel, gameOptions, statusLabel } from '../i18nLabels'
 import { state } from '../store'
 
@@ -13,6 +14,8 @@ const statusFilter = ref('all')
 const gameFilter = ref('all')
 const error = ref('')
 const busyRace = ref({})
+const page = ref(1)
+const pageSize = 25
 const raceGameOptions = computed(() => gameOptions(t, true))
 
 const statusOptions = computed(() => [
@@ -24,6 +27,7 @@ const statusOptions = computed(() => [
 ])
 
 const visibleCount = computed(() => races.value.length)
+const hasNextPage = computed(() => races.value.length === pageSize)
 
 function formatDate(value) {
   return new Date(value).toLocaleString(state.locale, {
@@ -44,7 +48,8 @@ async function load() {
   error.value = ''
   try {
     const params = new URLSearchParams({
-      limit: '500',
+      limit: String(pageSize),
+      offset: String((page.value - 1) * pageSize),
       status_filter: statusFilter.value,
       game_filter: gameFilter.value
     })
@@ -55,6 +60,14 @@ async function load() {
   } catch (err) {
     error.value = err.message
   }
+}
+
+function applyFilters() {
+  if (page.value === 1) {
+    load()
+    return
+  }
+  page.value = 1
 }
 
 async function closeRace(race) {
@@ -105,6 +118,7 @@ async function exportRegistrations(race) {
 }
 
 onMounted(load)
+watch(page, load)
 </script>
 
 <template>
@@ -125,7 +139,7 @@ onMounted(load)
       </div>
     </div>
 
-    <form class="race-admin-filters card" @submit.prevent="load">
+    <form class="race-admin-filters card" @submit.prevent="applyFilters">
       <label class="field">
         <span>{{ t('common.search') }}</span>
         <input v-model="search" :placeholder="t('raceAdmin.searchPlaceholder')" />
@@ -219,5 +233,6 @@ onMounted(load)
         </tbody>
       </table>
     </div>
+    <PaginationControls v-model:page="page" :page-size="pageSize" :loaded-count="races.length" :has-next="hasNextPage" />
   </section>
 </template>

@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
+import PaginationControls from '../components/PaginationControls.vue'
 import { gameLabel, gameOptions, raceCountLabel } from '../i18nLabels'
 import { state } from '../store'
 
@@ -13,6 +14,8 @@ const selected = ref(dateKey(new Date()))
 const gameFilter = ref('all')
 const statusFilter = ref('not_finished')
 const myGamesOnly = ref(false)
+const selectedPage = ref(1)
+const selectedPageSize = 6
 
 function dateKey(date) {
   const year = date.getFullYear()
@@ -64,6 +67,8 @@ const racesByDate = computed(() => {
   return map
 })
 const selectedRaces = computed(() => racesByDate.value.get(selected.value) || [])
+const selectedTotalPages = computed(() => Math.max(1, Math.ceil(selectedRaces.value.length / selectedPageSize)))
+const pagedSelectedRaces = computed(() => selectedRaces.value.slice((selectedPage.value - 1) * selectedPageSize, selectedPage.value * selectedPageSize))
 
 function dayRaces(day) {
   return racesByDate.value.get(dateKey(day)) || []
@@ -83,6 +88,14 @@ async function loadRaces() {
 
 onMounted(loadRaces)
 watch([gameFilter, statusFilter, myGamesOnly], loadRaces)
+watch([selected, gameFilter, statusFilter, myGamesOnly], () => {
+  selectedPage.value = 1
+})
+watch(selectedRaces, () => {
+  if (selectedPage.value > selectedTotalPages.value) {
+    selectedPage.value = selectedTotalPages.value
+  }
+})
 </script>
 
 <template>
@@ -153,7 +166,7 @@ watch([gameFilter, statusFilter, myGamesOnly], loadRaces)
         <span class="pill calendar-selection-count">{{ raceCountLabel(t, state.locale, selectedRaces.length) }}</span>
       </div>
       <div class="race-list">
-        <article v-for="race in selectedRaces" :key="race.id" class="card race-item">
+        <article v-for="race in pagedSelectedRaces" :key="race.id" class="card race-item">
           <div>
             <h3>{{ race.name }}</h3>
             <p class="muted">{{ gameLabel(t, race.game) }} - {{ race.track }} - {{ race.car_class }} - {{ new Date(race.datetime_start).toLocaleTimeString(state.locale, { hour: '2-digit', minute: '2-digit' }) }}</p>
@@ -165,6 +178,7 @@ watch([gameFilter, statusFilter, myGamesOnly], loadRaces)
           <p class="muted">{{ t('calendar.noRacesDescription') }}</p>
         </div>
       </div>
+      <PaginationControls v-model:page="selectedPage" :page-size="selectedPageSize" :total-items="selectedRaces.length" />
     </section>
   </section>
 </template>

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ChevronLeft, ChevronRight, Eye, Maximize2, Plus, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
+import PaginationControls from '../components/PaginationControls.vue'
 import { gameLabel, gameOptions, statusLabel } from '../i18nLabels'
 import { state } from '../store'
 
@@ -19,9 +20,12 @@ const error = ref('')
 const raceGameFilter = ref('all')
 const raceStatusFilter = ref('not_finished')
 const myGamesOnly = ref(false)
+const racePage = ref(1)
+const racePageSize = 5
 const currentNews = computed(() => news.value[activeNewsIndex.value] || null)
 const raceGameOptions = computed(() => gameOptions(t, true))
 const canFilterMyGames = computed(() => Boolean(state.user?.games?.length))
+const racesHasNextPage = computed(() => races.value.length === racePageSize)
 
 function banner(position) {
   return banners.value.find((item) => item.position === position && item.image_url)
@@ -103,11 +107,24 @@ function handleNewsKeydown(event) {
 }
 
 async function loadRaces() {
-  const params = new URLSearchParams({ limit: '100', game_filter: raceGameFilter.value, status_filter: raceStatusFilter.value })
+  const params = new URLSearchParams({
+    limit: String(racePageSize),
+    offset: String((racePage.value - 1) * racePageSize),
+    game_filter: raceGameFilter.value,
+    status_filter: raceStatusFilter.value
+  })
   if (myGamesOnly.value && canFilterMyGames.value) {
     params.set('my_games_only', 'true')
   }
   races.value = await api(`/races?${params.toString()}`)
+}
+
+async function resetRacePageAndLoad() {
+  if (racePage.value === 1) {
+    await loadRaces()
+    return
+  }
+  racePage.value = 1
 }
 
 onMounted(async () => {
@@ -130,9 +147,17 @@ onMounted(async () => {
   }
 })
 
-watch([raceGameFilter, raceStatusFilter, myGamesOnly], async () => {
+watch(racePage, async () => {
   try {
     await loadRaces()
+  } catch (err) {
+    error.value = err.message
+  }
+})
+
+watch([raceGameFilter, raceStatusFilter, myGamesOnly], async () => {
+  try {
+    await resetRacePageAndLoad()
   } catch (err) {
     error.value = err.message
   }
@@ -259,6 +284,7 @@ onBeforeUnmount(() => {
               </RouterLink>
             </article>
           </div>
+          <PaginationControls v-model:page="racePage" :page-size="racePageSize" :loaded-count="races.length" :has-next="racesHasNextPage" />
         </section>
 
         <section class="section">
