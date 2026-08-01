@@ -14,7 +14,7 @@ export const messages = {
       logout: 'Выйти',
       races: 'Гонки',
       news: 'Новости',
-      hallOfFame: 'Зал славы'
+      hallOfFame: 'Общий рейтинг'
     },
     common: {
       save: 'Сохранить',
@@ -277,9 +277,10 @@ export const messages = {
       empty: 'Апелляций нет'
     },
     banners: {
-      subtitle: 'Загрузка баннеров по позициям',
+      subtitle: 'Загрузка баннеров по позициям. GIF загружается напрямую и сохраняет анимацию.',
       noImage: 'Нет изображения',
       crop: 'Обрезать',
+      cropGifDisabled: 'GIF нельзя обрезать без потери анимации',
       cropTitle: 'Обрезка: {title}',
       cropSize: 'Итоговый размер',
       cropZoom: 'Масштаб',
@@ -290,25 +291,25 @@ export const messages = {
         top: {
           title: 'Верхний баннер',
           description: 'Горизонтальная реклама над главным меню',
-          sizeHint: 'Рекомендовано: 1240x170 px, пропорция 7.3:1',
+          sizeHint: 'Рекомендовано: 1280x230 px, пропорция 5.6:1',
           badge: 'TOP'
         },
         left: {
           title: 'Левый баннер',
           description: 'Вертикальная реклама слева от контента',
-          sizeHint: 'Рекомендовано: ширина 210 px, пропорция 1:3-1:4',
+          sizeHint: 'Рекомендовано: 245x760 px, пропорция 1:3.1',
           badge: 'LEFT'
         },
         right: {
           title: 'Правый баннер',
           description: 'Вертикальная реклама справа от контента',
-          sizeHint: 'Рекомендовано: ширина 210 px, пропорция 1:3-1:4',
+          sizeHint: 'Рекомендовано: 245x760 px, пропорция 1:3.1',
           badge: 'RIGHT'
         },
         bottom: {
           title: 'Нижний баннер',
           description: 'Горизонтальная реклама под основными блоками',
-          sizeHint: 'Рекомендовано: 788x110 px, пропорция 7.2:1',
+          sizeHint: 'Рекомендовано: 760x150 px, пропорция 5.1:1',
           badge: 'BOTTOM'
         }
       }
@@ -407,12 +408,12 @@ export const messages = {
       scrollRight: 'Листать новости вправо'
     },
     hallOfFame: {
-      subtitle: 'Рейтинг по подиумам завершенных гонок с подсчетом первых, вторых и третьих мест.',
+      subtitle: 'Общий рейтинг пилотов и команд по подиумам завершенных гонок.',
       pilotsTab: 'Пилоты',
       teamsTab: 'Команды',
       searchPlaceholder: 'Поиск по имени, команде, рейтингу',
-      ratedPilots: 'Пилотов в зале',
-      ratedTeams: 'Команд в зале',
+      ratedPilots: 'Пилотов в рейтинге',
+      ratedTeams: 'Команд в рейтинге',
       pilotPoints: 'Очки пилотов',
       teamPoints: 'Очки команд',
       totalMedals: 'Всего медалей',
@@ -445,7 +446,7 @@ export const messages = {
       logout: 'Logout',
       races: 'Races',
       news: 'News',
-      hallOfFame: 'Hall of Fame'
+      hallOfFame: 'Overall Rating'
     },
     common: {
       save: 'Save',
@@ -708,9 +709,10 @@ export const messages = {
       empty: 'No appeals'
     },
     banners: {
-      subtitle: 'Upload banners by placement',
+      subtitle: 'Upload banners by placement. GIF files upload directly and keep animation.',
       noImage: 'No image',
       crop: 'Crop',
+      cropGifDisabled: 'GIF cannot be cropped without losing animation',
       cropTitle: 'Crop: {title}',
       cropSize: 'Output size',
       cropZoom: 'Zoom',
@@ -721,25 +723,25 @@ export const messages = {
         top: {
           title: 'Top banner',
           description: 'Horizontal ad above the main menu',
-          sizeHint: 'Recommended: 1240x170 px, 7.3:1 ratio',
+          sizeHint: 'Recommended: 1280x230 px, 5.6:1 ratio',
           badge: 'TOP'
         },
         left: {
           title: 'Left banner',
           description: 'Vertical ad on the left side',
-          sizeHint: 'Recommended: 210 px wide, 1:3-1:4 ratio',
+          sizeHint: 'Recommended: 245x760 px, 1:3.1 ratio',
           badge: 'LEFT'
         },
         right: {
           title: 'Right banner',
           description: 'Vertical ad on the right side',
-          sizeHint: 'Recommended: 210 px wide, 1:3-1:4 ratio',
+          sizeHint: 'Recommended: 245x760 px, 1:3.1 ratio',
           badge: 'RIGHT'
         },
         bottom: {
           title: 'Bottom banner',
           description: 'Horizontal ad below the main content',
-          sizeHint: 'Recommended: 788x110 px, 7.2:1 ratio',
+          sizeHint: 'Recommended: 760x150 px, 5.1:1 ratio',
           badge: 'BOTTOM'
         }
       }
@@ -838,12 +840,12 @@ export const messages = {
       scrollRight: 'Scroll news right'
     },
     hallOfFame: {
-      subtitle: 'Finished-race podium ranking with first, second, and third places counted separately.',
+      subtitle: 'Overall rating for pilots and teams by finished-race podiums.',
       pilotsTab: 'Pilots',
       teamsTab: 'Teams',
       searchPlaceholder: 'Search by name, team, rating',
-      ratedPilots: 'Ranked pilots',
-      ratedTeams: 'Ranked teams',
+      ratedPilots: 'Pilots in rating',
+      ratedTeams: 'Teams in rating',
       pilotPoints: 'Pilot points',
       teamPoints: 'Team points',
       totalMedals: 'Total medals',

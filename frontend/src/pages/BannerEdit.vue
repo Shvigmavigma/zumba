@@ -20,10 +20,10 @@ const cropError = ref('')
 
 const positionOrder = ['top', 'left', 'right', 'bottom']
 const cropTargets = {
-  top: { width: 1240, height: 170 },
-  bottom: { width: 788, height: 110 },
-  left: { width: 210, height: 720 },
-  right: { width: 210, height: 720 }
+  top: { width: 1280, height: 230 },
+  bottom: { width: 760, height: 150 },
+  left: { width: 245, height: 760 },
+  right: { width: 245, height: 760 }
 }
 const sortedBanners = computed(() => [...banners.value].sort((a, b) => positionOrder.indexOf(a.position) - positionOrder.indexOf(b.position)))
 const cropTarget = computed(() => (cropper.value ? cropTargets[cropper.value.position] || cropTargets.top : cropTargets.top))
@@ -85,7 +85,37 @@ async function uploadToPosition(banner, event) {
   event.target.value = ''
   if (!file) return
 
+  if (isGifFile(file)) {
+    await uploadOriginal(banner, file)
+    return
+  }
+
   openCropper(banner, URL.createObjectURL(file), file)
+}
+
+function isGifFile(file) {
+  return file.type === 'image/gif' || /\.gif$/i.test(file.name || '')
+}
+
+function isGifBanner(banner) {
+  return /\.gif(?:$|\?)/i.test(banner.image_url || '')
+}
+
+async function uploadOriginal(banner, file) {
+  error.value = ''
+  uploading.value = { ...uploading.value, [banner.position]: true }
+  try {
+    const body = new FormData()
+    body.append('file', file)
+    body.append('link_url', banner.link_url || '#')
+    const updated = await api(`/banners/${banner.position}/upload`, { method: 'POST', body })
+    updateBanner(updated)
+    savedPosition.value = banner.position
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    uploading.value = { ...uploading.value, [banner.position]: false }
+  }
 }
 
 function openCropper(banner, sourceUrl, sourceFile = null) {
@@ -338,7 +368,7 @@ onBeforeUnmount(() => {
             <Upload :size="16" />
             {{ uploading[banner.position] ? t('common.uploading') : t('common.upload') }}
           </label>
-          <button class="button" type="button" :disabled="!banner.image_url || uploading[banner.position]" @click="openCropperForBanner(banner)">
+          <button class="button" type="button" :title="isGifBanner(banner) ? t('banners.cropGifDisabled') : t('banners.crop')" :disabled="!banner.image_url || uploading[banner.position] || isGifBanner(banner)" @click="openCropperForBanner(banner)">
             <Crop :size="16" />
             {{ t('banners.crop') }}
           </button>
