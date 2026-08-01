@@ -60,6 +60,7 @@ def registration_to_json(registration: RaceRegistration, user: User | None = Non
                 "team_id": user.team_id,
                 "team_name": team_name,
                 "avatar_color": user.avatar_color,
+                "avatar_url": user.avatar_url,
                 "games": user.games or [],
             }
         )

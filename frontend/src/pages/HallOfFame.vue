@@ -192,7 +192,7 @@ watch(visibleTeams, () => {
             <td><span class="hall-rank" :class="rankClass((pilotPage - 1) * pageSize + index)">{{ (pilotPage - 1) * pageSize + index + 1 }}</span></td>
             <td>
               <div class="hall-person-cell">
-                <UserAvatar mini :color="pilot.avatar_color" :label="pilotTitle(pilot)" />
+                <UserAvatar mini :src="pilot.avatar_url" :color="pilot.avatar_color" :label="pilotTitle(pilot)" />
                 <RouterLink class="hall-title" :to="`/pilots/${pilot.id}`">
                   <strong>{{ pilotTitle(pilot) }}</strong>
                   <span>{{ pilotLine(pilot) }}</span>
@@ -233,7 +233,7 @@ watch(visibleTeams, () => {
             <td><span class="hall-rank" :class="rankClass((teamPage - 1) * pageSize + index)">{{ (teamPage - 1) * pageSize + index + 1 }}</span></td>
             <td>
               <div class="hall-person-cell">
-                <TeamAvatar mini :color="team.avatar_color" :label="team.name" />
+                <TeamAvatar mini :src="team.avatar_url" :color="team.avatar_color" :label="team.name" />
                 <span class="hall-title">
                   <strong>{{ team.name }}</strong>
                   <span>{{ team.description || t('common.none') }}</span>
@@ -248,7 +248,7 @@ watch(visibleTeams, () => {
             <td>{{ formatRating(team.average_rating) }}</td>
             <td>
               <RouterLink v-if="team.best_pilot" class="hall-best-link" :to="`/pilots/${team.best_pilot.id}`">
-                <UserAvatar mini :color="team.best_pilot.avatar_color" :label="pilotTitle(team.best_pilot)" />
+                <UserAvatar mini :src="team.best_pilot.avatar_url" :color="team.best_pilot.avatar_color" :label="pilotTitle(team.best_pilot)" />
                 <span>
                   <strong>{{ pilotTitle(team.best_pilot) }}</strong>
                   <small>#{{ team.best_pilot.pilot_number }} - {{ teamShortName(team.best_pilot.team_name) }}</small>

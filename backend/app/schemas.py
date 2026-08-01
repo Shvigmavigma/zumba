@@ -58,6 +58,7 @@ class UserPublic(BaseModel):
     role: Role
     status: UserStatus
     avatar_color: str
+    avatar_url: str | None = None
     games: list[str] = Field(default_factory=list)
     team_id: int | None = None
     team_name: str | None = None
@@ -84,6 +85,11 @@ class UserUpdate(BaseModel):
     discord: str | None = Field(default=None, max_length=100)
     avatar_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     games: list[GameCode] | None = Field(default=None, min_length=1, max_length=3)
+
+
+class UserAdminUpdate(UserUpdate):
+    login: str | None = Field(default=None, min_length=3, max_length=50)
+    pilot_number: int | None = Field(default=None, ge=1, le=9999)
 
 
 class TeamBase(BaseModel):
@@ -118,6 +124,7 @@ class TeamMemberRead(BaseModel):
     team_id: int | None = None
     team_name: str | None = None
     avatar_color: str
+    avatar_url: str | None = None
     games: list[str] = Field(default_factory=list)
     created_at: datetime
 
@@ -142,6 +149,7 @@ class TeamCreationRequestRead(BaseModel):
     name: str
     description: str
     avatar_color: str
+    avatar_url: str | None = None
     status: TeamApplicationStatus
     team_id: int | None
     created_at: datetime
@@ -156,6 +164,7 @@ class TeamRead(BaseModel):
     name: str
     description: str
     avatar_color: str
+    avatar_url: str | None = None
     owner_id: int | None
     owner_login: str | None = None
     owner_nickname: str | None = None
@@ -336,6 +345,7 @@ class PenaltyDetailRead(PenaltyRead):
     target_nickname: str | None = None
     target_pilot_number: int | None = None
     target_avatar_color: str | None = None
+    target_avatar_url: str | None = None
     target_rating: int | None = None
     target_team_name: str | None = None
     issuer_login: str | None = None
@@ -438,6 +448,7 @@ class HallOfFamePilotRead(BaseModel):
     rating: int = Field(ge=int(MIN_RATING), le=int(MAX_RATING))
     rating_race_count: int = Field(ge=0)
     avatar_color: str
+    avatar_url: str | None = None
     team_id: int | None = None
     team_name: str | None = None
     points: int = Field(ge=0)
@@ -452,6 +463,7 @@ class HallOfFameTeamRead(BaseModel):
     name: str
     description: str
     avatar_color: str
+    avatar_url: str | None = None
     owner_id: int | None
     member_count: int = Field(ge=0)
     average_rating: int = Field(ge=0)

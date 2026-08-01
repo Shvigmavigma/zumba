@@ -68,6 +68,10 @@ function penaltyTargetColor(penalty) {
   return participantById(penalty.target_id)?.avatar_color || '#2563eb'
 }
 
+function penaltyTargetAvatar(penalty) {
+  return participantById(penalty.target_id)?.avatar_url || ''
+}
+
 function penaltyTimeMs(penalty) {
   const value = Number(penalty.time_penalty_ms ?? 0)
   if (value > 0) return value
@@ -159,7 +163,7 @@ function submitAppeal(penalty) {
         <article v-for="penalty in penalties" :key="penalty.id" class="card race-penalty-card" :class="{ 'is-own': isOwnPenalty(penalty) }">
           <div class="race-penalty-head">
             <div class="user-list-cell">
-              <UserAvatar mini :color="penaltyTargetColor(penalty)" :label="penaltyTargetName(penalty)" />
+              <UserAvatar mini :src="penaltyTargetAvatar(penalty)" :color="penaltyTargetColor(penalty)" :label="penaltyTargetName(penalty)" />
               <div class="user-list-main">
                 <strong>{{ penaltyTargetName(penalty) }}</strong>
                 <span>{{ penaltyTargetSubtitle(penalty) }}</span>

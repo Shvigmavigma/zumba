@@ -128,6 +128,9 @@ class User(Base):
     timeout_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     timeout_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     avatar_color: Mapped[str] = mapped_column(String(7), default="#2563eb")
+    avatar_url: Mapped[str | None] = mapped_column(String(255))
+    avatar_upload_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    avatar_upload_window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     games: Mapped[list[str]] = mapped_column(JSONB, default=lambda: list(DEFAULT_USER_GAMES), server_default=text("""'["ACC", "AC", "iRacing"]'::jsonb"""))
     team_id: Mapped[int | None] = mapped_column(
         ForeignKey("teams.id", ondelete="SET NULL", use_alter=True, name="fk_users_team_id"),
@@ -147,6 +150,9 @@ class Team(Base):
     name: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     description: Mapped[str] = mapped_column(Text, default="")
     avatar_color: Mapped[str] = mapped_column(String(7), default="#dc2626")
+    avatar_url: Mapped[str | None] = mapped_column(String(255))
+    avatar_upload_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    avatar_upload_window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     owner_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL", use_alter=True, name="fk_teams_owner_id"),
         index=True,

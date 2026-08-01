@@ -1,18 +1,21 @@
 ﻿from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy import String, cast, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.avatar_uploads import ensure_avatar_upload_allowed, mark_avatar_uploaded, remove_avatar_file, save_avatar_file
+from app.config import get_settings
 from app.db import get_session
 from app.deps import as_utc, clear_expired_timeout, require_admin, require_moder_plus, require_pilot_plus
 from app.models import Appeal, Banner, Penalty, Race, RaceRegistration, Role, Setup, Team, TeamApplication, TeamCreationRequest, User, UserStatus
 from app.rate_limit import limiter
-from app.schemas import RoleUpdate, TimeoutRequest, UserPrivate, UserPublic, UserUpdate
+from app.schemas import RoleUpdate, TimeoutRequest, UserAdminUpdate, UserPrivate, UserPublic, UserUpdate
 
 
 router = APIRouter()
+settings = get_settings()
 
 
 def user_response(user: User, team_name: str | None = None, private: bool = False) -> dict:
@@ -20,6 +23,36 @@ def user_response(user: User, team_name: str | None = None, private: bool = Fals
     data = schema.model_validate(user).model_dump()
     data["team_name"] = team_name
     return data
+
+
+async def user_team_name(session: AsyncSession, user: User) -> str | None:
+    if user.team_id is None:
+        return None
+    team = await session.get(Team, user.team_id)
+    return team.name if team else None
+
+
+async def set_user_avatar(session: AsyncSession, user: User, file: UploadFile) -> dict:
+    ensure_avatar_upload_allowed(user)
+    previous_avatar_url = user.avatar_url
+    user.avatar_url = await save_avatar_file(file, "users", user.id, settings.max_user_avatar_upload_mb)
+    mark_avatar_uploaded(user)
+    await session.commit()
+    await session.refresh(user)
+    remove_avatar_file(previous_avatar_url)
+    return user_response(user, await user_team_name(session, user), private=True)
+
+
+PROFILE_REQUIRED_FIELDS = {"email", "first_name", "last_name", "nickname", "avatar_color", "games"}
+ADMIN_UNIQUE_FIELDS = {"email", "login", "pilot_number"}
+
+
+async def ensure_unique_user_fields(session: AsyncSession, data: dict, user_id: int) -> None:
+    for field in ADMIN_UNIQUE_FIELDS & data.keys():
+        value = str(data[field]) if field == "email" else data[field]
+        existing = await session.scalar(select(User).where(getattr(User, field) == value, User.id != user_id))
+        if existing is not None:
+            raise HTTPException(status_code=409, detail=f"{field.replace('_', ' ').title()} already exists")
 
 
 def user_sort_columns(sort: str) -> tuple:
@@ -137,13 +170,9 @@ async def update_me(
     session: AsyncSession = Depends(get_session),
 ):
     data = payload.model_dump(exclude_unset=True)
-    required_fields = {"email", "first_name", "last_name", "nickname", "avatar_color", "games"}
-    if any(field in data and data[field] is None for field in required_fields):
+    if any(field in data and data[field] is None for field in PROFILE_REQUIRED_FIELDS):
         raise HTTPException(status_code=400, detail="Required profile fields cannot be null")
-    if "email" in data:
-        existing_email = await session.scalar(select(User).where(User.email == str(data["email"]), User.id != user.id))
-        if existing_email is not None:
-            raise HTTPException(status_code=409, detail="Email already exists")
+    await ensure_unique_user_fields(session, data, user.id)
     if user.role == Role.admin:
         for field, value in data.items():
             setattr(user, field, value)
@@ -151,7 +180,60 @@ async def update_me(
         user.pending_profile_changes = data
     await session.commit()
     await session.refresh(user)
-    return user
+    return user_response(user, await user_team_name(session, user), private=True)
+
+
+@router.post("/me/avatar", response_model=UserPrivate)
+@limiter.limit("20/minute")
+async def upload_my_avatar(
+    request: Request,
+    file: UploadFile = File(...),
+    user: User = Depends(require_pilot_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    return await set_user_avatar(session, user, file)
+
+
+@router.patch("/{user_id}", response_model=UserPrivate)
+@limiter.limit("60/minute")
+async def update_user_profile(
+    user_id: int,
+    request: Request,
+    payload: UserAdminUpdate,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    data = payload.model_dump(exclude_unset=True)
+    required_fields = PROFILE_REQUIRED_FIELDS | {"login", "pilot_number"}
+    if any(field in data and data[field] is None for field in required_fields):
+        raise HTTPException(status_code=400, detail="Required profile fields cannot be null")
+    await ensure_unique_user_fields(session, data, user.id)
+
+    for field, value in data.items():
+        setattr(user, field, value)
+    user.pending_profile_changes = None
+    await session.commit()
+    await session.refresh(user)
+    return user_response(user, await user_team_name(session, user), private=True)
+
+
+@router.post("/{user_id}/avatar", response_model=UserPrivate)
+@limiter.limit("20/minute")
+async def upload_user_avatar(
+    user_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return await set_user_avatar(session, user, file)
 
 
 @router.post("/{user_id}/approve", response_model=UserPrivate)

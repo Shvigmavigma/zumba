@@ -124,10 +124,7 @@ onMounted(() => {
         <span>{{ t('fields.games') }}</span>
         <GameCheckboxGroup v-model="form.games" />
       </div>
-      <div class="form-row">
-        <label class="field"><span>{{ t('fields.discord') }}</span><input v-model="form.discord" maxlength="100" /></label>
-        <label class="field"><span>{{ t('fields.avatarColor') }}</span><input v-model="form.avatar_color" type="color" /></label>
-      </div>
+      <label class="field"><span>{{ t('fields.discord') }}</span><input v-model="form.discord" maxlength="100" /></label>
       <p v-if="error" class="error">{{ error }}</p>
       <button class="button primary" type="submit" :disabled="!steamConnected">{{ t('auth.createAccount') }}</button>
     </form>

@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
+import AvatarViewer from '../components/AvatarViewer.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
 import { formatRating, teamShortName } from '../pilotDisplay'
@@ -12,6 +13,7 @@ const { t } = useI18n()
 const route = useRoute()
 const pilot = ref(null)
 const error = ref('')
+const avatarViewerOpen = ref(false)
 
 function formatDate(value) {
   return new Date(value).toLocaleDateString(state.locale, {
@@ -38,7 +40,9 @@ onMounted(async () => {
   <section class="section pilot-profile-page">
     <p v-if="error" class="error">{{ error }}</p>
     <section v-if="pilot" class="card pilot-profile-card">
-      <UserAvatar class="pilot-profile-avatar" :color="pilot.avatar_color" :label="pilot.nickname || pilot.login" />
+      <button class="avatar-open-button pilot-profile-avatar-button" type="button" :title="t('avatar.open')" @click="avatarViewerOpen = true">
+        <UserAvatar class="pilot-profile-avatar" :src="pilot.avatar_url" :color="pilot.avatar_color" :label="pilot.nickname || pilot.login" />
+      </button>
 
       <div class="pilot-profile-main">
         <div class="section-header pilot-profile-head">
@@ -99,5 +103,12 @@ onMounted(async () => {
         </div>
       </div>
     </section>
+    <AvatarViewer
+      :open="avatarViewerOpen"
+      :src="pilot?.avatar_url"
+      :label="pilot?.nickname || pilot?.login || t('roles.pilot')"
+      :fallback-color="pilot?.avatar_color"
+      @close="avatarViewerOpen = false"
+    />
   </section>
 </template>

@@ -178,6 +178,14 @@ export const messages = {
       timeoutEnd: 'Тайм-аут до',
       pendingChangesTitle: 'Ожидающие изменения'
     },
+    avatar: {
+      open: 'Открыть аватарку',
+      empty: 'Аватарка пока не загружена',
+      userTitle: 'Аватар профиля',
+      userHint: 'PNG, JPG, WEBP или GIF до 5 МБ. Изменение аватарки доступно не чаще 3 раз в день.',
+      teamTitle: 'Аватар команды',
+      teamHint: 'PNG, JPG, WEBP или GIF до 30 МБ. Изменение аватарки команды доступно не чаще 3 раз в день.'
+    },
     pagination: {
       label: 'Пагинация',
       previous: 'Назад',
@@ -195,6 +203,7 @@ export const messages = {
     },
     adminUsers: {
       deleteConfirm: 'Удалить аккаунт {login}? Это действие нельзя отменить.',
+      editProfileTitle: 'Редактирование профиля',
       timeoutTitle: 'Выдать тайм-аут',
       timeoutUser: 'Пользователь: {login}',
       timeoutUntil: 'Конец тайм-аута',
@@ -600,6 +609,14 @@ export const messages = {
       timeoutEnd: 'Timeout until',
       pendingChangesTitle: 'Pending changes'
     },
+    avatar: {
+      open: 'Open avatar',
+      empty: 'No avatar uploaded yet',
+      userTitle: 'Profile avatar',
+      userHint: 'PNG, JPG, WEBP or GIF up to 5 MB. Avatar changes are limited to 3 times per day.',
+      teamTitle: 'Team avatar',
+      teamHint: 'PNG, JPG, WEBP or GIF up to 30 MB. Team avatar changes are limited to 3 times per day.'
+    },
     pagination: {
       label: 'Pagination',
       previous: 'Previous',
@@ -617,6 +634,7 @@ export const messages = {
     },
     adminUsers: {
       deleteConfirm: 'Delete account {login}? This action cannot be undone.',
+      editProfileTitle: 'Edit profile',
       timeoutTitle: 'Issue timeout',
       timeoutUser: 'User: {login}',
       timeoutUntil: 'Timeout end',

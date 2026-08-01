@@ -45,6 +45,18 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(255)"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_upload_count INTEGER DEFAULT 0"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_upload_window_start TIMESTAMP WITH TIME ZONE"))
+        await conn.execute(text("UPDATE users SET avatar_upload_count = 0 WHERE avatar_upload_count IS NULL"))
+        await conn.execute(text("ALTER TABLE users ALTER COLUMN avatar_upload_count SET DEFAULT 0"))
+        await conn.execute(text("ALTER TABLE users ALTER COLUMN avatar_upload_count SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE teams ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(255)"))
+        await conn.execute(text("ALTER TABLE teams ADD COLUMN IF NOT EXISTS avatar_upload_count INTEGER DEFAULT 0"))
+        await conn.execute(text("ALTER TABLE teams ADD COLUMN IF NOT EXISTS avatar_upload_window_start TIMESTAMP WITH TIME ZONE"))
+        await conn.execute(text("UPDATE teams SET avatar_upload_count = 0 WHERE avatar_upload_count IS NULL"))
+        await conn.execute(text("ALTER TABLE teams ALTER COLUMN avatar_upload_count SET DEFAULT 0"))
+        await conn.execute(text("ALTER TABLE teams ALTER COLUMN avatar_upload_count SET NOT NULL"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS games JSONB"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS team_id INTEGER"))
         await conn.execute(text("""UPDATE users SET games = '["ACC", "AC", "iRacing"]'::jsonb WHERE games IS NULL OR jsonb_typeof(games) <> 'array'"""))

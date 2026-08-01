@@ -63,6 +63,7 @@ async def get_penalty(
             "target_nickname": penalty.target.nickname if penalty.target else None,
             "target_pilot_number": penalty.target.pilot_number if penalty.target else None,
             "target_avatar_color": penalty.target.avatar_color if penalty.target else None,
+            "target_avatar_url": penalty.target.avatar_url if penalty.target else None,
             "target_rating": int(round(float(penalty.target.rating))) if penalty.target else None,
             "target_team_name": penalty.target.team.name if penalty.target and penalty.target.team else None,
             "issuer_login": penalty.issuer.login if penalty.issuer else None,

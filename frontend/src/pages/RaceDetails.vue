@@ -180,6 +180,10 @@ function resultPilotColor(row) {
   return participantById(row.user_id)?.avatar_color || '#2563eb'
 }
 
+function resultPilotAvatar(row) {
+  return participantById(row.user_id)?.avatar_url || ''
+}
+
 function resultPilotTeam(row) {
   return teamShortName(participantById(row.user_id)?.team_name)
 }
@@ -438,7 +442,7 @@ watch(visibleParticipants, () => {
 
         <div v-if="participantsExpanded && visibleParticipants.length" class="race-participant-list">
           <article v-for="item in pagedParticipants" :key="item.user_id" class="race-participant-row">
-            <UserAvatar class="pilot-avatar-slot" :color="item.avatar_color" :label="participantName(item)" />
+            <UserAvatar class="pilot-avatar-slot" :src="item.avatar_url" :color="item.avatar_color" :label="participantName(item)" />
             <div class="race-participant-main">
               <strong>{{ participantName(item) }}</strong>
               <span>{{ participantSubtitle(item) }} · RER {{ formatRating(item.rating) }} · {{ pilotTeamChip(item) }}</span>
@@ -549,7 +553,7 @@ watch(visibleParticipants, () => {
                   <td><span class="result-position-badge" :class="{ 'is-top': Number(row.position) <= 3 }">{{ row.position || '-' }}</span></td>
                   <td>
                     <div class="result-driver-cell">
-                      <UserAvatar mini :color="resultPilotColor(row)" :label="resultPilotName(row)" />
+                      <UserAvatar mini :src="resultPilotAvatar(row)" :color="resultPilotColor(row)" :label="resultPilotName(row)" />
                       <div>
                         <strong>{{ resultPilotName(row) }}</strong>
                         <span>{{ resultPilotSubtitle(row) }} · RER {{ resultPilotRating(row) }} · {{ resultPilotTeam(row) }}</span>

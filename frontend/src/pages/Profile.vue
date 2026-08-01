@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { Edit3, RefreshCw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
+import AvatarViewer from '../components/AvatarViewer.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
 import { formatRating, pilotName, teamShortName } from '../pilotDisplay'
@@ -11,6 +12,7 @@ import { setSession, state } from '../store'
 const { t } = useI18n()
 const error = ref('')
 const loading = ref(false)
+const avatarViewerOpen = ref(false)
 const user = computed(() => state.user)
 const displayName = computed(() => pilotName(user.value, user.value?.login))
 const gameList = computed(() => user.value?.games?.length ? user.value.games.map((game) => gameLabel(t, game)).join(' / ') : t('common.none'))
@@ -42,7 +44,6 @@ const profileFields = computed(() => {
     { label: 'RER', value: formatRating(user.value.rating) },
     { label: 'SR', value: Number.isFinite(Number(user.value.sr)) ? Number(user.value.sr).toFixed(1) : null },
     { label: t('fields.ratingRaces'), value: user.value.rating_race_count ?? 0 },
-    { label: t('fields.avatarColor'), value: user.value.avatar_color },
     { label: t('fields.joinedAt'), value: formatDateTime(user.value.created_at) },
     { label: t('profile.updatedAt'), value: formatDateTime(user.value.updated_at) },
     { label: t('profile.banEnd'), value: formatDateTime(user.value.ban_end) },
@@ -74,7 +75,6 @@ function profileFieldLabel(key) {
     nickname: t('fields.nickname'),
     country: t('fields.country'),
     discord: t('fields.discord'),
-    avatar_color: t('fields.avatarColor'),
     games: t('fields.games')
   }
   return labels[key] || key.replaceAll('_', ' ')
@@ -118,7 +118,9 @@ onMounted(refreshProfile)
     <p v-if="error" class="error">{{ error }}</p>
 
     <article v-if="user" class="card pilot-profile-card profile-overview-card">
-      <UserAvatar class="pilot-profile-avatar" :color="user.avatar_color" :label="displayName" />
+      <button class="avatar-open-button pilot-profile-avatar-button" type="button" :title="t('avatar.open')" @click="avatarViewerOpen = true">
+        <UserAvatar class="pilot-profile-avatar" :src="user.avatar_url" :color="user.avatar_color" :label="displayName" />
+      </button>
       <div class="pilot-profile-main">
         <div class="pilot-profile-head">
           <h1>{{ displayName }}</h1>
@@ -156,5 +158,12 @@ onMounted(refreshProfile)
     </article>
 
     <RouterLink v-else class="button" to="/login">{{ t('nav.login') }}</RouterLink>
+    <AvatarViewer
+      :open="avatarViewerOpen"
+      :src="user?.avatar_url"
+      :label="displayName"
+      :fallback-color="user?.avatar_color"
+      @close="avatarViewerOpen = false"
+    />
   </section>
 </template>
