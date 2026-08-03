@@ -94,24 +94,24 @@ onMounted(() => {
     </div>
     <form class="form" @submit.prevent="submit">
       <div class="form-row">
-        <label class="field"><span>{{ t('fields.login') }}</span><input v-model="form.login" autocomplete="username" required minlength="3" maxlength="50" /></label>
-        <label class="field"><span>{{ t('fields.email') }}</span><input v-model="form.email" type="email" autocomplete="email" required maxlength="255" /></label>
+        <label class="field"><span class="required-label">{{ t('fields.login') }}</span><input v-model="form.login" autocomplete="username" required minlength="3" maxlength="50" /></label>
+        <label class="field"><span class="required-label">{{ t('fields.email') }}</span><input v-model="form.email" type="email" autocomplete="email" required maxlength="255" /></label>
       </div>
       <div class="form-row">
-        <label class="field"><span>{{ t('fields.password') }}</span><input v-model="form.password" type="password" autocomplete="new-password" required minlength="8" maxlength="128" /></label>
-        <label class="field"><span>{{ t('fields.confirm') }}</span><input v-model="form.password_confirm" type="password" autocomplete="new-password" required minlength="8" maxlength="128" /></label>
+        <label class="field"><span class="required-label">{{ t('fields.password') }}</span><input v-model="form.password" type="password" autocomplete="new-password" required minlength="8" maxlength="128" /></label>
+        <label class="field"><span class="required-label">{{ t('fields.confirm') }}</span><input v-model="form.password_confirm" type="password" autocomplete="new-password" required minlength="8" maxlength="128" /></label>
       </div>
       <div class="form-row">
-        <label class="field"><span>{{ t('fields.firstName') }}</span><input v-model="form.first_name" autocomplete="given-name" required minlength="1" maxlength="50" /></label>
-        <label class="field"><span>{{ t('fields.lastName') }}</span><input v-model="form.last_name" autocomplete="family-name" required minlength="1" maxlength="50" /></label>
+        <label class="field"><span class="required-label">{{ t('fields.firstName') }}</span><input v-model="form.first_name" autocomplete="given-name" required minlength="1" maxlength="50" /></label>
+        <label class="field"><span class="required-label">{{ t('fields.lastName') }}</span><input v-model="form.last_name" autocomplete="family-name" required minlength="1" maxlength="50" /></label>
       </div>
       <div class="form-row">
-        <label class="field"><span>{{ t('fields.nickname') }}</span><input v-model="form.nickname" required minlength="1" maxlength="80" /></label>
-        <label class="field"><span>{{ t('fields.pilotNumber') }}</span><input v-model.number="form.pilot_number" type="number" min="1" max="9999" required /></label>
+        <label class="field"><span class="required-label">{{ t('fields.nickname') }}</span><input v-model="form.nickname" required minlength="1" maxlength="80" /></label>
+        <label class="field"><span class="required-label">{{ t('fields.pilotNumber') }}</span><input v-model.number="form.pilot_number" type="number" min="1" max="9999" required /></label>
       </div>
       <section class="steam-connect">
         <div>
-          <strong>{{ t('fields.steam') }}</strong>
+          <strong>{{ t('fields.steam') }}<span class="required-mark">*</span></strong>
           <p class="muted">{{ steamConnected ? t('auth.steamConnected', { id: steamId }) : t('auth.steamRequired') }}</p>
         </div>
         <button class="button" type="button" @click="connectSteam">{{ steamConnected ? t('auth.reconnectSteam') : t('auth.connectSteam') }}</button>
@@ -120,8 +120,8 @@ onMounted(() => {
         <span>{{ t('fields.country') }}</span>
         <CountryCombobox v-model="form.country" :options="countries" />
       </div>
-      <div class="field">
-        <span>{{ t('fields.games') }}</span>
+      <div class="field is-required">
+        <span class="required-label">{{ t('fields.games') }}</span>
         <GameCheckboxGroup v-model="form.games" />
       </div>
       <label class="field"><span>{{ t('fields.discord') }}</span><input v-model="form.discord" maxlength="100" /></label>

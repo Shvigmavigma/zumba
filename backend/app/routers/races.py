@@ -1,15 +1,21 @@
-﻿from datetime import datetime, timezone
+﻿from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from sqlalchemy import delete
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.db import get_session
+from app.deps import require_admin
 from app.deps import get_optional_user, require_moder_plus, require_pilot_plus
+from app.models import AppSetting, RaceFanVote
 from app.models import RACE_GAMES, Penalty, Race, RaceRegistration, RaceStatus, Role, Setup, Team, User
+from app.race_assets import normalize_race_create_assets, normalize_race_update_assets
+from app.race_videos import remove_race_video_file, save_race_video_file
 from app.rate_limit import limiter
+from app.schemas import FanVoteCast, FanVoteConfigRead, FanVoteConfigUpdate, FanVoteRead, FanVoteSetup
 from app.schemas import AccResultsUpload, ManualResultsUpload, RaceCreate, RaceManageRead, RaceRead, RaceRegisterRequest, RaceUpdate, ResultsUpload
 from app.services import apply_sr_penalties, recalculate_all_ratings, recalculate_race_results, restore_race_sr_bonus, restore_sr_penalty
 
@@ -36,6 +42,165 @@ async def ensure_race(session: AsyncSession, race_id: int) -> Race:
 def ensure_can_manage_race(user: User, race: Race, action: str) -> None:
     if user.role != Role.admin and race.creator_id != user.id and user.role != Role.moder:
         raise HTTPException(status_code=403, detail=f"Only creator, moder or admin can {action} this race")
+
+
+def normalize_external_race_data(data: dict, race: Race | None = None) -> dict:
+    game = data.get("game", race.game if race else None)
+    if game != "LMU":
+        return data
+    link = str(data.get("server_link", race.server_link if race else "") or "").strip()
+    if not link:
+        raise HTTPException(status_code=400, detail="LMU races require an external link")
+    data["server_link"] = link
+    data["track"] = "LMU"
+    data["car_class"] = "LMU"
+    data["has_qualification"] = False
+    data["mods_pack"] = []
+    data["allowed_cars"] = []
+    return data
+
+
+FAN_VOTE_DURATION_KEY = "fan_vote_duration_hours"
+DEFAULT_FAN_VOTE_DURATION_HOURS = 24
+MAX_FAN_VOTE_DURATION_HOURS = 168
+
+
+def clamp_fan_vote_duration(value: int) -> int:
+    return max(1, min(MAX_FAN_VOTE_DURATION_HOURS, value))
+
+
+def to_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+async def get_fan_vote_duration_hours(session: AsyncSession) -> int:
+    setting = await session.get(AppSetting, FAN_VOTE_DURATION_KEY)
+    raw_value = setting.value if setting is not None else {}
+    if not isinstance(raw_value, dict):
+        return DEFAULT_FAN_VOTE_DURATION_HOURS
+    try:
+        return clamp_fan_vote_duration(int(raw_value.get("hours", DEFAULT_FAN_VOTE_DURATION_HOURS)))
+    except (TypeError, ValueError):
+        return DEFAULT_FAN_VOTE_DURATION_HOURS
+
+
+async def save_fan_vote_duration_hours(session: AsyncSession, hours: int) -> int:
+    normalized_hours = clamp_fan_vote_duration(hours)
+    setting = await session.get(AppSetting, FAN_VOTE_DURATION_KEY)
+    if setting is None:
+        setting = AppSetting(key=FAN_VOTE_DURATION_KEY, value={"hours": normalized_hours})
+        session.add(setting)
+    else:
+        setting.value = {"hours": normalized_hours}
+    await session.commit()
+    return normalized_hours
+
+
+def normalize_fan_vote_options(value) -> list[int]:
+    options: list[int] = []
+    for item in value or []:
+        try:
+            user_id = int(item)
+        except (TypeError, ValueError):
+            continue
+        if user_id > 0 and user_id not in options:
+            options.append(user_id)
+    return options[:3]
+
+
+async def build_fan_vote_payload(session: AsyncSession, race: Race, current_user: User | None) -> FanVoteRead:
+    duration_hours = await get_fan_vote_duration_hours(session)
+    option_ids = normalize_fan_vote_options(race.fan_vote_options)
+    started_at = to_utc(race.fan_vote_started_at)
+    ends_at = started_at + timedelta(hours=duration_hours) if started_at else None
+    now = datetime.now(timezone.utc)
+
+    if not option_ids:
+        return FanVoteRead(enabled=False, is_open=False, show_results=False, duration_hours=duration_hours)
+
+    count_rows = (
+        await session.execute(
+            select(RaceFanVote.target_id, func.count(RaceFanVote.id))
+            .where(RaceFanVote.race_id == race.id, RaceFanVote.target_id.in_(option_ids))
+            .group_by(RaceFanVote.target_id)
+        )
+    ).all()
+    counts = {int(target_id): int(count) for target_id, count in count_rows}
+    total_votes = sum(counts.values())
+
+    my_vote_user_id = None
+    if current_user is not None:
+        my_vote_user_id = await session.scalar(
+            select(RaceFanVote.target_id).where(RaceFanVote.race_id == race.id, RaceFanVote.user_id == current_user.id)
+        )
+
+    user_rows = (
+        await session.execute(
+            select(User, Team.name)
+            .outerjoin(Team, Team.id == User.team_id)
+            .where(User.id.in_(option_ids))
+        )
+    ).all()
+    users_by_id = {user.id: (user, team_name) for user, team_name in user_rows}
+    options = []
+    for user_id in option_ids:
+        item = users_by_id.get(user_id)
+        if item is None:
+            continue
+        user, team_name = item
+        votes = counts.get(user.id, 0)
+        options.append(
+            {
+                "user_id": user.id,
+                "login": user.login,
+                "nickname": user.nickname,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "pilot_number": user.pilot_number,
+                "team_name": team_name,
+                "avatar_color": user.avatar_color,
+                "avatar_url": user.avatar_url,
+                "rating": int(round(float(user.rating))),
+                "sr": float(user.sr),
+                "votes": votes,
+                "percentage": round(votes * 100 / total_votes, 1) if total_votes else 0,
+            }
+        )
+
+    enabled = len(options) == 3 and started_at is not None
+    is_open = bool(enabled and race.status == RaceStatus.finished and ends_at and ends_at > now)
+
+    return FanVoteRead(
+        enabled=enabled,
+        is_open=is_open,
+        show_results=bool(enabled and not is_open),
+        duration_hours=duration_hours,
+        started_at=started_at,
+        ends_at=ends_at,
+        total_votes=total_votes,
+        my_vote_user_id=my_vote_user_id,
+        options=options,
+    )
+
+
+async def ensure_fan_vote_options_are_registered(session: AsyncSession, race: Race, option_user_ids: list[int]) -> None:
+    registered_ids = set(
+        (
+            await session.scalars(
+                select(RaceRegistration.user_id).where(
+                    RaceRegistration.race_id == race.id,
+                    RaceRegistration.user_id.in_(option_user_ids),
+                )
+            )
+        ).all()
+    )
+    missing_ids = [user_id for user_id in option_user_ids if user_id not in registered_ids]
+    if missing_ids:
+        raise HTTPException(status_code=400, detail=f"Fan vote pilots must be registered for this race: {', '.join(map(str, missing_ids))}")
 
 
 def registration_to_json(registration: RaceRegistration, user: User | None = None, team_name: str | None = None) -> dict:
@@ -500,6 +665,7 @@ async def manage_races(
             "id": race.id,
             "name": race.name,
             "description": race.description,
+            "server_link": race.server_link,
             "status": race.status,
             "datetime_start": race.datetime_start,
             "datetime_end": race.datetime_end,
@@ -524,8 +690,10 @@ async def manage_races(
 async def create_race(payload: RaceCreate, request: Request, user: User = Depends(require_moder_plus), session: AsyncSession = Depends(get_session)):
     if payload.datetime_end <= payload.datetime_start:
         raise HTTPException(status_code=400, detail="Registration end must be after start")
+    data = await normalize_race_create_assets(session, payload.model_dump())
+    data = normalize_external_race_data(data)
     race = Race(
-        **payload.model_dump(),
+        **data,
         creator_id=user.id,
         status=RaceStatus.registration_open,
         is_passed=False,
@@ -536,6 +704,27 @@ async def create_race(payload: RaceCreate, request: Request, user: User = Depend
     await session.refresh(race)
     await attach_registered_pilots(session, [race])
     return race
+
+
+@router.get("/fan-vote/config", response_model=FanVoteConfigRead)
+@limiter.limit("600/minute")
+async def get_fan_vote_config(
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    return FanVoteConfigRead(duration_hours=await get_fan_vote_duration_hours(session))
+
+
+@router.patch("/fan-vote/config", response_model=FanVoteConfigRead)
+@limiter.limit("10/minute")
+async def update_fan_vote_config(
+    payload: FanVoteConfigUpdate,
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    return FanVoteConfigRead(duration_hours=await save_fan_vote_duration_hours(session, payload.duration_hours))
 
 
 @router.get("/{race_id}", response_model=RaceRead)
@@ -576,6 +765,8 @@ async def update_race(
             raise HTTPException(status_code=400, detail="Registration end must be after start")
     if requested_status == RaceStatus.finished and requested_results is None and race.results is None:
         raise HTTPException(status_code=400, detail="Upload race results before finishing the race")
+    data = await normalize_race_update_assets(session, race, data)
+    data = normalize_external_race_data(data, race)
     if was_finished and (requested_results is not None or not will_be_finished):
         await restore_race_sr_bonus(session, race)
     for field, value in data.items():
@@ -632,9 +823,123 @@ async def delete_race(
     setups = (await session.scalars(select(Setup).where(Setup.race_id == race.id))).all()
     for setup in setups:
         setup.race_id = None
+    video_url = race.video_url
     await session.delete(race)
     await recalculate_all_ratings(session)
     await session.commit()
+    remove_race_video_file(video_url)
+
+
+@router.post("/{race_id}/video", response_model=RaceRead)
+@limiter.limit("3/minute")
+async def upload_race_video(
+    race_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    user: User = Depends(require_moder_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    race = await ensure_race(session, race_id)
+    if race.status != RaceStatus.finished:
+        raise HTTPException(status_code=400, detail="Video can be attached only to a finished race")
+    previous_video_url = race.video_url
+    new_video_url = await save_race_video_file(file, race.id)
+    race.video_url = new_video_url
+    race.video_filename = file.filename or "race-video"
+    race.video_uploaded_at = datetime.now(timezone.utc)
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        remove_race_video_file(new_video_url)
+        raise
+    await session.refresh(race)
+    remove_race_video_file(previous_video_url)
+    await attach_registered_pilots(session, [race])
+    return race
+
+
+@router.delete("/{race_id}/video", response_model=RaceRead)
+@limiter.limit("10/minute")
+async def delete_race_video(
+    race_id: int,
+    request: Request,
+    _: User = Depends(require_moder_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    race = await ensure_race(session, race_id)
+    previous_video_url = race.video_url
+    race.video_url = None
+    race.video_filename = None
+    race.video_uploaded_at = None
+    await session.commit()
+    await session.refresh(race)
+    remove_race_video_file(previous_video_url)
+    await attach_registered_pilots(session, [race])
+    return race
+
+
+@router.get("/{race_id}/fan-vote", response_model=FanVoteRead)
+@limiter.limit("600/minute")
+async def get_race_fan_vote(
+    race_id: int,
+    request: Request,
+    user: User = Depends(require_pilot_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    race = await ensure_race(session, race_id)
+    return await build_fan_vote_payload(session, race, user)
+
+
+@router.patch("/{race_id}/fan-vote", response_model=FanVoteRead)
+@limiter.limit("10/minute")
+async def setup_race_fan_vote(
+    race_id: int,
+    request: Request,
+    payload: FanVoteSetup,
+    _: User = Depends(require_moder_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    race = await ensure_race(session, race_id)
+    if race.status != RaceStatus.finished:
+        raise HTTPException(status_code=400, detail="Fan vote can be started only after the race is finished")
+    await ensure_fan_vote_options_are_registered(session, race, payload.option_user_ids)
+    race.fan_vote_options = payload.option_user_ids
+    race.fan_vote_started_at = datetime.now(timezone.utc)
+    await session.execute(delete(RaceFanVote).where(RaceFanVote.race_id == race.id))
+    await session.commit()
+    await session.refresh(race)
+    return await build_fan_vote_payload(session, race, None)
+
+
+@router.post("/{race_id}/fan-vote", response_model=FanVoteRead)
+@limiter.limit("60/minute")
+async def cast_race_fan_vote(
+    race_id: int,
+    request: Request,
+    payload: FanVoteCast,
+    user: User = Depends(require_pilot_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    race = await ensure_race(session, race_id)
+    fan_vote = await build_fan_vote_payload(session, race, user)
+    if not fan_vote.enabled:
+        raise HTTPException(status_code=400, detail="Fan vote is not configured for this race")
+    if not fan_vote.is_open:
+        raise HTTPException(status_code=400, detail="Fan vote is closed")
+    option_ids = {option.user_id for option in fan_vote.options}
+    if payload.target_user_id not in option_ids:
+        raise HTTPException(status_code=400, detail="Choose one of the fan vote pilots")
+
+    existing_vote = await session.scalar(
+        select(RaceFanVote).where(RaceFanVote.race_id == race.id, RaceFanVote.user_id == user.id)
+    )
+    if existing_vote is None:
+        session.add(RaceFanVote(race_id=race.id, user_id=user.id, target_id=payload.target_user_id))
+    else:
+        existing_vote.target_id = payload.target_user_id
+    await session.commit()
+    return await build_fan_vote_payload(session, race, user)
 
 
 @router.post("/{race_id}/register", response_model=RaceRead)

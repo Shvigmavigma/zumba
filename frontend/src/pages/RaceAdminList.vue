@@ -4,7 +4,7 @@ import { Download, Eye, Pencil, Plus, RotateCw, SquareCheckBig, Trash2 } from 'l
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
-import { gameLabel, gameOptions, statusLabel } from '../i18nLabels'
+import { gameLabel, gameOptions, isExternalRace, raceOpenHref, statusLabel } from '../i18nLabels'
 import { state } from '../store'
 
 const { t } = useI18n()
@@ -35,7 +35,8 @@ function formatDate(value) {
     month: 'short',
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    hourCycle: 'h23'
   })
 }
 
@@ -176,8 +177,13 @@ watch(page, load)
           <tr v-for="race in races" :key="race.id">
             <td>
               <div class="race-admin-title">
-                <RouterLink :to="`/races/${race.id}`">{{ race.name }}</RouterLink>
-                <p class="muted">{{ gameLabel(t, race.game) }} - {{ race.track }} - {{ race.car_class }} - {{ race.has_qualification ? t('raceDetails.withQualification') : t('raceDetails.withoutQualification') }}</p>
+                <a v-if="isExternalRace(race)" :href="raceOpenHref(race)">{{ race.name }}</a>
+                <RouterLink v-else :to="raceOpenHref(race)">{{ race.name }}</RouterLink>
+                <p class="muted">
+                  {{ race.game === 'LMU'
+                    ? gameLabel(t, race.game)
+                    : `${gameLabel(t, race.game)} - ${race.track} - ${race.car_class} - ${race.has_qualification ? t('raceDetails.withQualification') : t('raceDetails.withoutQualification')}` }}
+                </p>
                 <p>{{ race.description }}</p>
               </div>
             </td>
@@ -200,7 +206,10 @@ watch(page, load)
             </td>
             <td>
               <div class="race-admin-actions">
-                <RouterLink class="icon-button" :to="`/races/${race.id}`" :title="t('common.open')">
+                <a v-if="isExternalRace(race)" class="icon-button" :href="raceOpenHref(race)" :title="t('common.open')">
+                  <Eye :size="16" />
+                </a>
+                <RouterLink v-else class="icon-button" :to="raceOpenHref(race)" :title="t('common.open')">
                   <Eye :size="16" />
                 </RouterLink>
                 <RouterLink class="icon-button" :to="`/races/${race.id}/edit`" :title="t('common.edit')">

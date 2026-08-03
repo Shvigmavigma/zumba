@@ -1,11 +1,12 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { Search, SlidersHorizontal } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
 import UserAvatar from '../components/UserAvatar.vue'
-import { gameLabel } from '../i18nLabels'
-import { formatRating, teamShortName } from '../pilotDisplay'
+import { countryLabel, gameLabel } from '../i18nLabels'
+import { formatRating, pilotName, teamShortName } from '../pilotDisplay'
 
 const { t } = useI18n()
 const pilots = ref([])
@@ -44,6 +45,14 @@ watch([search, sort], resetPageAndLoad)
 function pilotGames(pilot) {
   return pilot.games?.length ? pilot.games.map((game) => gameLabel(t, game)).join(' / ') : t('common.none')
 }
+
+function pilotNumber(pilot) {
+  return pilot.pilot_number ? `#${pilot.pilot_number}` : '-'
+}
+
+function pilotCountry(pilot) {
+  return pilot.country ? countryLabel(t, pilot.country) : t('common.none')
+}
 </script>
 
 <template>
@@ -51,42 +60,57 @@ function pilotGames(pilot) {
     <div class="section-header pilot-list-header">
       <h1>{{ t('nav.pilots') }}</h1>
       <div class="pilot-list-controls">
-        <input v-model="search" class="pilot-list-search" :placeholder="t('common.search')" />
-        <select v-model="sort" class="pilot-list-sort" :aria-label="t('common.sort')">
-          <option value="rating_desc">{{ t('sort.ratingDesc') }}</option>
-          <option value="rating_asc">{{ t('sort.ratingAsc') }}</option>
-          <option value="sr_desc">{{ t('sort.srDesc') }}</option>
-          <option value="sr_asc">{{ t('sort.srAsc') }}</option>
-          <option value="alpha_asc">{{ t('sort.alphaAsc') }}</option>
-          <option value="alpha_desc">{{ t('sort.alphaDesc') }}</option>
-        </select>
+        <label class="pilot-control-field">
+          <Search :size="16" />
+          <input v-model="search" class="pilot-list-search" :placeholder="t('common.search')" />
+        </label>
+        <label class="pilot-control-field pilot-control-select">
+          <SlidersHorizontal :size="16" />
+          <select v-model="sort" class="pilot-list-sort" :aria-label="t('common.sort')">
+            <option value="rating_desc">{{ t('sort.ratingDesc') }}</option>
+            <option value="rating_asc">{{ t('sort.ratingAsc') }}</option>
+            <option value="sr_desc">{{ t('sort.srDesc') }}</option>
+            <option value="sr_asc">{{ t('sort.srAsc') }}</option>
+            <option value="alpha_asc">{{ t('sort.alphaAsc') }}</option>
+            <option value="alpha_desc">{{ t('sort.alphaDesc') }}</option>
+          </select>
+        </label>
       </div>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
-    <table class="table card">
-      <thead>
-        <tr><th>#</th><th>{{ t('roles.pilot') }}</th><th>{{ t('fields.team') }}</th><th>{{ t('fields.country') }}</th><th>RER</th><th>SR</th><th>{{ t('fields.ratingRaces') }}</th></tr>
-      </thead>
-      <tbody>
-        <tr v-for="pilot in pilots" :key="pilot.id">
-          <td>{{ pilot.pilot_number }}</td>
-          <td>
-            <div class="user-list-cell">
-              <UserAvatar mini :src="pilot.avatar_url" :color="pilot.avatar_color" :label="pilot.nickname || pilot.login" />
-              <RouterLink class="user-list-main" :to="`/pilots/${pilot.id}`">
-                <strong>{{ pilot.first_name }} {{ pilot.last_name }}</strong>
-                <span>{{ pilot.nickname }} - {{ pilotGames(pilot) }}</span>
-              </RouterLink>
-            </div>
-          </td>
-          <td><span class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name) }}</span></td>
-          <td>{{ pilot.country || '-' }}</td>
-          <td>{{ formatRating(pilot.rating) }}</td>
-          <td>{{ pilot.sr }}</td>
-          <td>{{ pilot.rating_race_count ?? 0 }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="pilot-roster card" role="table" :aria-label="t('nav.pilots')">
+      <div class="pilot-roster-head" role="row">
+        <span role="columnheader">#</span>
+        <span role="columnheader">{{ t('roles.pilot') }}</span>
+        <span role="columnheader">{{ t('fields.team') }}</span>
+        <span role="columnheader">{{ t('fields.country') }}</span>
+        <span role="columnheader">RER</span>
+        <span role="columnheader">SR</span>
+        <span role="columnheader">{{ t('fields.ratingRaces') }}</span>
+      </div>
+
+      <article v-for="pilot in pilots" :key="pilot.id" class="pilot-roster-row" role="row">
+        <span class="pilot-roster-number" role="cell" data-label="#">{{ pilotNumber(pilot) }}</span>
+
+        <div class="pilot-roster-driver" role="cell" :data-label="t('roles.pilot')">
+          <UserAvatar mini :src="pilot.avatar_url" :color="pilot.avatar_color" :label="pilot.nickname || pilot.login" />
+          <RouterLink class="user-list-main" :to="`/pilots/${pilot.id}`">
+            <strong>{{ pilotName(pilot, pilot.login) }}</strong>
+            <span>{{ pilot.nickname || pilot.login }} - {{ pilotGames(pilot) }}</span>
+          </RouterLink>
+        </div>
+
+        <span class="pilot-roster-team" role="cell" :data-label="t('fields.team')">
+          <span class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name) }}</span>
+        </span>
+        <span class="pilot-roster-country" role="cell" :data-label="t('fields.country')">{{ pilotCountry(pilot) }}</span>
+        <span class="pilot-roster-metric" role="cell" data-label="RER"><strong>{{ formatRating(pilot.rating) }}</strong><small>RER</small></span>
+        <span class="pilot-roster-metric" role="cell" data-label="SR"><strong>{{ pilot.sr }}</strong><small>SR</small></span>
+        <span class="pilot-roster-metric" role="cell" :data-label="t('fields.ratingRaces')"><strong>{{ pilot.rating_race_count ?? 0 }}</strong><small>{{ t('fields.ratingRaces') }}</small></span>
+      </article>
+
+      <div v-if="!pilots.length" class="pilot-roster-empty">{{ t('common.noMatches') }}</div>
+    </div>
     <PaginationControls v-model:page="page" :page-size="pageSize" :loaded-count="pilots.length" :has-next="hasNextPage" />
   </section>
 </template>

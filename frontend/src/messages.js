@@ -8,7 +8,7 @@ export const messages = {
       moderation: 'Модерация',
       appeals: 'Апелляции',
       banners: 'Баннеры',
-      admin: 'Пользователи',
+      admin: 'Админ панель',
       profile: 'Профиль',
       login: 'Вход',
       logout: 'Выйти',
@@ -51,7 +51,8 @@ export const messages = {
       sort: 'Сортировка',
       noMatches: 'Ничего не найдено',
       yes: 'Да',
-      no: 'Нет'
+      no: 'Нет',
+      more: 'Еще'
     },
     fields: {
       user: 'Пользователь',
@@ -80,7 +81,7 @@ export const messages = {
       maxPilots: 'Максимум пилотов',
       game: 'Симулятор',
       modsUrls: 'Ссылки на моды, по одной в строке',
-      allowedCars: 'Разрешенные машины, по одной в строке',
+      allowedCars: 'Разрешенные машины',
       qualification: 'Квалификация',
       officialRace: 'Официальная гонка',
       proofLink: 'Ссылка на доказательство',
@@ -114,7 +115,8 @@ export const messages = {
     games: {
       ACC: 'ACC',
       AC: 'AC',
-      iRacing: 'iRacing'
+      iRacing: 'iRacing',
+      LMU: 'LMU'
     },
     raceFilters: {
       allGames: 'Все игры',
@@ -162,7 +164,7 @@ export const messages = {
       pilots: 'Пилотов',
       completed: 'Проведено гонок',
       open: 'Открытых регистраций',
-      staff: 'Модераторов и администраторов',
+      staff: 'Админы и модераторы',
       races: 'Гонки',
       setups: 'Сетапы',
       contacts: 'Контакты'
@@ -203,6 +205,20 @@ export const messages = {
     },
     adminUsers: {
       deleteConfirm: 'Удалить аккаунт {login}? Это действие нельзя отменить.',
+      dangerTitle: 'Опасная зона',
+      dangerHint: 'Массовые удаления требуют двух подтверждений и пароля администратора.',
+      deleteAllPilots: 'Удалить всех гонщиков',
+      deleteAllPilotsHint: 'Будут удалены все аккаунты с ролью пилота. Админы, модераторы, маршалы и SMM останутся.',
+      deleteAllRaces: 'Удалить все гонки',
+      deleteAllRacesHint: 'Будут удалены все гонки вместе с регистрациями, штрафами и апелляциями. Сетапы останутся без привязки к гонке.',
+      dangerModalHint: 'Для продолжения дважды введите фразу {phrase} и пароль текущего администратора.',
+      confirmationOne: 'Первое подтверждение',
+      confirmationTwo: 'Второе подтверждение',
+      deletedCount: 'Удалено: {count}',
+      twitchFallbackTitle: 'Видео Twitch вне эфира',
+      twitchFallbackHint: 'Это видео будет открываться в Twitch-окне, пока трансляция не идет. Когда канал выйдет в эфир, сайт покажет стрим.',
+      twitchFallbackUrl: 'Ссылка или ID видео',
+      twitchFallbackTitleField: 'Название в виджете',
       editProfileTitle: 'Редактирование профиля',
       timeoutTitle: 'Выдать тайм-аут',
       timeoutUser: 'Пользователь: {login}',
@@ -215,6 +231,14 @@ export const messages = {
       teamLimitTitle: 'Команды',
       teamLimitHint: 'Максимальное количество участников в одной гоночной команде.',
       teamLimitField: 'Лимит участников',
+      fanVoteTitle: 'Зрительская симпатия',
+      fanVoteHint: 'Сколько часов после запуска голосования пользователи могут выбирать любимого пилота.',
+      fanVoteDurationField: 'Длительность, часов',
+      raceAssetsTitle: 'Справочник гонок',
+      raceAssetsHint: 'Трассы, классы и машины используются при создании гонок ACC.',
+      raceAssetsTracks: 'Трассы ACC',
+      raceAssetsClasses: 'Классы и машины',
+      addRaceClass: 'Добавить класс',
       empty: 'Пользователи не найдены'
     },
     teams: {
@@ -347,6 +371,11 @@ export const messages = {
       penaltiesCount: 'Штрафов: {count}',
       noPenalties: 'Штрафов пока нет',
       openPenalties: 'Открыть штрафы',
+      issuePenalty: 'Выдать штраф',
+      selectPenaltyPilot: 'Выберите пилота',
+      timePenaltySeconds: 'Штраф времени, сек',
+      srPenaltyValue: 'Штраф SR',
+      penaltyDescriptionPlaceholder: 'Что именно нарушено',
       penalty: 'Штраф',
       yourPenalty: 'Ваш штраф',
       timePenalty: 'Штраф по времени',
@@ -378,12 +407,40 @@ export const messages = {
       leaderGap: 'Лидер',
       invalidTime: 'Введите время в формате mm:ss.mmm или hh:mm:ss.mmm',
       resultsFileRequired: 'Прикрепите оба JSON-файла результатов',
+      videoTitle: 'Видео гонки',
+      videoHint: 'К завершенной гонке можно прикрепить одно видео. Новая загрузка заменит старое.',
+      videoFile: 'Файл видео',
+      uploadVideo: 'Загрузить видео',
+      replaceVideo: 'Заменить видео',
+      deleteVideo: 'Удалить видео',
+      noVideo: 'Видео гонки пока не загружено',
+      fanVoteTitle: 'Зрительская симпатия',
+      fanVoteHint: 'Модератор или админ выбирает 3 участников после завершения гонки.',
+      fanVoteSetupHint: 'Выберите ровно 3 пилотов из списка участников.',
+      fanVoteNotReady: 'Голосование появится после завершения гонки.',
+      fanVoteEmpty: 'Голосование пока не запущено.',
+      fanVoteChooseThree: 'Выбрано: {count}/3',
+      fanVoteStart: 'Запустить голосование',
+      fanVoteRestart: 'Перезапустить голосование',
+      fanVoteVote: 'Голосовать',
+      fanVoteSelected: 'Ваш выбор',
+      fanVoteOpenUntil: 'Открыто до {date}',
+      fanVoteClosed: 'Голосование завершено',
+      fanVoteResults: 'Результаты',
+      fanVoteTotal: 'Голосов: {count}',
+      fanVotePercent: '{value}%',
       confirmClose: 'Закрыть эту гонку? Регистрация будет недоступна.',
-      confirmDelete: 'Удалить эту гонку навсегда?'
+      confirmDelete: 'Удалить эту гонку навсегда?',
+      confirmDeleteVideo: 'Удалить видео этой гонки?'
     },
     raceEdit: {
       createTitle: 'Создание гонки',
       editTitle: 'Редактирование гонки'
+    },
+    raceAssets: {
+      selectAll: 'Выбрать все',
+      selectedCars: 'Выбрано: {count}/{total}',
+      chooseCars: 'Выберите хотя бы одну машину'
     },
     moderation: {
       pendingProfileChanges: 'Ожидающие изменения профиля: {changes}'
@@ -406,6 +463,21 @@ export const messages = {
       goTo: 'Новость {number}',
       scrollLeft: 'Листать новости влево',
       scrollRight: 'Листать новости вправо'
+    },
+    twitch: {
+      title: 'BMRL Twitch',
+      live: 'Трансляция идёт',
+      latestVideo: 'Последняя запись',
+      channel: 'Twitch канал',
+      openTwitch: 'Открыть Twitch',
+      watchLive: 'Смотреть трансляцию',
+      watchLastStream: 'Смотреть последний стрим',
+      closePlayer: 'Закрыть плеер',
+      dragHint: 'Перетащить Twitch',
+      fallback: 'Показан канал Twitch',
+      unavailable: 'Данные Twitch временно недоступны',
+      playerUnavailable: 'Плеер появится здесь, когда Twitch API вернет активную трансляцию или последнюю запись.',
+      viewers: '{count} зрителей'
     },
     hallOfFame: {
       subtitle: 'Общий рейтинг пилотов и команд по подиумам завершенных гонок.',
@@ -440,7 +512,7 @@ export const messages = {
       moderation: 'Moderation',
       appeals: 'Appeals',
       banners: 'Banners',
-      admin: 'Users',
+      admin: 'Admin Panel',
       profile: 'Profile',
       login: 'Login',
       logout: 'Logout',
@@ -483,7 +555,8 @@ export const messages = {
       sort: 'Sort',
       noMatches: 'No matches',
       yes: 'Yes',
-      no: 'No'
+      no: 'No',
+      more: 'More'
     },
     fields: {
       user: 'User',
@@ -512,7 +585,7 @@ export const messages = {
       maxPilots: 'Max pilots',
       game: 'Game',
       modsUrls: 'Mods URLs, one per line',
-      allowedCars: 'Allowed cars, one per line',
+      allowedCars: 'Allowed cars',
       qualification: 'Qualification',
       officialRace: 'Official race',
       proofLink: 'Proof link',
@@ -546,7 +619,8 @@ export const messages = {
     games: {
       ACC: 'ACC',
       AC: 'AC',
-      iRacing: 'iRacing'
+      iRacing: 'iRacing',
+      LMU: 'LMU'
     },
     raceFilters: {
       allGames: 'All games',
@@ -635,6 +709,20 @@ export const messages = {
     },
     adminUsers: {
       deleteConfirm: 'Delete account {login}? This action cannot be undone.',
+      dangerTitle: 'Danger Zone',
+      dangerHint: 'Bulk deletion requires two confirmations and the admin password.',
+      deleteAllPilots: 'Delete all pilots',
+      deleteAllPilotsHint: 'Deletes every account with the pilot role. Admins, moderators, marshals and SMM stay untouched.',
+      deleteAllRaces: 'Delete all races',
+      deleteAllRacesHint: 'Deletes every race with registrations, penalties and appeals. Setups stay without a race link.',
+      dangerModalHint: 'To continue, type {phrase} twice and enter the current admin password.',
+      confirmationOne: 'First confirmation',
+      confirmationTwo: 'Second confirmation',
+      deletedCount: 'Deleted: {count}',
+      twitchFallbackTitle: 'Offline Twitch video',
+      twitchFallbackHint: 'This video opens in the Twitch window while the channel is offline. When the channel goes live, the site shows the stream.',
+      twitchFallbackUrl: 'Video URL or ID',
+      twitchFallbackTitleField: 'Widget title',
       editProfileTitle: 'Edit profile',
       timeoutTitle: 'Issue timeout',
       timeoutUser: 'User: {login}',
@@ -647,6 +735,14 @@ export const messages = {
       teamLimitTitle: 'Teams',
       teamLimitHint: 'Maximum members allowed in one racing team.',
       teamLimitField: 'Member limit',
+      fanVoteTitle: 'Fan favorite',
+      fanVoteHint: 'How many hours users can vote after the fan favorite poll is started.',
+      fanVoteDurationField: 'Duration, hours',
+      raceAssetsTitle: 'Race assets',
+      raceAssetsHint: 'Tracks, classes and cars are used when creating ACC races.',
+      raceAssetsTracks: 'ACC tracks',
+      raceAssetsClasses: 'Classes and cars',
+      addRaceClass: 'Add class',
       empty: 'No users found'
     },
     teams: {
@@ -779,6 +875,11 @@ export const messages = {
       penaltiesCount: '{count} penalties',
       noPenalties: 'No penalties yet',
       openPenalties: 'Open penalties',
+      issuePenalty: 'Issue penalty',
+      selectPenaltyPilot: 'Select pilot',
+      timePenaltySeconds: 'Time penalty, sec',
+      srPenaltyValue: 'SR penalty',
+      penaltyDescriptionPlaceholder: 'What exactly was violated',
       penalty: 'Penalty',
       yourPenalty: 'Your penalty',
       timePenalty: 'Time penalty',
@@ -810,12 +911,40 @@ export const messages = {
       leaderGap: 'Leader',
       invalidTime: 'Enter time as mm:ss.mmm or hh:mm:ss.mmm',
       resultsFileRequired: 'Attach both result JSON files',
+      videoTitle: 'Race video',
+      videoHint: 'A finished race can have one attached video. New upload replaces the old one.',
+      videoFile: 'Video file',
+      uploadVideo: 'Upload video',
+      replaceVideo: 'Replace video',
+      deleteVideo: 'Delete video',
+      noVideo: 'No race video uploaded yet',
+      fanVoteTitle: 'Fan favorite',
+      fanVoteHint: 'A moderator or admin chooses 3 race participants after the race is finished.',
+      fanVoteSetupHint: 'Choose exactly 3 pilots from the participant list.',
+      fanVoteNotReady: 'Voting appears after the race is finished.',
+      fanVoteEmpty: 'Voting has not started yet.',
+      fanVoteChooseThree: 'Selected: {count}/3',
+      fanVoteStart: 'Start voting',
+      fanVoteRestart: 'Restart voting',
+      fanVoteVote: 'Vote',
+      fanVoteSelected: 'Your pick',
+      fanVoteOpenUntil: 'Open until {date}',
+      fanVoteClosed: 'Voting closed',
+      fanVoteResults: 'Results',
+      fanVoteTotal: '{count} votes',
+      fanVotePercent: '{value}%',
       confirmClose: 'Close this race? Registration will be unavailable.',
-      confirmDelete: 'Delete this race permanently?'
+      confirmDelete: 'Delete this race permanently?',
+      confirmDeleteVideo: 'Delete this race video?'
     },
     raceEdit: {
       createTitle: 'Create race',
       editTitle: 'Edit race'
+    },
+    raceAssets: {
+      selectAll: 'Select all',
+      selectedCars: 'Selected: {count}/{total}',
+      chooseCars: 'Choose at least one car'
     },
     moderation: {
       pendingProfileChanges: 'Pending profile changes: {changes}'
@@ -838,6 +967,21 @@ export const messages = {
       goTo: 'News {number}',
       scrollLeft: 'Scroll news left',
       scrollRight: 'Scroll news right'
+    },
+    twitch: {
+      title: 'BMRL Twitch',
+      live: 'Live now',
+      latestVideo: 'Latest recording',
+      channel: 'Twitch channel',
+      openTwitch: 'Open Twitch',
+      watchLive: 'Watch live',
+      watchLastStream: 'Watch latest stream',
+      closePlayer: 'Close player',
+      dragHint: 'Drag Twitch',
+      fallback: 'Showing the Twitch channel',
+      unavailable: 'Twitch data is temporarily unavailable',
+      playerUnavailable: 'The player will appear here when the Twitch API returns a live stream or the latest recording.',
+      viewers: '{count} viewers'
     },
     hallOfFame: {
       subtitle: 'Overall rating for pilots and teams by finished-race podiums.',

@@ -129,6 +129,11 @@ function pendingApplicationsTitle(team) {
   return t('teams.pendingApplicationsNotice', { count: team.pending_application_count || 0 })
 }
 
+function teamFillPercent(team) {
+  if (!team?.member_limit) return 0
+  return Math.min(100, Math.round((team.member_count / team.member_limit) * 100))
+}
+
 async function syncCurrentUser() {
   if (!state.user) return
   try {
@@ -527,8 +532,9 @@ watch(visibleTeamMembers, () => {
 
     <div class="teams-layout">
       <div class="teams-list card">
-        <div v-for="team in pagedTeams" :key="team.id" class="team-list-item" :class="{ 'is-selected': selectedTeam?.id === team.id, 'is-full': team.member_count >= team.member_limit }">
+        <div v-for="(team, index) in pagedTeams" :key="team.id" class="team-list-item" :class="{ 'is-selected': selectedTeam?.id === team.id, 'is-full': team.member_count >= team.member_limit }">
           <button class="team-list-open" type="button" :disabled="busyTeams[team.id]" @click="openTeam(team)">
+            <span class="team-list-rank">#{{ (teamPage - 1) * teamPageSize + index + 1 }}</span>
             <TeamAvatar mini :src="team.avatar_url" :color="team.avatar_color" :label="team.name" />
             <span class="team-list-main">
               <strong>{{ team.name }}</strong>
@@ -543,6 +549,9 @@ watch(visibleTeamMembers, () => {
                 <Users :size="15" />
                 {{ team.member_count }}/{{ team.member_limit }}
               </span>
+            </span>
+            <span class="team-list-meter" aria-hidden="true">
+              <span :style="{ width: `${teamFillPercent(team)}%` }"></span>
             </span>
           </button>
         </div>
@@ -626,7 +635,7 @@ watch(visibleTeamMembers, () => {
           <form class="team-owner-tools" @submit.prevent="transferOwnership">
             <label class="field">
               <span>{{ t('teams.newOwner') }}</span>
-              <select v-model="transferOwnerId" :disabled="!transferCandidates.length">
+              <select v-model="transferOwnerId" :disabled="!transferCandidates.length" required>
                 <option value="">{{ t('teams.chooseMember') }}</option>
                 <option v-for="member in transferCandidates" :key="member.id" :value="member.id">
                   {{ memberTitle(member) }} · #{{ member.pilot_number }} · RER {{ formatRating(member.rating) }}

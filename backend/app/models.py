@@ -27,7 +27,7 @@ MAX_SR = 30.0
 DEFAULT_RATING = 1000.0
 MIN_RATING = 10.0
 MAX_RATING = 10000.0
-RACE_GAMES = ("ACC", "AC", "iRacing")
+RACE_GAMES = ("ACC", "AC", "iRacing", "LMU")
 DEFAULT_USER_GAMES = list(RACE_GAMES)
 
 
@@ -220,6 +220,11 @@ class Race(Base):
     is_passed: Mapped[bool] = mapped_column(Boolean, default=False)
     results: Mapped[dict | list | None] = mapped_column(JSONB)
     rating_applied: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    video_url: Mapped[str | None] = mapped_column(String(255))
+    video_filename: Mapped[str | None] = mapped_column(String(255))
+    video_uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fan_vote_options: Mapped[list[int]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    fan_vote_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     game: Mapped[str] = mapped_column(String(20), default="ACC", server_default="ACC")
     has_qualification: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     creator_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
@@ -232,6 +237,7 @@ class Race(Base):
     registrations: Mapped[list["RaceRegistration"]] = relationship(back_populates="race", cascade="all, delete-orphan")
     penalties: Mapped[list["Penalty"]] = relationship(back_populates="race", cascade="all, delete-orphan")
     appeals: Mapped[list["Appeal"]] = relationship(back_populates="race", cascade="all, delete-orphan")
+    fan_votes: Mapped[list["RaceFanVote"]] = relationship(back_populates="race", cascade="all, delete-orphan")
 
 
 class RaceRegistration(Base):
@@ -246,6 +252,22 @@ class RaceRegistration(Base):
 
     race: Mapped[Race] = relationship(back_populates="registrations")
     user: Mapped[User] = relationship()
+
+
+class RaceFanVote(Base):
+    __tablename__ = "race_fan_votes"
+    __table_args__ = (UniqueConstraint("race_id", "user_id", name="uq_race_fan_vote_race_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    race_id: Mapped[int] = mapped_column(ForeignKey("races.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    target_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    race: Mapped[Race] = relationship(back_populates="fan_votes")
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+    target: Mapped[User] = relationship(foreign_keys=[target_id])
 
 
 class Penalty(Base):
@@ -376,6 +398,8 @@ Index("ix_races_registered_pilots_gin", Race.registered_pilots, postgresql_using
 Index("ix_races_mods_pack_gin", Race.mods_pack, postgresql_using="gin")
 Index("ix_race_registrations_race_registered_at", RaceRegistration.race_id, RaceRegistration.registered_at)
 Index("ix_race_registrations_user_registered_at", RaceRegistration.user_id, RaceRegistration.registered_at)
+Index("ix_race_fan_votes_race_target", RaceFanVote.race_id, RaceFanVote.target_id)
+Index("ix_race_fan_votes_user_created", RaceFanVote.user_id, RaceFanVote.created_at)
 Index("ix_penalties_race_target_status", Penalty.race_id, Penalty.target_id, Penalty.status)
 Index("ix_appeals_status_created", Appeal.status, Appeal.created_at)
 Index("uq_banners_position", Banner.position, unique=True)

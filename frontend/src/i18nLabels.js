@@ -12,7 +12,7 @@ export function statusLabel(t, status) {
   return translatedValue(t, 'statuses', status)
 }
 
-export const GAME_VALUES = ['ACC', 'AC', 'iRacing']
+export const GAME_VALUES = ['ACC', 'AC', 'iRacing', 'LMU']
 
 export function gameLabel(t, game) {
   return translatedValue(t, 'games', game)
@@ -21,6 +21,14 @@ export function gameLabel(t, game) {
 export function gameOptions(t, includeAll = false) {
   const options = GAME_VALUES.map((value) => ({ value, label: gameLabel(t, value) }))
   return includeAll ? [{ value: 'all', label: t('raceFilters.allGames') }, ...options] : options
+}
+
+export function isExternalRace(race) {
+  return race?.game === 'LMU' && Boolean(race.server_link)
+}
+
+export function raceOpenHref(race) {
+  return isExternalRace(race) ? race.server_link : `/races/${race.id}`
 }
 
 export function countryLabel(t, country) {

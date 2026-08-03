@@ -11,7 +11,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.config import get_settings
 from app.db import SessionLocal, db_initialization_lock, init_db
 from app.rate_limit import limiter
-from app.routers import appeals, auth, banners, dashboard, hall_of_fame, news, penalties, races, setups, teams, users
+from app.routers import appeals, auth, banners, dashboard, hall_of_fame, news, penalties, race_assets, races, setups, teams, twitch, users
 from app.seed import seed_defaults
 
 
@@ -59,6 +59,7 @@ app.mount("/api/uploads", StaticFiles(directory=settings.upload_dir), name="uplo
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(races.router, prefix="/api/races", tags=["races"])
+app.include_router(race_assets.router, prefix="/api/race-assets", tags=["race-assets"])
 app.include_router(penalties.router, prefix="/api/penalties", tags=["penalties"])
 app.include_router(appeals.router, prefix="/api/appeals", tags=["appeals"])
 app.include_router(banners.router, prefix="/api/banners", tags=["banners"])
@@ -67,3 +68,4 @@ app.include_router(setups.router, prefix="/api/setups", tags=["setups"])
 app.include_router(teams.router, prefix="/api/teams", tags=["teams"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(hall_of_fame.router, prefix="/api/hall-of-fame", tags=["hall-of-fame"])
+app.include_router(twitch.router, prefix="/api/twitch", tags=["twitch"])

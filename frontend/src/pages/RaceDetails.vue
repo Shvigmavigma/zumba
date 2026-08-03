@@ -2,12 +2,12 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, ChevronUp, Scale } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, Film, Heart, Scale, Trash2, Upload } from 'lucide-vue-next'
 import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
 import RacePenaltyListModal from '../components/RacePenaltyListModal.vue'
 import UserAvatar from '../components/UserAvatar.vue'
-import { countryLabel, gameLabel, statusLabel } from '../i18nLabels'
+import { countryLabel, gameLabel, isExternalRace, statusLabel } from '../i18nLabels'
 import { filterPilots, formatRating, sortPilots, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
 
@@ -22,14 +22,21 @@ const error = ref('')
 const actionPending = ref(false)
 const accQualificationFile = ref(null)
 const accRaceFile = ref(null)
+const raceVideoFile = ref(null)
+const raceVideoInput = ref(null)
 const manualRows = ref([])
 const participantsExpanded = ref(false)
 const penaltiesOpen = ref(false)
+const penaltyCreateOpen = ref(false)
 const resultsTab = ref('race')
 const participantSearch = ref('')
 const participantSort = ref('rating_desc')
 const participantPage = ref(1)
 const participantPageSize = 12
+const fanVote = ref(null)
+const fanVoteSelection = ref([])
+const fanVoteSaving = ref(false)
+const fanVoteVoting = ref(false)
 
 const participants = computed(() => race.value?.registered_pilots || [])
 const visibleParticipants = computed(() => sortPilots(filterPilots(participants.value, participantSearch.value), participantSort.value))
@@ -37,6 +44,7 @@ const participantTotalPages = computed(() => Math.max(1, Math.ceil(visiblePartic
 const pagedParticipants = computed(() => visibleParticipants.value.slice((participantPage.value - 1) * participantPageSize, participantPage.value * participantPageSize))
 const registered = computed(() => participants.value.some((item) => item.user_id === state.user?.id))
 const canManageRace = computed(() => ['admin', 'moder'].includes(state.user?.role))
+const canIssuePenalty = computed(() => ['admin', 'moder', 'marshall'].includes(state.user?.role) && race.value?.status !== 'registration_open')
 const resultRows = computed(() => {
   if (Array.isArray(race.value?.results)) return race.value.results
   return race.value?.results?.rows || []
@@ -92,6 +100,10 @@ const resultTabItems = computed(() => [
   { id: 'race', label: t('raceDetails.raceResultsTab'), count: resultRows.value.length },
   ...(qualificationRows.value.length ? [{ id: 'qualification', label: t('raceDetails.qualificationResultsTab'), count: qualificationRows.value.length }] : [])
 ])
+const fanVoteOptions = computed(() => fanVote.value?.options || [])
+const fanVoteCanSetup = computed(() => canManageRace.value && race.value?.status === 'finished' && participants.value.length >= 3)
+const fanVoteCanSaveSetup = computed(() => fanVoteCanSetup.value && fanVoteSelection.value.length === 3 && !fanVoteSaving.value)
+const fanVoteResultVisible = computed(() => Boolean(fanVote.value?.show_results))
 
 function normalizeAccPlayerId(value) {
   const raw = String(value || '').trim()
@@ -122,6 +134,10 @@ function formatDate(value) {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+function formatFanVoteDate(value) {
+  return value ? formatDate(value) : '-'
 }
 
 function formatDuration(ms) {
@@ -157,6 +173,44 @@ function participantName(item) {
 function participantSubtitle(item) {
   const number = item.pilot_number ? `#${item.pilot_number}` : `ID ${item.user_id}`
   return item.nickname ? `${number} - ${item.nickname}` : number
+}
+
+function fanVotePilotName(item) {
+  const fullName = [item.first_name, item.last_name].filter(Boolean).join(' ')
+  return fullName || item.nickname || item.login || `${t('roles.pilot')} ${item.user_id}`
+}
+
+function fanVotePilotSubtitle(item) {
+  const team = teamShortName(item.team_name)
+  const number = item.pilot_number ? `#${item.pilot_number}` : `ID ${item.user_id}`
+  return [number, `RER ${formatRating(item.rating)}`, `SR ${item.sr ?? '-'}`, team].filter(Boolean).join(' - ')
+}
+
+function fanVotePercent(option) {
+  const value = Number(option.percentage || 0)
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
+}
+
+function isFanVoteCandidate(userId) {
+  return fanVoteSelection.value.includes(Number(userId))
+}
+
+function toggleFanVoteCandidate(userId) {
+  const id = Number(userId)
+  if (isFanVoteCandidate(id)) {
+    fanVoteSelection.value = fanVoteSelection.value.filter((item) => item !== id)
+  } else if (fanVoteSelection.value.length < 3) {
+    fanVoteSelection.value = [...fanVoteSelection.value, id]
+  }
+}
+
+function syncFanVoteSelection() {
+  if (fanVote.value?.options?.length) {
+    fanVoteSelection.value = fanVote.value.options.map((option) => option.user_id).slice(0, 3)
+    return
+  }
+  const participantIds = new Set(participants.value.map((item) => item.user_id))
+  fanVoteSelection.value = fanVoteSelection.value.filter((item) => participantIds.has(item)).slice(0, 3)
 }
 
 function participantById(userId) {
@@ -217,6 +271,15 @@ function resultRatingDeltaClass(row) {
   }
 }
 
+function resultPodiumClass(row) {
+  const position = Number(row.position)
+  return {
+    'is-gold': position === 1,
+    'is-silver': position === 2,
+    'is-bronze': position === 3
+  }
+}
+
 function resultGap(row) {
   if (row.gap_ms === 0) return t('raceDetails.leaderGap')
   return Number.isFinite(Number(row.gap_ms)) ? `+${formatDuration(row.gap_ms)}` : '-'
@@ -224,6 +287,16 @@ function resultGap(row) {
 
 function pilotTeamChip(item) {
   return teamShortName(item?.team_name)
+}
+
+function openPenaltyCreator() {
+  penaltiesOpen.value = true
+  penaltyCreateOpen.value = true
+}
+
+function closePenaltiesModal() {
+  penaltiesOpen.value = false
+  penaltyCreateOpen.value = false
 }
 
 function fillManualRows() {
@@ -242,7 +315,15 @@ function fillManualRows() {
 
 async function load() {
   try {
-    race.value = await api(`/races/${route.params.id}`)
+    const loadedRace = await api(`/races/${route.params.id}`)
+    if (isExternalRace(loadedRace)) {
+      window.location.href = loadedRace.server_link
+      return
+    }
+    const loadedFanVote = await api(`/races/${route.params.id}/fan-vote`)
+    race.value = loadedRace
+    fanVote.value = loadedFanVote
+    syncFanVoteSelection()
     if (state.user) {
       penalties.value = await api(`/penalties?race_id=${route.params.id}`)
       appeals.value = await api('/appeals')
@@ -252,6 +333,12 @@ async function load() {
   } catch (err) {
     error.value = err.message
   }
+}
+
+async function refreshFanVote() {
+  if (!race.value) return
+  fanVote.value = await api(`/races/${race.value.id}/fan-vote`)
+  syncFanVoteSelection()
 }
 
 async function register() {
@@ -268,6 +355,7 @@ async function closeRace() {
   actionPending.value = true
   try {
     race.value = await api(`/races/${race.value.id}/close`, { method: 'POST' })
+    await refreshFanVote()
   } catch (err) {
     error.value = err.message
   } finally {
@@ -302,6 +390,7 @@ async function uploadAccResults() {
       body: { qualification_results, race_results }
     })
     fillManualRows()
+    await refreshFanVote()
   } catch (err) {
     error.value = err.message
   } finally {
@@ -321,13 +410,48 @@ async function uploadManualResults() {
         finish_ms: parseDuration(row.finish_time, true),
         lap_count: Number(row.lap_count || 0),
         best_lap_ms: parseDuration(row.best_lap_time, false)
-      }))
+    }))
     race.value = await api(`/races/${race.value.id}/results/manual`, { method: 'POST', body: { rows } })
     fillManualRows()
+    await refreshFanVote()
   } catch (err) {
     error.value = err.message
   } finally {
     actionPending.value = false
+  }
+}
+
+async function setupFanVote() {
+  if (!race.value || fanVoteSelection.value.length !== 3) return
+  error.value = ''
+  fanVoteSaving.value = true
+  try {
+    fanVote.value = await api(`/races/${race.value.id}/fan-vote`, {
+      method: 'PATCH',
+      body: { option_user_ids: fanVoteSelection.value }
+    })
+    syncFanVoteSelection()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    fanVoteSaving.value = false
+  }
+}
+
+async function castFanVote(targetUserId) {
+  if (!race.value || !fanVote.value?.is_open) return
+  error.value = ''
+  fanVoteVoting.value = true
+  try {
+    fanVote.value = await api(`/races/${race.value.id}/fan-vote`, {
+      method: 'POST',
+      body: { target_user_id: targetUserId }
+    })
+    syncFanVoteSelection()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    fanVoteVoting.value = false
   }
 }
 
@@ -344,9 +468,68 @@ async function deleteRace() {
   }
 }
 
+function setRaceVideo(event) {
+  raceVideoFile.value = event.target.files?.[0] || null
+}
+
+async function uploadRaceVideo() {
+  if (!race.value || !raceVideoFile.value) return
+  error.value = ''
+  actionPending.value = true
+  try {
+    const body = new FormData()
+    body.append('file', raceVideoFile.value)
+    race.value = await api(`/races/${race.value.id}/video`, { method: 'POST', body })
+    raceVideoFile.value = null
+    if (raceVideoInput.value) raceVideoInput.value.value = ''
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    actionPending.value = false
+  }
+}
+
+async function deleteRaceVideo() {
+  if (!race.value?.video_url || !window.confirm(t('raceDetails.confirmDeleteVideo'))) return
+  error.value = ''
+  actionPending.value = true
+  try {
+    race.value = await api(`/races/${race.value.id}/video`, { method: 'DELETE' })
+    raceVideoFile.value = null
+    if (raceVideoInput.value) raceVideoInput.value.value = ''
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    actionPending.value = false
+  }
+}
+
 async function createAppeal(penalty, form) {
   await api('/appeals', { method: 'POST', body: { ...form, penalty_id: penalty.id, race_id: race.value.id } })
   await load()
+}
+
+async function createPenalty(form) {
+  if (!race.value) return
+  error.value = ''
+  actionPending.value = true
+  try {
+    await api('/penalties', {
+      method: 'POST',
+      body: {
+        ...form,
+        race_id: race.value.id,
+        penalty_type: 'combined',
+        penalty_value: form.time_penalty_ms
+      }
+    })
+    penaltyCreateOpen.value = false
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    actionPending.value = false
+  }
 }
 
 onMounted(load)
@@ -376,6 +559,9 @@ watch(visibleParticipants, () => {
               <Scale :size="16" />
               {{ t('raceDetails.openPenalties') }}
               <span class="button-count">{{ penalties.length }}</span>
+            </button>
+            <button v-if="canIssuePenalty" class="button" type="button" @click="openPenaltyCreator">
+              {{ t('raceDetails.issuePenalty') }}
             </button>
             <template v-if="canManageRace">
               <RouterLink class="button" :to="`/races/${race.id}/edit`">{{ t('common.edit') }}</RouterLink>
@@ -412,6 +598,128 @@ watch(visibleParticipants, () => {
           <button class="button primary" type="submit">{{ t('common.register') }}</button>
         </form>
       </section>
+
+      <div v-if="race.status === 'finished'" class="race-main-layout">
+        <div class="race-main-column">
+          <section v-if="race.status === 'finished'" class="card race-video-panel">
+            <div class="section-header">
+              <div>
+                <h2>{{ t('raceDetails.videoTitle') }}</h2>
+                <p v-if="canManageRace" class="muted">{{ t('raceDetails.videoHint') }}</p>
+              </div>
+              <span v-if="canManageRace && race.video_filename" class="pill">
+                <Film :size="14" />
+                {{ race.video_filename }}
+              </span>
+            </div>
+
+            <div v-if="race.video_url" class="race-video-frame">
+              <video controls preload="metadata" :src="race.video_url"></video>
+            </div>
+            <div v-else class="empty-row">{{ t('raceDetails.noVideo') }}</div>
+
+            <form v-if="canManageRace" class="form race-video-upload" @submit.prevent="uploadRaceVideo">
+              <label class="field">
+                <span>{{ t('raceDetails.videoFile') }}</span>
+                <input ref="raceVideoInput" type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.mp4,.webm,.mov,.mkv" @change="setRaceVideo" />
+              </label>
+              <button class="button primary" type="submit" :disabled="actionPending || !raceVideoFile">
+                <Upload :size="16" />
+                {{ race.video_url ? t('raceDetails.replaceVideo') : t('raceDetails.uploadVideo') }}
+              </button>
+              <button v-if="race.video_url" class="button danger" type="button" :disabled="actionPending" @click="deleteRaceVideo">
+                <Trash2 :size="16" />
+                {{ t('raceDetails.deleteVideo') }}
+              </button>
+            </form>
+          </section>
+        </div>
+
+        <aside class="race-vote-column">
+          <section class="card race-fan-vote-panel">
+            <div class="section-header race-fan-vote-header">
+              <div>
+                <h2>
+                  <Heart :size="18" />
+                  {{ t('raceDetails.fanVoteTitle') }}
+                </h2>
+                <p class="muted">{{ t('raceDetails.fanVoteHint') }}</p>
+              </div>
+              <span v-if="fanVote?.enabled" class="pill">
+                {{ fanVote.is_open ? t('common.open') : t('raceDetails.fanVoteResults') }}
+              </span>
+            </div>
+
+            <div v-if="race.status !== 'finished'" class="empty-row">{{ t('raceDetails.fanVoteNotReady') }}</div>
+
+            <template v-else>
+              <div v-if="fanVote?.enabled" class="fan-vote-status">
+                <strong>
+                  {{ fanVote.is_open ? t('raceDetails.fanVoteOpenUntil', { date: formatFanVoteDate(fanVote.ends_at) }) : t('raceDetails.fanVoteClosed') }}
+                </strong>
+                <span>{{ t('raceDetails.fanVoteTotal', { count: fanVote.total_votes || 0 }) }}</span>
+              </div>
+
+              <div v-if="fanVoteOptions.length" class="fan-vote-options">
+                <article v-for="option in fanVoteOptions" :key="option.user_id" class="fan-vote-option" :class="{ selected: fanVote?.my_vote_user_id === option.user_id }">
+                  <UserAvatar mini :src="option.avatar_url" :color="option.avatar_color" :label="fanVotePilotName(option)" />
+                  <div class="fan-vote-option-main">
+                    <strong>{{ fanVotePilotName(option) }}</strong>
+                    <span>{{ fanVotePilotSubtitle(option) }}</span>
+                  </div>
+
+                  <div v-if="fanVoteResultVisible" class="fan-vote-result">
+                    <div>
+                      <strong>{{ t('raceDetails.fanVotePercent', { value: fanVotePercent(option) }) }}</strong>
+                      <span>{{ option.votes }}</span>
+                    </div>
+                    <div class="fan-vote-bar"><span :style="{ width: `${Math.min(100, Number(option.percentage || 0))}%` }"></span></div>
+                  </div>
+
+                  <button
+                    v-if="fanVote?.is_open"
+                    class="button fan-vote-button"
+                    type="button"
+                    :class="{ primary: fanVote?.my_vote_user_id === option.user_id }"
+                    :disabled="fanVoteVoting"
+                    @click="castFanVote(option.user_id)"
+                  >
+                    {{ fanVote?.my_vote_user_id === option.user_id ? t('raceDetails.fanVoteSelected') : t('raceDetails.fanVoteVote') }}
+                  </button>
+                </article>
+              </div>
+              <div v-else class="empty-row">{{ t('raceDetails.fanVoteEmpty') }}</div>
+
+              <form v-if="fanVoteCanSetup" class="fan-vote-setup" @submit.prevent="setupFanVote">
+                <div class="fan-vote-setup-head">
+                  <strong>{{ t('raceDetails.fanVoteSetupHint') }}</strong>
+                  <span class="pill">{{ t('raceDetails.fanVoteChooseThree', { count: fanVoteSelection.length }) }}</span>
+                </div>
+
+                <div class="fan-vote-candidates">
+                  <button
+                    v-for="item in participants"
+                    :key="`fan-vote-${item.user_id}`"
+                    class="fan-vote-candidate"
+                    type="button"
+                    :class="{ selected: isFanVoteCandidate(item.user_id) }"
+                    :disabled="!isFanVoteCandidate(item.user_id) && fanVoteSelection.length >= 3"
+                    @click="toggleFanVoteCandidate(item.user_id)"
+                  >
+                    <UserAvatar mini :src="item.avatar_url" :color="item.avatar_color" :label="participantName(item)" />
+                    <span>{{ participantName(item) }}</span>
+                    <small>{{ fanVotePilotSubtitle(item) }}</small>
+                  </button>
+                </div>
+
+                <button class="button primary" type="submit" :disabled="!fanVoteCanSaveSetup">
+                  {{ fanVote?.enabled ? t('raceDetails.fanVoteRestart') : t('raceDetails.fanVoteStart') }}
+                </button>
+              </form>
+            </template>
+          </section>
+        </aside>
+      </div>
 
       <section class="card race-participants-panel">
         <div class="section-header">
@@ -521,8 +829,8 @@ watch(visibleParticipants, () => {
           </div>
 
           <div class="race-results-podium">
-            <article v-for="row in activeResultRows.slice(0, 3)" :key="`podium-${resultsTab}-${row.user_id || row.player_id || row.position}`" class="result-podium-card">
-              <span class="result-position-badge" :class="{ 'is-top': Number(row.position) <= 3 }">{{ row.position || '-' }}</span>
+            <article v-for="row in activeResultRows.slice(0, 3)" :key="`podium-${resultsTab}-${row.user_id || row.player_id || row.position}`" class="result-podium-card" :class="resultPodiumClass(row)">
+              <span class="result-position-badge" :class="resultPodiumClass(row)">{{ row.position || '-' }}</span>
               <div>
                 <strong>{{ resultPilotName(row) }}</strong>
                 <span>{{ resultPilotSubtitle(row) }}</span>
@@ -549,8 +857,8 @@ watch(visibleParticipants, () => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="row in activeResultRows" :key="`${resultsTab}-${row.user_id || row.player_id || row.raw_position}-${row.position}`">
-                  <td><span class="result-position-badge" :class="{ 'is-top': Number(row.position) <= 3 }">{{ row.position || '-' }}</span></td>
+                <tr v-for="row in activeResultRows" :key="`${resultsTab}-${row.user_id || row.player_id || row.raw_position}-${row.position}`" :class="resultPodiumClass(row)">
+                  <td><span class="result-position-badge" :class="resultPodiumClass(row)">{{ row.position || '-' }}</span></td>
                   <td>
                     <div class="result-driver-cell">
                       <UserAvatar mini :src="resultPilotAvatar(row)" :color="resultPilotColor(row)" :label="resultPilotName(row)" />
@@ -582,7 +890,11 @@ watch(visibleParticipants, () => {
         :penalties="penalties"
         :appeals="appeals"
         :participants="participants"
-        @close="penaltiesOpen = false"
+        :can-create="canIssuePenalty"
+        v-model:create-open="penaltyCreateOpen"
+        :busy="actionPending"
+        @close="closePenaltiesModal"
+        @create-penalty="createPenalty"
         @create-appeal="createAppeal"
       />
     </template>

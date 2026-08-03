@@ -30,6 +30,20 @@ const editAvatarViewerOpen = ref(false)
 const teamLimit = ref(5)
 const teamLimitSaving = ref(false)
 const settingsSaved = ref(false)
+const fanVoteDurationHours = ref(24)
+const fanVoteSaving = ref(false)
+const fanVoteSaved = ref(false)
+const twitchConfig = ref({ fallback_video_url: '', fallback_video_title: '' })
+const twitchConfigSaving = ref(false)
+const twitchConfigSaved = ref(false)
+const raceAssetsTracksText = ref('')
+const raceAssetsClasses = ref([])
+const raceAssetsSaving = ref(false)
+const raceAssetsSaved = ref(false)
+const dangerDialog = ref(null)
+const dangerForm = ref({ confirmation: '', confirmation_repeat: '', password: '' })
+const dangerSaving = ref(false)
+const dangerResult = ref('')
 const userSearch = ref('')
 const userSort = ref('rating_desc')
 const page = ref(1)
@@ -37,6 +51,30 @@ const pageSize = 25
 const visibleUsers = computed(() => users.value)
 const hasNextPage = computed(() => users.value.length === pageSize)
 const editCountries = computed(() => countryOptionsWithCurrent(state.locale, editForm.value.country || ''))
+const dangerActions = {
+  pilots: {
+    endpoint: '/users/admin/delete-pilots',
+    code: 'DELETE PILOTS',
+    titleKey: 'adminUsers.deleteAllPilots',
+    descriptionKey: 'adminUsers.deleteAllPilotsHint'
+  },
+  races: {
+    endpoint: '/users/admin/delete-races',
+    code: 'DELETE RACES',
+    titleKey: 'adminUsers.deleteAllRaces',
+    descriptionKey: 'adminUsers.deleteAllRacesHint'
+  }
+}
+const activeDangerAction = computed(() => (dangerDialog.value ? dangerActions[dangerDialog.value] : null))
+const dangerFormValid = computed(() => {
+  const action = activeDangerAction.value
+  if (!action) return false
+  return (
+    dangerForm.value.confirmation.trim() === action.code &&
+    dangerForm.value.confirmation_repeat.trim() === action.code &&
+    dangerForm.value.password.length > 0
+  )
+})
 
 function datetimeLocalValue(date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
@@ -67,12 +105,25 @@ async function load() {
       sort: userSort.value
     })
     if (userSearch.value.trim()) params.set('search', userSearch.value.trim())
-    const [loadedUsers, teamConfig] = await Promise.all([
+    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedRaceAssets] = await Promise.all([
       api(`/users/admin?${params.toString()}`),
-      api('/teams/config')
+      api('/teams/config'),
+      api('/races/fan-vote/config'),
+      api('/twitch/config'),
+      api('/race-assets')
     ])
     users.value = loadedUsers
     teamLimit.value = teamConfig.member_limit
+    fanVoteDurationHours.value = fanVoteConfig.duration_hours
+    twitchConfig.value = {
+      fallback_video_url: loadedTwitchConfig.fallback_video_url || '',
+      fallback_video_title: loadedTwitchConfig.fallback_video_title || ''
+    }
+    raceAssetsTracksText.value = (loadedRaceAssets.tracks || []).join('\n')
+    raceAssetsClasses.value = (loadedRaceAssets.classes || []).map((item) => ({
+      name: item.name,
+      carsText: (item.cars || []).join('\n')
+    }))
   } catch (err) {
     error.value = err.message
   }
@@ -101,6 +152,124 @@ async function saveTeamLimit() {
     error.value = err.message
   } finally {
     teamLimitSaving.value = false
+  }
+}
+
+async function saveFanVoteConfig() {
+  fanVoteSaving.value = true
+  fanVoteSaved.value = false
+  error.value = ''
+  try {
+    const config = await api('/races/fan-vote/config', {
+      method: 'PATCH',
+      body: { duration_hours: Number(fanVoteDurationHours.value) }
+    })
+    fanVoteDurationHours.value = config.duration_hours
+    fanVoteSaved.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    fanVoteSaving.value = false
+  }
+}
+
+async function saveTwitchConfig() {
+  twitchConfigSaving.value = true
+  twitchConfigSaved.value = false
+  error.value = ''
+  try {
+    const config = await api('/twitch/config', {
+      method: 'PATCH',
+      body: {
+        fallback_video_url: twitchConfig.value.fallback_video_url.trim(),
+        fallback_video_title: twitchConfig.value.fallback_video_title.trim()
+      }
+    })
+    twitchConfig.value = {
+      fallback_video_url: config.fallback_video_url || '',
+      fallback_video_title: config.fallback_video_title || ''
+    }
+    twitchConfigSaved.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    twitchConfigSaving.value = false
+  }
+}
+
+function addRaceAssetClass() {
+  raceAssetsClasses.value = [...raceAssetsClasses.value, { name: '', carsText: '' }]
+}
+
+function removeRaceAssetClass(index) {
+  raceAssetsClasses.value = raceAssetsClasses.value.filter((_, itemIndex) => itemIndex !== index)
+}
+
+async function saveRaceAssets() {
+  raceAssetsSaving.value = true
+  raceAssetsSaved.value = false
+  error.value = ''
+  try {
+    const config = await api('/race-assets', {
+      method: 'PATCH',
+      body: {
+        tracks: raceAssetsTracksText.value.split('\n').map((item) => item.trim()).filter(Boolean),
+        classes: raceAssetsClasses.value
+          .map((item) => ({
+            name: item.name.trim(),
+            cars: item.carsText.split('\n').map((car) => car.trim()).filter(Boolean)
+          }))
+          .filter((item) => item.name)
+      }
+    })
+    raceAssetsTracksText.value = (config.tracks || []).join('\n')
+    raceAssetsClasses.value = (config.classes || []).map((item) => ({
+      name: item.name,
+      carsText: (item.cars || []).join('\n')
+    }))
+    raceAssetsSaved.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    raceAssetsSaving.value = false
+  }
+}
+
+function openDangerDialog(type) {
+  dangerDialog.value = type
+  dangerForm.value = { confirmation: '', confirmation_repeat: '', password: '' }
+  dangerResult.value = ''
+}
+
+function closeDangerDialog() {
+  if (dangerSaving.value) return
+  dangerDialog.value = null
+  dangerForm.value = { confirmation: '', confirmation_repeat: '', password: '' }
+}
+
+async function runDangerAction() {
+  const action = activeDangerAction.value
+  if (!action || !dangerFormValid.value) return
+  dangerSaving.value = true
+  error.value = ''
+  dangerResult.value = ''
+  try {
+    const result = await api(action.endpoint, {
+      method: 'POST',
+      body: {
+        confirmation: dangerForm.value.confirmation,
+        confirmation_repeat: dangerForm.value.confirmation_repeat,
+        password: dangerForm.value.password
+      }
+    })
+    dangerResult.value = t('adminUsers.deletedCount', { count: result?.deleted ?? 0 })
+    dangerDialog.value = null
+    dangerForm.value = { confirmation: '', confirmation_repeat: '', password: '' }
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    dangerSaving.value = false
   }
 }
 
@@ -317,6 +486,97 @@ watch([userSearch, userSort], resetUserPageAndLoad)
       <span v-if="settingsSaved" class="pill">{{ t('common.saved') }}</span>
     </form>
 
+    <form class="admin-settings-card card" @submit.prevent="saveFanVoteConfig">
+      <div>
+        <h2>{{ t('adminUsers.fanVoteTitle') }}</h2>
+        <p class="muted">{{ t('adminUsers.fanVoteHint') }}</p>
+      </div>
+      <label class="field admin-team-limit-field">
+        <span>{{ t('adminUsers.fanVoteDurationField') }}</span>
+        <input v-model.number="fanVoteDurationHours" type="number" min="1" max="168" required />
+      </label>
+      <button class="button primary" type="submit" :disabled="fanVoteSaving">
+        <Save :size="16" />
+        {{ t('common.save') }}
+      </button>
+      <span v-if="fanVoteSaved" class="pill">{{ t('common.saved') }}</span>
+    </form>
+
+    <form class="admin-settings-card admin-twitch-config-card card" @submit.prevent="saveTwitchConfig">
+      <div>
+        <h2>{{ t('adminUsers.twitchFallbackTitle') }}</h2>
+        <p class="muted">{{ t('adminUsers.twitchFallbackHint') }}</p>
+      </div>
+      <label class="field admin-twitch-video-field">
+        <span>{{ t('adminUsers.twitchFallbackUrl') }}</span>
+        <input v-model="twitchConfig.fallback_video_url" type="text" placeholder="https://www.twitch.tv/videos/1234567890" />
+      </label>
+      <label class="field admin-twitch-video-field">
+        <span>{{ t('adminUsers.twitchFallbackTitleField') }}</span>
+        <input v-model="twitchConfig.fallback_video_title" type="text" maxlength="120" :placeholder="t('twitch.latestVideo')" />
+      </label>
+      <button class="button primary" type="submit" :disabled="twitchConfigSaving">
+        <Save :size="16" />
+        {{ t('common.save') }}
+      </button>
+      <span v-if="twitchConfigSaved" class="pill">{{ t('common.saved') }}</span>
+    </form>
+
+    <form class="admin-settings-card admin-race-assets-card card" @submit.prevent="saveRaceAssets">
+      <div class="admin-race-assets-head">
+        <h2>{{ t('adminUsers.raceAssetsTitle') }}</h2>
+        <p class="muted">{{ t('adminUsers.raceAssetsHint') }}</p>
+      </div>
+      <label class="field admin-race-assets-tracks">
+        <span>{{ t('adminUsers.raceAssetsTracks') }}</span>
+        <textarea v-model="raceAssetsTracksText" required></textarea>
+      </label>
+      <div class="admin-race-assets-classes">
+        <div class="section-header">
+          <h3>{{ t('adminUsers.raceAssetsClasses') }}</h3>
+          <button class="button small" type="button" @click="addRaceAssetClass">{{ t('adminUsers.addRaceClass') }}</button>
+        </div>
+        <article v-for="(item, index) in raceAssetsClasses" :key="index" class="admin-race-class-row">
+          <label class="field">
+            <span>{{ t('fields.class') }}</span>
+            <input v-model="item.name" required />
+          </label>
+          <label class="field">
+            <span>{{ t('fields.allowedCars') }}</span>
+            <textarea v-model="item.carsText" required></textarea>
+          </label>
+          <button class="icon-button danger-icon" type="button" :title="t('common.delete')" :aria-label="t('common.delete')" @click="removeRaceAssetClass(index)">
+            <Trash2 :size="16" />
+          </button>
+        </article>
+      </div>
+      <div class="admin-race-assets-actions">
+        <button class="button primary" type="submit" :disabled="raceAssetsSaving">
+          <Save :size="16" />
+          {{ t('common.save') }}
+        </button>
+        <span v-if="raceAssetsSaved" class="pill">{{ t('common.saved') }}</span>
+      </div>
+    </form>
+
+    <section class="admin-danger-card card">
+      <div>
+        <h2>{{ t('adminUsers.dangerTitle') }}</h2>
+        <p class="muted">{{ t('adminUsers.dangerHint') }}</p>
+        <span v-if="dangerResult" class="pill">{{ dangerResult }}</span>
+      </div>
+      <div class="admin-danger-actions">
+        <button class="button danger" type="button" @click="openDangerDialog('pilots')">
+          <Trash2 :size="16" />
+          {{ t('adminUsers.deleteAllPilots') }}
+        </button>
+        <button class="button danger" type="button" @click="openDangerDialog('races')">
+          <Trash2 :size="16" />
+          {{ t('adminUsers.deleteAllRaces') }}
+        </button>
+      </div>
+    </section>
+
     <div class="admin-users-card card">
       <div class="pilot-inline-controls admin-users-controls">
         <input v-model="userSearch" type="search" :placeholder="t('common.search')" />
@@ -449,6 +709,43 @@ watch([userSearch, userSort], resetUserPageAndLoad)
     </div>
     <PaginationControls v-model:page="page" :page-size="pageSize" :loaded-count="visibleUsers.length" :has-next="hasNextPage" />
 
+    <div v-if="activeDangerAction" class="penalty-modal-backdrop" @click.self="closeDangerDialog">
+      <form class="penalty-modal admin-danger-modal card" @submit.prevent="runDangerAction">
+        <div class="penalty-modal-head section-header">
+          <div>
+            <h2>{{ t(activeDangerAction.titleKey) }}</h2>
+            <p>{{ t(activeDangerAction.descriptionKey) }}</p>
+          </div>
+          <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="closeDangerDialog">
+            <X :size="18" />
+          </button>
+        </div>
+        <p class="admin-danger-warning">{{ t('adminUsers.dangerModalHint', { phrase: activeDangerAction.code }) }}</p>
+        <label class="field">
+          <span>{{ t('adminUsers.confirmationOne') }}</span>
+          <input v-model="dangerForm.confirmation" autocomplete="off" :placeholder="activeDangerAction.code" required />
+        </label>
+        <label class="field">
+          <span>{{ t('adminUsers.confirmationTwo') }}</span>
+          <input v-model="dangerForm.confirmation_repeat" autocomplete="off" :placeholder="activeDangerAction.code" required />
+        </label>
+        <label class="field">
+          <span>{{ t('fields.password') }}</span>
+          <input v-model="dangerForm.password" type="password" autocomplete="current-password" required />
+        </label>
+        <div class="admin-timeout-actions">
+          <button class="button" type="button" :disabled="dangerSaving" @click="closeDangerDialog">
+            <X :size="16" />
+            {{ t('common.close') }}
+          </button>
+          <button class="button danger" type="submit" :disabled="dangerSaving || !dangerFormValid">
+            <Trash2 :size="16" />
+            {{ t('common.delete') }}
+          </button>
+        </div>
+      </form>
+    </div>
+
     <div v-if="timeoutDialogUser" class="penalty-modal-backdrop" @click.self="closeTimeoutDialog">
       <form class="penalty-modal admin-timeout-modal card" @submit.prevent="issueTimeout">
         <div class="penalty-modal-head">
@@ -535,7 +832,7 @@ watch([userSearch, userSort], resetUserPageAndLoad)
             <span>{{ t('fields.discord') }}</span>
             <input v-model="editForm.discord" maxlength="100" />
           </label>
-          <div class="field admin-profile-games">
+          <div class="field admin-profile-games is-required">
             <span>{{ t('fields.games') }}</span>
             <GameCheckboxGroup v-model="editForm.games" />
           </div>
