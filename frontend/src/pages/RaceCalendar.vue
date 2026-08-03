@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
-import { gameLabel, gameOptions, raceCountLabel } from '../i18nLabels'
+import { gameLabel, gameOptions, isExternalRace, raceCountLabel, raceOpenHref } from '../i18nLabels'
 import { state } from '../store'
 
 const { t } = useI18n()
@@ -16,6 +16,12 @@ const statusFilter = ref('not_finished')
 const myGamesOnly = ref(false)
 const selectedPage = ref(1)
 const selectedPageSize = 6
+const gameCountMeta = [
+  { value: 'AC', color: '#B32000' },
+  { value: 'ACC', color: '#FF4A21' },
+  { value: 'iRacing', color: '#3700EB' },
+  { value: 'LMU', color: '#0095EB' }
+]
 
 function dateKey(date) {
   const year = date.getFullYear()
@@ -67,11 +73,32 @@ const racesByDate = computed(() => {
   return map
 })
 const selectedRaces = computed(() => racesByDate.value.get(selected.value) || [])
+const selectedGameCounts = computed(() => raceGameCounts(selectedRaces.value))
 const selectedTotalPages = computed(() => Math.max(1, Math.ceil(selectedRaces.value.length / selectedPageSize)))
 const pagedSelectedRaces = computed(() => selectedRaces.value.slice((selectedPage.value - 1) * selectedPageSize, selectedPage.value * selectedPageSize))
 
 function dayRaces(day) {
   return racesByDate.value.get(dateKey(day)) || []
+}
+
+function raceGameCounts(items) {
+  const counts = new Map()
+  items.forEach((race) => counts.set(race.game, (counts.get(race.game) || 0) + 1))
+  return gameCountMeta
+    .map((item) => ({ ...item, label: gameLabel(t, item.value), count: counts.get(item.value) || 0 }))
+    .filter((item) => item.count > 0)
+}
+
+function dayGameCounts(day) {
+  return raceGameCounts(dayRaces(day))
+}
+
+function formatRaceTime(value) {
+  return new Date(value).toLocaleTimeString(state.locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  })
 }
 
 function shiftMonth(delta) {
@@ -150,7 +177,17 @@ watch(selectedRaces, () => {
         >
           <span class="calendar-date-row">
             <strong>{{ day.getDate() }}</strong>
-            <span v-if="dayRaces(day).length" class="calendar-count">{{ dayRaces(day).length }}</span>
+          </span>
+          <span v-if="dayGameCounts(day).length" class="calendar-game-counts">
+            <span
+              v-for="item in dayGameCounts(day)"
+              :key="item.value"
+              class="calendar-game-count"
+              :style="{ '--calendar-game-color': item.color }"
+            >
+              <small>{{ item.label }}</small>
+              <strong>{{ item.count }}</strong>
+            </span>
           </span>
           <span class="calendar-race-stack">
             <span v-for="race in dayRaces(day).slice(0, 2)" :key="race.id" class="pill calendar-race-pill">{{ race.name }}</span>
@@ -163,15 +200,33 @@ watch(selectedRaces, () => {
     <section class="section selected-races">
       <div class="section-header">
         <h2>{{ selectedLabel }}</h2>
-        <span class="pill calendar-selection-count">{{ raceCountLabel(t, state.locale, selectedRaces.length) }}</span>
+        <div class="calendar-selection-summary">
+          <span class="pill calendar-selection-count">{{ raceCountLabel(t, state.locale, selectedRaces.length) }}</span>
+          <span v-if="selectedGameCounts.length" class="calendar-game-counts selected-calendar-game-counts">
+            <span
+              v-for="item in selectedGameCounts"
+              :key="item.value"
+              class="calendar-game-count"
+              :style="{ '--calendar-game-color': item.color }"
+            >
+              <small>{{ item.label }}</small>
+              <strong>{{ item.count }}</strong>
+            </span>
+          </span>
+        </div>
       </div>
       <div class="race-list">
         <article v-for="race in pagedSelectedRaces" :key="race.id" class="card race-item">
           <div>
             <h3>{{ race.name }}</h3>
-            <p class="muted">{{ gameLabel(t, race.game) }} - {{ race.track }} - {{ race.car_class }} - {{ new Date(race.datetime_start).toLocaleTimeString(state.locale, { hour: '2-digit', minute: '2-digit' }) }}</p>
+            <p class="muted">
+              {{ race.game === 'LMU'
+                ? gameLabel(t, race.game)
+                : `${gameLabel(t, race.game)} - ${race.track} - ${race.car_class} - ${formatRaceTime(race.datetime_start)}` }}
+            </p>
           </div>
-          <RouterLink class="button" :to="`/races/${race.id}`">{{ t('common.open') }}</RouterLink>
+          <a v-if="isExternalRace(race)" class="button" :href="raceOpenHref(race)">{{ t('common.open') }}</a>
+          <RouterLink v-else class="button" :to="raceOpenHref(race)">{{ t('common.open') }}</RouterLink>
         </article>
         <div v-if="!selectedRaces.length" class="calendar-empty">
           <strong>{{ t('calendar.noRacesTitle') }}</strong>

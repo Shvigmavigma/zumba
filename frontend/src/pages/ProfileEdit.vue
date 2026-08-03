@@ -102,12 +102,12 @@ async function uploadAvatar() {
     </div>
     <form v-if="state.user" class="form" @submit.prevent="submit">
       <div class="form-row">
-        <label class="field"><span>{{ t('fields.email') }}</span><input v-model="form.email" type="email" /></label>
-        <label class="field"><span>{{ t('fields.nickname') }}</span><input v-model="form.nickname" /></label>
+        <label class="field"><span>{{ t('fields.email') }}</span><input v-model="form.email" type="email" required /></label>
+        <label class="field"><span>{{ t('fields.nickname') }}</span><input v-model="form.nickname" required maxlength="80" /></label>
       </div>
       <div class="form-row">
-        <label class="field"><span>{{ t('fields.firstName') }}</span><input v-model="form.first_name" /></label>
-        <label class="field"><span>{{ t('fields.lastName') }}</span><input v-model="form.last_name" /></label>
+        <label class="field"><span>{{ t('fields.firstName') }}</span><input v-model="form.first_name" required maxlength="50" /></label>
+        <label class="field"><span>{{ t('fields.lastName') }}</span><input v-model="form.last_name" required maxlength="50" /></label>
       </div>
       <div class="form-row">
         <div class="field">
@@ -116,7 +116,7 @@ async function uploadAvatar() {
         </div>
         <label class="field"><span>{{ t('fields.discord') }}</span><input v-model="form.discord" /></label>
       </div>
-      <div class="field">
+      <div class="field is-required">
         <span>{{ t('fields.games') }}</span>
         <GameCheckboxGroup v-model="form.games" />
       </div>

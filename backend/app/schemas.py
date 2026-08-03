@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator, model
 
 from app.models import MAX_RATING, MAX_SR, MIN_RATING, MIN_SR, AppealStatus, BannerPosition, PenaltyStatus, PenaltyType, RaceStatus, Role, TeamApplicationStatus, UserStatus
 
-GameCode = Literal["ACC", "AC", "iRacing"]
+GameCode = Literal["ACC", "AC", "iRacing", "LMU"]
 
 
 class TokenResponse(BaseModel):
@@ -32,7 +32,7 @@ class UserRegister(BaseModel):
     country: str | None = Field(default=None, max_length=50)
     discord: str | None = Field(default=None, max_length=100)
     avatar_color: str = Field(default="#2563eb", pattern=r"^#[0-9A-Fa-f]{6}$")
-    games: list[GameCode] = Field(default_factory=lambda: ["ACC"], min_length=1, max_length=3)
+    games: list[GameCode] = Field(default_factory=lambda: ["ACC"], min_length=1, max_length=4)
 
     @field_validator("password_confirm")
     @classmethod
@@ -84,7 +84,7 @@ class UserUpdate(BaseModel):
     country: str | None = Field(default=None, max_length=50)
     discord: str | None = Field(default=None, max_length=100)
     avatar_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
-    games: list[GameCode] | None = Field(default=None, min_length=1, max_length=3)
+    games: list[GameCode] | None = Field(default=None, min_length=1, max_length=4)
 
 
 class UserAdminUpdate(UserUpdate):
@@ -204,6 +204,12 @@ class TimeoutRequest(BaseModel):
     timeout_end: datetime
 
 
+class AdminDangerDeleteRequest(BaseModel):
+    confirmation: str = Field(min_length=1, max_length=60)
+    confirmation_repeat: str = Field(min_length=1, max_length=60)
+    password: str = Field(min_length=1, max_length=128)
+
+
 class RegisteredPilot(BaseModel):
     user_id: int
     car_model: str
@@ -230,6 +236,35 @@ class RaceCreate(RaceBase):
     pass
 
 
+class RaceAssetClass(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+    cars: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def normalize_items(self):
+        self.name = self.name.strip()
+        seen: set[str] = set()
+        self.cars = [car for car in (item.strip() for item in self.cars) if car and not (car.lower() in seen or seen.add(car.lower()))]
+        return self
+
+
+class RaceAssetsConfig(BaseModel):
+    tracks: list[str] = Field(default_factory=list)
+    classes: list[RaceAssetClass] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def normalize_items(self):
+        seen_tracks: set[str] = set()
+        self.tracks = [
+            track
+            for track in (item.strip() for item in self.tracks)
+            if track and not (track.lower() in seen_tracks or seen_tracks.add(track.lower()))
+        ]
+        seen_classes: set[str] = set()
+        self.classes = [item for item in self.classes if not (item.name.lower() in seen_classes or seen_classes.add(item.name.lower()))]
+        return self
+
+
 class RaceUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=100)
     description: str | None = None
@@ -254,6 +289,9 @@ class RaceRead(RaceBase):
     is_passed: bool
     results: dict | list | None
     rating_applied: bool
+    video_url: str | None = None
+    video_filename: str | None = None
+    video_uploaded_at: datetime | None = None
     creator_id: int
     registered_pilots: list[dict]
     created_at: datetime
@@ -266,6 +304,7 @@ class RaceManageRead(BaseModel):
     id: int
     name: str
     description: str
+    server_link: str
     status: RaceStatus
     datetime_start: datetime
     datetime_end: datetime
@@ -280,6 +319,57 @@ class RaceManageRead(BaseModel):
     is_official: bool
     created_at: datetime
     updated_at: datetime
+
+
+class FanVoteConfigRead(BaseModel):
+    duration_hours: int = Field(ge=1, le=168)
+
+
+class FanVoteConfigUpdate(BaseModel):
+    duration_hours: int = Field(ge=1, le=168)
+
+
+class FanVoteOptionRead(BaseModel):
+    user_id: int
+    login: str
+    nickname: str
+    first_name: str
+    last_name: str
+    pilot_number: int
+    team_name: str | None = None
+    avatar_color: str
+    avatar_url: str | None = None
+    rating: int
+    sr: float
+    votes: int = 0
+    percentage: float = 0
+
+
+class FanVoteRead(BaseModel):
+    enabled: bool
+    is_open: bool
+    show_results: bool
+    duration_hours: int
+    started_at: datetime | None = None
+    ends_at: datetime | None = None
+    total_votes: int = 0
+    my_vote_user_id: int | None = None
+    options: list[FanVoteOptionRead] = Field(default_factory=list)
+
+
+class FanVoteSetup(BaseModel):
+    option_user_ids: list[int] = Field(min_length=3, max_length=3)
+
+    @field_validator("option_user_ids")
+    @classmethod
+    def unique_options(cls, value: list[int]):
+        if len(set(value)) != len(value):
+            raise ValueError("Choose three different pilots")
+        return value
+
+
+class FanVoteCast(BaseModel):
+    target_user_id: int = Field(ge=1)
 
 
 class RaceRegisterRequest(BaseModel):
@@ -434,6 +524,35 @@ class NewsItemUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=120)
     body: str | None = Field(default=None, min_length=1, max_length=1000)
     is_published: bool | None = None
+
+
+class TwitchStatus(BaseModel):
+    channel_login: str
+    channel_url: str
+    is_configured: bool
+    is_live: bool
+    status: Literal["live", "vod", "channel"]
+    embed_type: Literal["channel", "video"]
+    embed_value: str
+    external_url: str
+    title: str | None = None
+    game_name: str | None = None
+    thumbnail_url: str | None = None
+    viewer_count: int | None = None
+    started_at: datetime | None = None
+    published_at: datetime | None = None
+
+
+class TwitchConfigRead(BaseModel):
+    fallback_video_url: str = ""
+    fallback_video_id: str = ""
+    fallback_video_title: str = ""
+    fallback_video_thumbnail_url: str = ""
+
+
+class TwitchConfigUpdate(BaseModel):
+    fallback_video_url: str = Field(default="", max_length=300)
+    fallback_video_title: str = Field(default="", max_length=120)
 
 
 class HallOfFamePilotRead(BaseModel):

@@ -57,10 +57,18 @@ async def init_db() -> None:
         await conn.execute(text("UPDATE teams SET avatar_upload_count = 0 WHERE avatar_upload_count IS NULL"))
         await conn.execute(text("ALTER TABLE teams ALTER COLUMN avatar_upload_count SET DEFAULT 0"))
         await conn.execute(text("ALTER TABLE teams ALTER COLUMN avatar_upload_count SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS video_url VARCHAR(255)"))
+        await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS video_filename VARCHAR(255)"))
+        await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS video_uploaded_at TIMESTAMP WITH TIME ZONE"))
+        await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS fan_vote_options JSONB DEFAULT '[]'::jsonb"))
+        await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS fan_vote_started_at TIMESTAMP WITH TIME ZONE"))
+        await conn.execute(text("UPDATE races SET fan_vote_options = '[]'::jsonb WHERE fan_vote_options IS NULL OR jsonb_typeof(fan_vote_options) <> 'array'"))
+        await conn.execute(text("ALTER TABLE races ALTER COLUMN fan_vote_options SET DEFAULT '[]'::jsonb"))
+        await conn.execute(text("ALTER TABLE races ALTER COLUMN fan_vote_options SET NOT NULL"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS games JSONB"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS team_id INTEGER"))
-        await conn.execute(text("""UPDATE users SET games = '["ACC", "AC", "iRacing"]'::jsonb WHERE games IS NULL OR jsonb_typeof(games) <> 'array'"""))
-        await conn.execute(text("""ALTER TABLE users ALTER COLUMN games SET DEFAULT '["ACC", "AC", "iRacing"]'::jsonb"""))
+        await conn.execute(text("""UPDATE users SET games = '["ACC", "AC", "iRacing", "LMU"]'::jsonb WHERE games IS NULL OR jsonb_typeof(games) <> 'array'"""))
+        await conn.execute(text("""ALTER TABLE users ALTER COLUMN games SET DEFAULT '["ACC", "AC", "iRacing", "LMU"]'::jsonb"""))
         await conn.execute(text("ALTER TABLE users ALTER COLUMN games SET NOT NULL"))
         await conn.execute(
             text(
@@ -221,9 +229,10 @@ async def init_db() -> None:
                     WHEN game IN ('ACC', 'Assetto Corsa Competizione') THEN 'ACC'
                     WHEN game IN ('AC', 'Assetto Corsa') THEN 'AC'
                     WHEN lower(game) IN ('iracing', 'iracin') THEN 'iRacing'
+                    WHEN game IN ('LMU', 'Le Mans Ultimate') THEN 'LMU'
                     ELSE 'ACC'
                 END
-                WHERE game IS NULL OR game NOT IN ('ACC', 'AC', 'iRacing')
+                WHERE game IS NULL OR game NOT IN ('ACC', 'AC', 'iRacing', 'LMU')
                 """
             )
         )

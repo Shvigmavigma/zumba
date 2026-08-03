@@ -23,12 +23,30 @@ const props = defineProps({
   participants: {
     type: Array,
     default: () => []
+  },
+  canCreate: {
+    type: Boolean,
+    default: false
+  },
+  createOpen: {
+    type: Boolean,
+    default: false
+  },
+  busy: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['close', 'create-appeal'])
+const emit = defineEmits(['close', 'create-appeal', 'create-penalty', 'update:createOpen'])
 const { t } = useI18n()
 const appealDrafts = ref({})
+const penaltyDraft = ref({
+  target_id: '',
+  time_seconds: 5,
+  sr_penalty_value: 0.3,
+  description: ''
+})
 
 function formatDate(value) {
   return new Date(value).toLocaleString(state.locale, {
@@ -144,6 +162,21 @@ function submitAppeal(penalty) {
     [penalty.id]: { proof_link: '', description: '' }
   }
 }
+
+function toggleCreateForm() {
+  emit('update:createOpen', !props.createOpen)
+}
+
+function submitPenalty() {
+  const timeSeconds = Number(penaltyDraft.value.time_seconds)
+  const srValue = Number(penaltyDraft.value.sr_penalty_value)
+  emit('create-penalty', {
+    target_id: Number(penaltyDraft.value.target_id),
+    time_penalty_ms: Math.round(timeSeconds * 1000),
+    sr_penalty_value: srValue,
+    description: penaltyDraft.value.description.trim()
+  })
+}
 </script>
 
 <template>
@@ -154,10 +187,44 @@ function submitAppeal(penalty) {
           <h2>{{ t('raceDetails.penalties') }}</h2>
           <p class="muted">{{ t('raceDetails.penaltiesCount', { count: penalties.length }) }}</p>
         </div>
-        <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="$emit('close')">
-          <X :size="18" />
-        </button>
+        <div class="toolbar">
+          <button v-if="canCreate" class="button primary" type="button" :disabled="!participants.length" @click="toggleCreateForm">
+            {{ createOpen ? t('common.close') : t('raceDetails.issuePenalty') }}
+          </button>
+          <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="$emit('close')">
+            <X :size="18" />
+          </button>
+        </div>
       </div>
+
+      <form v-if="canCreate && createOpen" class="form race-penalty-create-form" @submit.prevent="submitPenalty">
+        <div class="race-penalty-create-grid">
+          <label class="field">
+            <span>{{ t('roles.pilot') }}</span>
+            <select v-model="penaltyDraft.target_id" required>
+              <option value="" disabled>{{ t('raceDetails.selectPenaltyPilot') }}</option>
+              <option v-for="item in participants" :key="item.user_id" :value="item.user_id">
+                {{ participantName(item) }} #{{ item.pilot_number || item.user_id }}
+              </option>
+            </select>
+          </label>
+          <label class="field">
+            <span>{{ t('raceDetails.timePenaltySeconds') }}</span>
+            <input v-model.number="penaltyDraft.time_seconds" type="number" min="0.1" step="0.1" required />
+          </label>
+          <label class="field">
+            <span>{{ t('raceDetails.srPenaltyValue') }}</span>
+            <input v-model.number="penaltyDraft.sr_penalty_value" type="number" min="0.1" step="0.1" required />
+          </label>
+        </div>
+        <label class="field">
+          <span>{{ t('fields.description') }}</span>
+          <textarea v-model="penaltyDraft.description" required :placeholder="t('raceDetails.penaltyDescriptionPlaceholder')"></textarea>
+        </label>
+        <button class="button primary" type="submit" :disabled="busy || !participants.length">
+          {{ t('raceDetails.issuePenalty') }}
+        </button>
+      </form>
 
       <div v-if="penalties.length" class="race-penalty-list">
         <article v-for="penalty in penalties" :key="penalty.id" class="card race-penalty-card" :class="{ 'is-own': isOwnPenalty(penalty) }">

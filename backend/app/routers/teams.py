@@ -562,9 +562,15 @@ async def upload_team_avatar(
         raise HTTPException(status_code=403, detail="Only the team owner or moderators can edit this team")
     ensure_avatar_upload_allowed(team)
     previous_avatar_url = team.avatar_url
-    team.avatar_url = await save_avatar_file(file, "teams", team.id, settings.max_team_avatar_upload_mb)
+    new_avatar_url = await save_avatar_file(file, "teams", team.id, settings.max_team_avatar_upload_mb)
+    team.avatar_url = new_avatar_url
     mark_avatar_uploaded(team)
-    await session.commit()
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        remove_avatar_file(new_avatar_url)
+        raise
     await session.refresh(team)
     remove_avatar_file(previous_avatar_url)
     return await build_team_detail(session, team, user)
@@ -717,9 +723,11 @@ async def delete_team(
     team = await get_team_or_404(session, team_id, for_update=True)
     if not can_manage_team(user, team):
         raise HTTPException(status_code=403, detail="Only the team owner or moderators can delete this team")
+    avatar_url = team.avatar_url
     await session.execute(update(User).where(User.team_id == team.id).values(team_id=None))
     await session.delete(team)
     await session.commit()
+    remove_avatar_file(avatar_url)
 
 
 @router.delete("/{team_id}/members/{user_id}", response_model=TeamDetailRead)

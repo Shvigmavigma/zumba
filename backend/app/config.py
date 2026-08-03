@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     max_banner_upload_mb: int = 20
     max_user_avatar_upload_mb: int = 5
     max_team_avatar_upload_mb: int = 30
+    max_race_video_upload_mb: int = 300
+    twitch_channel_login: str = "bmrlracing"
+    twitch_client_id: str = ""
+    twitch_client_secret: str = ""
+    twitch_status_cache_seconds: int = 60
 
     @property
     def cors_origin_list(self) -> list[str]:

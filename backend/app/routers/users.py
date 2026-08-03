@@ -10,8 +10,10 @@ from app.config import get_settings
 from app.db import get_session
 from app.deps import as_utc, clear_expired_timeout, require_admin, require_moder_plus, require_pilot_plus
 from app.models import Appeal, Banner, Penalty, Race, RaceRegistration, Role, Setup, Team, TeamApplication, TeamCreationRequest, User, UserStatus
+from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
-from app.schemas import RoleUpdate, TimeoutRequest, UserAdminUpdate, UserPrivate, UserPublic, UserUpdate
+from app.schemas import AdminDangerDeleteRequest, RoleUpdate, TimeoutRequest, UserAdminUpdate, UserPrivate, UserPublic, UserUpdate
+from app.security import verify_password
 
 
 router = APIRouter()
@@ -35,12 +37,25 @@ async def user_team_name(session: AsyncSession, user: User) -> str | None:
 async def set_user_avatar(session: AsyncSession, user: User, file: UploadFile) -> dict:
     ensure_avatar_upload_allowed(user)
     previous_avatar_url = user.avatar_url
-    user.avatar_url = await save_avatar_file(file, "users", user.id, settings.max_user_avatar_upload_mb)
+    new_avatar_url = await save_avatar_file(file, "users", user.id, settings.max_user_avatar_upload_mb)
+    user.avatar_url = new_avatar_url
     mark_avatar_uploaded(user)
-    await session.commit()
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        remove_avatar_file(new_avatar_url)
+        raise
     await session.refresh(user)
     remove_avatar_file(previous_avatar_url)
     return user_response(user, await user_team_name(session, user), private=True)
+
+
+def ensure_danger_request(payload: AdminDangerDeleteRequest, admin: User, expected_confirmation: str) -> None:
+    if payload.confirmation.strip() != expected_confirmation or payload.confirmation_repeat.strip() != expected_confirmation:
+        raise HTTPException(status_code=400, detail="Confirmation phrase is invalid")
+    if not verify_password(payload.password, admin.password_hash):
+        raise HTTPException(status_code=403, detail="Admin password is invalid")
 
 
 PROFILE_REQUIRED_FIELDS = {"email", "first_name", "last_name", "nickname", "avatar_color", "games"}
@@ -148,6 +163,90 @@ async def admin_user_list(
         for user in users:
             await session.refresh(user)
     return [user_response(user, team_name, private=True) for user, team_name in rows]
+
+
+@router.post("/admin/delete-pilots")
+@limiter.limit("3/minute")
+async def delete_all_pilots(
+    request: Request,
+    payload: AdminDangerDeleteRequest,
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    ensure_danger_request(payload, admin, "DELETE PILOTS")
+    pilot_ids = list((await session.scalars(select(User.id).where(User.role == Role.pilot))).all())
+    if not pilot_ids:
+        return {"deleted": 0}
+    pilot_avatar_urls = list((await session.scalars(select(User.avatar_url).where(User.id.in_(pilot_ids), User.avatar_url.is_not(None)))).all())
+
+    pilot_id_set = set(pilot_ids)
+    races = (await session.scalars(select(Race))).all()
+    for race in races:
+        if not isinstance(race.registered_pilots, list):
+            continue
+        filtered_pilots = []
+        for item in race.registered_pilots:
+            if not isinstance(item, dict):
+                filtered_pilots.append(item)
+                continue
+            try:
+                user_id = int(item.get("user_id") or 0)
+            except (TypeError, ValueError):
+                user_id = 0
+            if user_id not in pilot_id_set:
+                filtered_pilots.append(item)
+        race.registered_pilots = filtered_pilots
+
+    target_penalty_ids = list(
+        (
+            await session.scalars(
+                select(Penalty.id).where(or_(Penalty.target_id.in_(pilot_ids), Penalty.issuer_id.in_(pilot_ids)))
+            )
+        ).all()
+    )
+    if target_penalty_ids:
+        await session.execute(delete(Appeal).where(Appeal.penalty_id.in_(target_penalty_ids)))
+        await session.execute(delete(Penalty).where(Penalty.id.in_(target_penalty_ids)))
+
+    await session.execute(delete(Appeal).where(Appeal.user_id.in_(pilot_ids)))
+    await session.execute(update(Appeal).where(Appeal.moderator_id.in_(pilot_ids)).values(moderator_id=None))
+    await session.execute(delete(RaceRegistration).where(RaceRegistration.user_id.in_(pilot_ids)))
+    await session.execute(delete(Setup).where(Setup.user_id.in_(pilot_ids)))
+    await session.execute(delete(TeamApplication).where(TeamApplication.user_id.in_(pilot_ids)))
+    await session.execute(update(TeamApplication).where(TeamApplication.resolved_by.in_(pilot_ids)).values(resolved_by=None))
+    await session.execute(delete(TeamCreationRequest).where(TeamCreationRequest.requester_id.in_(pilot_ids)))
+    await session.execute(update(TeamCreationRequest).where(TeamCreationRequest.resolved_by.in_(pilot_ids)).values(resolved_by=None))
+    await session.execute(update(Banner).where(Banner.updated_by.in_(pilot_ids)).values(updated_by=None))
+    await session.execute(update(Team).where(Team.owner_id.in_(pilot_ids)).values(owner_id=None))
+    await session.execute(update(Race).where(Race.creator_id.in_(pilot_ids)).values(creator_id=admin.id))
+
+    result = await session.execute(delete(User).where(User.id.in_(pilot_ids)))
+    await session.commit()
+    for avatar_url in pilot_avatar_urls:
+        remove_avatar_file(avatar_url)
+    return {"deleted": result.rowcount or len(pilot_ids)}
+
+
+@router.post("/admin/delete-races")
+@limiter.limit("3/minute")
+async def delete_all_races(
+    request: Request,
+    payload: AdminDangerDeleteRequest,
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    ensure_danger_request(payload, admin, "DELETE RACES")
+    race_count = await session.scalar(select(func.count()).select_from(Race))
+    race_video_urls = list((await session.scalars(select(Race.video_url).where(Race.video_url.is_not(None)))).all())
+    await session.execute(delete(Appeal))
+    await session.execute(delete(Penalty))
+    await session.execute(delete(RaceRegistration))
+    await session.execute(update(Setup).values(race_id=None))
+    await session.execute(delete(Race))
+    await session.commit()
+    for video_url in race_video_urls:
+        remove_race_video_file(video_url)
+    return {"deleted": int(race_count or 0)}
 
 
 @router.get("/{user_id}", response_model=UserPublic)
@@ -265,6 +364,7 @@ async def reject_user(user_id: int, request: Request, _: User = Depends(require_
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    avatar_url = user.avatar_url
     if user.status == UserStatus.unapproved:
         await session.delete(user)
     elif user.pending_profile_changes:
@@ -272,6 +372,8 @@ async def reject_user(user_id: int, request: Request, _: User = Depends(require_
     else:
         raise HTTPException(status_code=400, detail="No registration or profile change to reject")
     await session.commit()
+    if user.status == UserStatus.unapproved:
+        remove_avatar_file(avatar_url)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -292,6 +394,8 @@ async def delete_user_account(
         if (admin_count or 0) <= 1:
             raise HTTPException(status_code=400, detail="The last admin account cannot be deleted")
 
+    user_avatar_url = user.avatar_url
+    deleted_team_avatar_urls: list[str] = []
     owned_team_ids = list((await session.scalars(select(Team.id).where(Team.owner_id == user.id))).all())
     for team_id in owned_team_ids:
         next_owner = await session.scalar(
@@ -301,6 +405,9 @@ async def delete_user_account(
             .limit(1)
         )
         if next_owner is None:
+            team_avatar_url = await session.scalar(select(Team.avatar_url).where(Team.id == team_id))
+            if team_avatar_url:
+                deleted_team_avatar_urls.append(team_avatar_url)
             await session.execute(delete(Team).where(Team.id == team_id))
         else:
             await session.execute(update(Team).where(Team.id == team_id).values(owner_id=next_owner.id))
@@ -328,6 +435,9 @@ async def delete_user_account(
     except IntegrityError as exc:
         await session.rollback()
         raise HTTPException(status_code=409, detail="User cannot be deleted because linked records still exist") from exc
+    remove_avatar_file(user_avatar_url)
+    for avatar_url in deleted_team_avatar_urls:
+        remove_avatar_file(avatar_url)
 
 
 @router.patch("/{user_id}/role", response_model=UserPrivate)
