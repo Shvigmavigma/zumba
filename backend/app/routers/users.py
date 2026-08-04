@@ -101,7 +101,16 @@ async def list_pilots(
         stmt = stmt.where(User.country == country)
     if search:
         like = f"%{search}%"
-        stmt = stmt.where(or_(User.login.ilike(like), User.nickname.ilike(like), User.first_name.ilike(like), User.last_name.ilike(like), Team.name.ilike(like)))
+        stmt = stmt.where(
+            or_(
+                User.login.ilike(like),
+                User.nickname.ilike(like),
+                User.first_name.ilike(like),
+                User.last_name.ilike(like),
+                cast(User.pilot_number, String).ilike(like),
+                Team.name.ilike(like),
+            )
+        )
     rows = (await session.execute(stmt.order_by(*user_sort_columns(sort)).offset(offset).limit(limit))).all()
     return [user_response(user, team_name) for user, team_name in rows]
 

@@ -3,6 +3,11 @@ export function formatRating(value) {
   return Number.isFinite(rating) ? Math.round(rating) : '-'
 }
 
+export function formatPilotNumber(value) {
+  const number = Number(value)
+  return Number.isInteger(number) && number >= 0 ? String(number % 1000).padStart(3, '0') : '-'
+}
+
 export function teamShortName(name) {
   const raw = String(name || '').trim()
   if (!raw) return '-'

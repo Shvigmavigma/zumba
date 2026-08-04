@@ -2,10 +2,11 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AppSetting, Race
-from app.schemas import RaceAssetsConfig
+from app.schemas import RaceAssetGameConfig, RaceAssetsConfig
 
 
 RACE_ASSETS_KEY = "race_assets"
+RACE_ASSET_GAMES = {"ACC", "AC", "iRacing"}
 
 DEFAULT_RACE_ASSETS = {
     "tracks": [
@@ -117,6 +118,11 @@ DEFAULT_RACE_ASSETS = {
         },
     ],
 }
+DEFAULT_RACE_ASSETS["games"] = {
+    "ACC": {"tracks": DEFAULT_RACE_ASSETS["tracks"], "classes": DEFAULT_RACE_ASSETS["classes"]},
+    "AC": {"tracks": [], "classes": []},
+    "iRacing": {"tracks": [], "classes": []},
+}
 
 
 def normalize_race_assets(value: dict | None) -> RaceAssetsConfig:
@@ -142,15 +148,22 @@ async def save_race_assets(session: AsyncSession, payload: RaceAssetsConfig) -> 
     return normalized
 
 
-def find_asset_class(config: RaceAssetsConfig, class_name: str):
+def assets_for_game(config: RaceAssetsConfig, game: str) -> RaceAssetGameConfig:
+    if game == "ACC":
+        return RaceAssetGameConfig(tracks=config.tracks, classes=config.classes)
+    return config.games.get(game, RaceAssetGameConfig())
+
+
+def find_asset_class(config: RaceAssetGameConfig, class_name: str):
     normalized_name = class_name.strip().lower()
     return next((item for item in config.classes if item.name.lower() == normalized_name), None)
 
 
-def validate_acc_asset_selection(config: RaceAssetsConfig, track: str, car_class: str, allowed_cars: list[str] | None) -> list[str]:
-    if track.strip().lower() not in {item.lower() for item in config.tracks}:
+def validate_asset_selection(config: RaceAssetsConfig, game: str, track: str, car_class: str, allowed_cars: list[str] | None) -> list[str]:
+    game_config = assets_for_game(config, game)
+    if track.strip().lower() not in {item.lower() for item in game_config.tracks}:
         raise HTTPException(status_code=400, detail="Track is not in race assets")
-    asset_class = find_asset_class(config, car_class)
+    asset_class = find_asset_class(game_config, car_class)
     if asset_class is None:
         raise HTTPException(status_code=400, detail="Class is not in race assets")
     selected_cars = [item.strip() for item in (allowed_cars or asset_class.cars) if item.strip()]
@@ -164,10 +177,11 @@ def validate_acc_asset_selection(config: RaceAssetsConfig, track: str, car_class
 
 
 async def normalize_race_create_assets(session: AsyncSession, data: dict) -> dict:
-    if data.get("game") != "ACC":
+    game = data.get("game")
+    if game not in RACE_ASSET_GAMES:
         return data
     config = await get_race_assets(session)
-    data["allowed_cars"] = validate_acc_asset_selection(config, data.get("track", ""), data.get("car_class", ""), data.get("allowed_cars"))
+    data["allowed_cars"] = validate_asset_selection(config, game, data.get("track", ""), data.get("car_class", ""), data.get("allowed_cars"))
     return data
 
 
@@ -176,11 +190,12 @@ async def normalize_race_update_assets(session: AsyncSession, race: Race, data: 
     if not asset_fields.intersection(data):
         return data
     game = data.get("game", race.game)
-    if game != "ACC":
+    if game not in RACE_ASSET_GAMES:
         return data
     config = await get_race_assets(session)
-    data["allowed_cars"] = validate_acc_asset_selection(
+    data["allowed_cars"] = validate_asset_selection(
         config,
+        game,
         data.get("track", race.track),
         data.get("car_class", race.car_class),
         data.get("allowed_cars", race.allowed_cars),

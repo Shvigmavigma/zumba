@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CalendarDays, Home, Languages, ListChecks, LogIn, LogOut, Medal, Moon, MoreHorizontal, Newspaper, Shield, Sun, Trophy, User, Users } from 'lucide-vue-next'
+import { CalendarDays, Calculator, Flag, Home, Languages, ListChecks, LogIn, LogOut, Medal, Moon, MoreHorizontal, Newspaper, Shield, Sun, Trophy, User, Users } from 'lucide-vue-next'
 import { statusLabel } from './i18nLabels'
 import { clearSession, state } from './store'
 
@@ -25,8 +25,10 @@ const navItems = computed(() => [
   { key: 'main', to: '/', label: t('nav.main'), icon: Home, visible: true },
   { key: 'pilots', to: '/pilots', label: t('nav.pilots'), icon: Users, visible: true },
   { key: 'teams', to: '/teams', label: t('nav.teams'), icon: Trophy, visible: true },
+  { key: 'championships', to: '/championships', label: t('nav.championships'), icon: Flag, visible: true },
   { key: 'hallOfFame', to: '/hall-of-fame', label: t('nav.hallOfFame'), icon: Medal, visible: true },
   { key: 'calendar', to: '/calendar', label: t('nav.calendar'), icon: CalendarDays, visible: true },
+  { key: 'fuel', to: '/fuel-calculator', label: t('nav.fuel'), icon: Calculator, visible: true },
   { key: 'races', to: '/races/manage', label: t('nav.races'), icon: ListChecks, visible: canManageRaces.value },
   { key: 'appeals', to: '/appeals', label: t('nav.appeals'), icon: Shield, visible: isStaff.value },
   { key: 'moderation', to: '/moderation/users', label: t('nav.moderation'), icon: User, visible: isStaff.value },
@@ -56,14 +58,26 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => state.locale,
+  (value) => {
+    const nextLocale = value === 'en' ? 'en' : 'ru'
+    if (nextLocale !== value) {
+      state.locale = nextLocale
+      return
+    }
+    locale.value = nextLocale
+    localStorage.setItem('locale', nextLocale)
+  },
+  { immediate: true }
+)
+
 function toggleTheme() {
   state.theme = state.theme === 'light' ? 'dark' : 'light'
 }
 
 function setLocale(value) {
-  state.locale = value
-  locale.value = value
-  localStorage.setItem('locale', value)
+  state.locale = value === 'en' ? 'en' : 'ru'
 }
 
 function sameKeys(left, right) {
@@ -161,20 +175,32 @@ watch(navItems, () => {
       </RouterLink>
 
       <nav ref="navContainer" class="nav-links" :aria-label="t('nav.main')">
-        <RouterLink v-for="item in visibleNavItems" :key="item.key" :to="item.to" @click="closeMoreMenu">
-          <component :is="item.icon" v-if="item.icon" :size="18" />
-          {{ item.label }}
-        </RouterLink>
+        <template v-for="item in visibleNavItems" :key="item.key">
+          <RouterLink v-if="item.to" :to="item.to" @click="closeMoreMenu">
+            <component :is="item.icon" v-if="item.icon" :size="18" />
+            {{ item.label }}
+          </RouterLink>
+          <a v-else :href="item.href" @click="closeMoreMenu">
+            <component :is="item.icon" v-if="item.icon" :size="18" />
+            {{ item.label }}
+          </a>
+        </template>
         <div v-if="hiddenNavItems.length" ref="navMore" class="nav-more">
           <button class="icon-button nav-more-button" type="button" :aria-expanded="isMoreOpen" :title="t('common.more')" @click="isMoreOpen = !isMoreOpen" @keydown.escape="closeMoreMenu">
             <MoreHorizontal :size="18" />
             <span>{{ t('common.more') }}</span>
           </button>
           <div v-if="isMoreOpen" class="nav-more-menu" role="menu" @keydown.escape="closeMoreMenu">
-            <RouterLink v-for="item in hiddenNavItems" :key="item.key" :to="item.to" role="menuitem" @click="closeMoreMenu">
-              <component :is="item.icon" v-if="item.icon" :size="18" />
-              {{ item.label }}
-            </RouterLink>
+            <template v-for="item in hiddenNavItems" :key="item.key">
+              <RouterLink v-if="item.to" :to="item.to" role="menuitem" @click="closeMoreMenu">
+                <component :is="item.icon" v-if="item.icon" :size="18" />
+                {{ item.label }}
+              </RouterLink>
+              <a v-else :href="item.href" role="menuitem" @click="closeMoreMenu">
+                <component :is="item.icon" v-if="item.icon" :size="18" />
+                {{ item.label }}
+              </a>
+            </template>
           </div>
         </div>
         <div ref="navMeasure" class="nav-measure" aria-hidden="true">

@@ -8,7 +8,7 @@ import PaginationControls from '../components/PaginationControls.vue'
 import RacePenaltyListModal from '../components/RacePenaltyListModal.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, isExternalRace, statusLabel } from '../i18nLabels'
-import { filterPilots, formatRating, sortPilots, teamShortName } from '../pilotDisplay'
+import { filterPilots, formatPilotNumber, formatRating, sortPilots, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
 
 const { t } = useI18n()
@@ -18,6 +18,7 @@ const race = ref(null)
 const penalties = ref([])
 const appeals = ref([])
 const car = ref('')
+const pilotNumber = ref(pilotNumberDraft(state.user?.pilot_number))
 const error = ref('')
 const actionPending = ref(false)
 const accQualificationFile = ref(null)
@@ -44,7 +45,9 @@ const participantTotalPages = computed(() => Math.max(1, Math.ceil(visiblePartic
 const pagedParticipants = computed(() => visibleParticipants.value.slice((participantPage.value - 1) * participantPageSize, participantPage.value * participantPageSize))
 const registered = computed(() => participants.value.some((item) => item.user_id === state.user?.id))
 const canManageRace = computed(() => ['admin', 'moder'].includes(state.user?.role))
-const canIssuePenalty = computed(() => ['admin', 'moder', 'marshall'].includes(state.user?.role) && race.value?.status !== 'registration_open')
+const canIssuePenalty = computed(() => ['admin', 'moder', 'marshall'].includes(state.user?.role) && ['ongoing', 'finished'].includes(race.value?.status))
+const isChampionshipStage = computed(() => Boolean(race.value?.championship_id))
+const canShowRegistrationPanel = computed(() => Boolean(state.user) && (race.value?.status === 'registration_open' || (isChampionshipStage.value && race.value?.status === 'not_started')))
 const resultRows = computed(() => {
   if (Array.isArray(race.value?.results)) return race.value.results
   return race.value?.results?.rows || []
@@ -171,7 +174,7 @@ function participantName(item) {
 }
 
 function participantSubtitle(item) {
-  const number = item.pilot_number ? `#${item.pilot_number}` : `ID ${item.user_id}`
+  const number = item.pilot_number !== null && item.pilot_number !== undefined ? `#${formatPilotNumber(item.pilot_number)}` : `ID ${item.user_id}`
   return item.nickname ? `${number} - ${item.nickname}` : number
 }
 
@@ -182,8 +185,19 @@ function fanVotePilotName(item) {
 
 function fanVotePilotSubtitle(item) {
   const team = teamShortName(item.team_name)
-  const number = item.pilot_number ? `#${item.pilot_number}` : `ID ${item.user_id}`
+  const number = item.pilot_number !== null && item.pilot_number !== undefined ? `#${formatPilotNumber(item.pilot_number)}` : `ID ${item.user_id}`
   return [number, `RER ${formatRating(item.rating)}`, `SR ${item.sr ?? '-'}`, team].filter(Boolean).join(' - ')
+}
+
+function pilotNumberDraft(value) {
+  const number = Number(value)
+  return Number.isInteger(number) && number >= 0 ? formatPilotNumber(number) : ''
+}
+
+function parsePilotNumber(value) {
+  const raw = String(value ?? '').trim()
+  if (!/^\d{3}$/.test(raw)) throw new Error(t('championships.invalidPilotNumber'))
+  return Number(raw)
 }
 
 function fanVotePercent(option) {
@@ -329,6 +343,7 @@ async function load() {
       appeals.value = await api('/appeals')
     }
     car.value = race.value.allowed_cars?.[0] || ''
+    pilotNumber.value = pilotNumberDraft(state.user?.pilot_number)
     fillManualRows()
   } catch (err) {
     error.value = err.message
@@ -342,7 +357,11 @@ async function refreshFanVote() {
 }
 
 async function register() {
-  race.value = await api(`/races/${race.value.id}/register`, { method: 'POST', body: { car_model: car.value } })
+  const body = { car_model: car.value || 'TBD' }
+  if (!isChampionshipStage.value) {
+    body.pilot_number = parsePilotNumber(pilotNumber.value)
+  }
+  race.value = await api(`/races/${race.value.id}/register`, { method: 'POST', body })
 }
 
 async function unregister() {
@@ -583,19 +602,25 @@ watch(visibleParticipants, () => {
         <p>{{ t('fields.mods') }}: {{ race.mods_pack?.join(', ') || t('common.none') }}</p>
       </section>
 
-      <section v-if="race.status === 'registration_open' && state.user" class="card race-registration-panel">
+      <section v-if="canShowRegistrationPanel" class="card race-registration-panel">
         <div v-if="registered" class="section-header">
-          <strong>{{ t('raceDetails.alreadyRegistered') }}</strong>
+          <strong>{{ isChampionshipStage ? t('raceDetails.championshipStageRegistered') : t('raceDetails.alreadyRegistered') }}</strong>
           <button class="button danger" @click="unregister">{{ t('common.unregister') }}</button>
         </div>
         <form v-else class="form" @submit.prevent="register">
           <label class="field">
             <span>{{ t('common.car') }}</span>
             <select v-model="car">
+              <option v-if="!race.allowed_cars?.length" value="">TBD</option>
               <option v-for="item in race.allowed_cars" :key="item">{{ item }}</option>
             </select>
           </label>
-          <button class="button primary" type="submit">{{ t('common.register') }}</button>
+          <label v-if="!isChampionshipStage" class="field">
+            <span>{{ t('fields.pilotNumber') }}</span>
+            <input v-model="pilotNumber" inputmode="numeric" pattern="[0-9]{3}" minlength="3" maxlength="3" placeholder="000" required />
+          </label>
+          <p v-if="isChampionshipStage" class="muted">{{ t('raceDetails.championshipStageRegistrationHint') }}</p>
+          <button class="button primary" type="submit">{{ isChampionshipStage ? t('raceDetails.championshipStageRegister') : t('common.register') }}</button>
         </form>
       </section>
 
@@ -783,7 +808,7 @@ watch(visibleParticipants, () => {
         <div class="section-header">
           <div>
             <h2>{{ t('raceDetails.results') }}</h2>
-            <p class="muted">{{ race.game === 'ACC' ? t('raceDetails.accResultsHint') : t('raceDetails.manualResultsHint') }}</p>
+            <p v-if="race.game !== 'ACC'" class="muted">{{ t('raceDetails.manualResultsHint') }}</p>
           </div>
           <span class="pill">{{ resultRows.length }}</span>
         </div>

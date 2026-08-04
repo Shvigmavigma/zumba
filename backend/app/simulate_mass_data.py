@@ -259,7 +259,7 @@ async def create_users(session, now: datetime) -> list[User]:
             first_name="BMRL",
             last_name=f"Sim {index:03d}",
             nickname=f"Sim Pilot {index:03d}" if role == Role.pilot else f"Sim {role.value.title()} {index:03d}",
-            pilot_number=5000 + index,
+            pilot_number=index % 1000,
             country=COUNTRIES[index % len(COUNTRIES)],
             sr=round(min(MAX_SR, 4.5 + (index % 34) * 0.35), 1),
             rating=DEFAULT_RATING,
@@ -640,6 +640,7 @@ async def create_races(session, admin: User, users: list[User], now: datetime) -
                     race_id=race.id,
                     user_id=user.id,
                     car_model=CARS[game][position % len(CARS[game])],
+                    pilot_number=user.pilot_number,
                     registered_at=start - timedelta(days=random.randint(1, 14), minutes=position * 3),
                 )
             )

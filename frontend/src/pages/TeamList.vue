@@ -7,7 +7,7 @@ import AvatarViewer from '../components/AvatarViewer.vue'
 import PaginationControls from '../components/PaginationControls.vue'
 import TeamAvatar from '../components/TeamAvatar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
-import { filterPilots, formatRating, sortPilots, teamShortName } from '../pilotDisplay'
+import { filterPilots, formatPilotNumber, formatRating, sortPilots, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
 
 const { t } = useI18n()
@@ -514,7 +514,7 @@ watch(visibleTeamMembers, () => {
             <span>{{ t('teams.requestedBy', { name: memberTitle(requestItem.requester) }) }}</span>
           </span>
           <span class="team-member-stat">
-            <strong>#{{ requestItem.requester.pilot_number }}</strong>
+            <strong>#{{ formatPilotNumber(requestItem.requester.pilot_number) }}</strong>
             <span>RER {{ formatRating(requestItem.requester.rating) }}</span>
           </span>
           <div class="team-application-actions">
@@ -638,7 +638,7 @@ watch(visibleTeamMembers, () => {
               <select v-model="transferOwnerId" :disabled="!transferCandidates.length" required>
                 <option value="">{{ t('teams.chooseMember') }}</option>
                 <option v-for="member in transferCandidates" :key="member.id" :value="member.id">
-                  {{ memberTitle(member) }} · #{{ member.pilot_number }} · RER {{ formatRating(member.rating) }}
+                  {{ memberTitle(member) }} · #{{ formatPilotNumber(member.pilot_number) }} · RER {{ formatRating(member.rating) }}
                 </option>
               </select>
             </label>
@@ -664,7 +664,7 @@ watch(visibleTeamMembers, () => {
               <UserAvatar mini :src="application.user.avatar_url" :color="application.user.avatar_color" :label="application.user.login" />
               <span class="team-application-main">
                 <strong>{{ memberTitle(application.user) }}</strong>
-                <span>{{ application.user.login }} · #{{ application.user.pilot_number }} · RER {{ formatRating(application.user.rating) }} · {{ teamShortName(application.user.team_name) }}</span>
+                <span>{{ application.user.login }} · #{{ formatPilotNumber(application.user.pilot_number) }} · RER {{ formatRating(application.user.rating) }} · {{ teamShortName(application.user.team_name) }}</span>
               </span>
               <span class="team-member-stat">
                 <strong>{{ application.user.sr.toFixed(1) }}</strong>
@@ -704,7 +704,7 @@ watch(visibleTeamMembers, () => {
               <UserAvatar mini :src="member.avatar_url" :color="member.avatar_color" :label="member.login" />
               <RouterLink class="team-member-main" :to="`/pilots/${member.id}`">
                 <strong>{{ memberTitle(member) }}</strong>
-                <span>{{ member.login }} · #{{ member.pilot_number }} · {{ teamShortName(memberTeamName(member)) }}</span>
+                <span>{{ member.login }} · #{{ formatPilotNumber(member.pilot_number) }} · {{ teamShortName(memberTeamName(member)) }}</span>
               </RouterLink>
               <span class="team-member-stat">
                 <strong>{{ formatRating(member.rating) }}</strong>

@@ -6,7 +6,7 @@ import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
-import { formatRating, teamShortName } from '../pilotDisplay'
+import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
 
 const { t } = useI18n()
@@ -57,7 +57,7 @@ onMounted(async () => {
         </div>
 
         <div class="pilot-profile-badges">
-          <span class="pill">#{{ pilot.pilot_number }}</span>
+          <span class="pill">#{{ formatPilotNumber(pilot.pilot_number) }}</span>
           <span class="pill" :title="pilot.team_name || t('common.none')">{{ t('fields.team') }} {{ teamShortName(pilot.team_name) }}</span>
           <span class="pill">{{ countryLabel(t, pilot.country) }}</span>
           <span class="status-badge" :class="`status-${pilot.status}`">{{ statusLabel(t, pilot.status) }}</span>

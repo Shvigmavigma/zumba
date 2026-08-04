@@ -2,6 +2,30 @@ import { clearSession, state } from './store'
 
 export const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
+function apiErrorMessage(message) {
+  const text = Array.isArray(message) ? message.map((item) => item.msg).join(', ') : String(message || '')
+  const locale = state.locale === 'en' ? 'en' : 'ru'
+  const friendly = {
+    'Pilot number is already taken in this race': {
+      ru: 'Этот номер уже занят в этой гонке. Выберите другой номер.',
+      en: 'This pilot number is already taken in this race. Choose another number.'
+    },
+    'Pilot number is already taken in this championship': {
+      ru: 'Этот номер уже занят в этом чемпионате. Выберите другой номер.',
+      en: 'This pilot number is already taken in this championship. Choose another number.'
+    },
+    'Car is required': {
+      ru: 'Выберите машину для заявки.',
+      en: 'Choose a car for the application.'
+    },
+    'Car is not allowed': {
+      ru: 'Эта машина недоступна для выбранного класса чемпионата.',
+      en: 'This car is not available for the selected championship class.'
+    }
+  }
+  return friendly[text]?.[locale] || text
+}
+
 export async function api(path, options = {}) {
   const headers = new Headers(options.headers || {})
   const isFormData = options.body instanceof FormData
@@ -29,7 +53,7 @@ export async function api(path, options = {}) {
     } catch {
       // Keep status text.
     }
-    throw new Error(Array.isArray(message) ? message.map((item) => item.msg).join(', ') : message)
+    throw new Error(apiErrorMessage(message))
   }
   if (response.status === 204) return null
   return response.json()

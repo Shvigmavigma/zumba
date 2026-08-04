@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
 import UserAvatar from '../components/UserAvatar.vue'
-import { formatRating, teamShortName } from '../pilotDisplay'
+import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
 
 const { t } = useI18n()
 const users = ref([])
@@ -57,7 +57,7 @@ watch(users, () => {
           </div>
         </div>
         <div class="user-moderation-meta">
-          <p class="muted">#{{ user.pilot_number }} - RER {{ formatRating(user.rating) }} - {{ teamShortName(user.team_name) }} - {{ user.email }} - {{ t('fields.steam') }} {{ user.steam_id }}</p>
+          <p class="muted">#{{ formatPilotNumber(user.pilot_number) }} - RER {{ formatRating(user.rating) }} - {{ teamShortName(user.team_name) }} - {{ user.email }} - {{ t('fields.steam') }} {{ user.steam_id }}</p>
           <p v-if="user.pending_profile_changes" class="muted">{{ t('moderation.pendingProfileChanges', { changes: user.pending_profile_changes }) }}</p>
         </div>
         <div class="toolbar">
