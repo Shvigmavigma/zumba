@@ -13,6 +13,7 @@ const races = ref([])
 const setups = ref([])
 const banners = ref([])
 const news = ref([])
+const registrationChampionships = ref([])
 const newsTrack = ref(null)
 const activeNewsIndex = ref(0)
 const isNewsViewerOpen = ref(false)
@@ -44,6 +45,9 @@ const twitchDragState = ref(null)
 const twitchWasDragged = ref(false)
 const twitchPreviewStartSecond = Math.floor(Math.random() * 900) + 15
 const currentNews = computed(() => news.value[activeNewsIndex.value] || null)
+const featuredChampionship = computed(() => registrationChampionships.value[0] || null)
+const featuredChampionshipStageCount = computed(() => featuredChampionship.value?.stage_count ?? featuredChampionship.value?.stages?.length ?? 0)
+const featuredChampionshipStageText = computed(() => stageCount(featuredChampionshipStageCount.value))
 const raceGameOptions = computed(() => gameOptions(t, true))
 const canFilterMyGames = computed(() => Boolean(state.user?.games?.length))
 const racesHasNextPage = computed(() => races.value.length === racePageSize)
@@ -125,6 +129,19 @@ function formatRaceTime(value) {
     minute: '2-digit',
     hourCycle: 'h23'
   })
+}
+
+function stagePluralSuffix(count) {
+  if (state.locale !== 'ru') return count === 1 ? 'One' : 'Many'
+  const mod10 = count % 10
+  const mod100 = count % 100
+  if (mod10 === 1 && mod100 !== 11) return 'One'
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'Few'
+  return 'Many'
+}
+
+function stageCount(count) {
+  return `${count} ${t(`championships.stageWord${stagePluralSuffix(count)}`)}`
 }
 
 function registeredCount(race) {
@@ -313,16 +330,18 @@ onMounted(async () => {
   placeTwitchWidget()
   loadTwitchStatus()
   try {
-    const [statsData, setupsData, bannerData, newsData] = await Promise.all([
+    const [statsData, setupsData, bannerData, newsData, championshipData] = await Promise.all([
       api('/dashboard/stats'),
       api('/setups?limit=6'),
       api('/banners'),
-      api('/news')
+      api('/news'),
+      api('/championships?status_filter=registration_open&limit=3')
     ])
     stats.value = statsData
     setups.value = setupsData
     banners.value = bannerData
     news.value = newsData
+    registrationChampionships.value = championshipData
     activeNewsIndex.value = 0
     await loadRaces()
   } catch (err) {
@@ -433,6 +452,18 @@ onBeforeUnmount(() => {
         </section>
 
         <p v-if="error" class="error">{{ error }}</p>
+
+        <RouterLink v-if="featuredChampionship" class="card main-championship-callout" to="/championships">
+          <span class="main-championship-icon"><Flag :size="20" /></span>
+          <span>
+            <small>{{ t('main.championshipOpen') }}</small>
+            <strong>{{ featuredChampionship.name }}</strong>
+          </span>
+          <span class="main-championship-meta">
+            <span class="pill">{{ featuredChampionship.game }}</span>
+            <span class="pill">{{ featuredChampionshipStageText }}</span>
+          </span>
+        </RouterLink>
 
         <section class="section main-races-section">
           <div class="section-header main-races-header">

@@ -3,9 +3,24 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator, model_validator
 
-from app.models import MAX_RATING, MAX_SR, MIN_RATING, MIN_SR, AppealStatus, BannerPosition, PenaltyStatus, PenaltyType, RaceStatus, Role, TeamApplicationStatus, UserStatus
+from app.models import (
+    MAX_RATING,
+    MAX_SR,
+    MIN_RATING,
+    MIN_SR,
+    AppealStatus,
+    BannerPosition,
+    ChampionshipScoringSystem,
+    PenaltyStatus,
+    PenaltyType,
+    RaceStatus,
+    Role,
+    TeamApplicationStatus,
+    UserStatus,
+)
 
 GameCode = Literal["ACC", "AC", "iRacing", "LMU"]
+AssetGameCode = Literal["ACC", "AC", "iRacing"]
 
 
 class TokenResponse(BaseModel):
@@ -27,7 +42,7 @@ class UserRegister(BaseModel):
     first_name: str = Field(min_length=1, max_length=50)
     last_name: str = Field(min_length=1, max_length=50)
     nickname: str = Field(min_length=1, max_length=80)
-    pilot_number: int = Field(ge=1, le=9999)
+    pilot_number: int = Field(ge=0, le=999)
     steam_auth_token: str = Field(min_length=1)
     country: str | None = Field(default=None, max_length=50)
     discord: str | None = Field(default=None, max_length=100)
@@ -89,7 +104,7 @@ class UserUpdate(BaseModel):
 
 class UserAdminUpdate(UserUpdate):
     login: str | None = Field(default=None, min_length=3, max_length=50)
-    pilot_number: int | None = Field(default=None, ge=1, le=9999)
+    pilot_number: int | None = Field(default=None, ge=0, le=999)
 
 
 class TeamBase(BaseModel):
@@ -213,6 +228,7 @@ class AdminDangerDeleteRequest(BaseModel):
 class RegisteredPilot(BaseModel):
     user_id: int
     car_model: str
+    pilot_number: int
     registered_at: datetime
 
 
@@ -229,6 +245,8 @@ class RaceBase(BaseModel):
     allowed_cars: list[str] = Field(default_factory=list)
     game: GameCode = "ACC"
     has_qualification: bool = True
+    scoring_system: ChampionshipScoringSystem = ChampionshipScoringSystem.fia
+    pole_bonus_enabled: bool = False
     is_official: bool = False
 
 
@@ -248,7 +266,7 @@ class RaceAssetClass(BaseModel):
         return self
 
 
-class RaceAssetsConfig(BaseModel):
+class RaceAssetGameConfig(BaseModel):
     tracks: list[str] = Field(default_factory=list)
     classes: list[RaceAssetClass] = Field(default_factory=list)
 
@@ -262,6 +280,36 @@ class RaceAssetsConfig(BaseModel):
         ]
         seen_classes: set[str] = set()
         self.classes = [item for item in self.classes if not (item.name.lower() in seen_classes or seen_classes.add(item.name.lower()))]
+        return self
+
+
+class RaceAssetsConfig(RaceAssetGameConfig):
+    games: dict[AssetGameCode, RaceAssetGameConfig] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_legacy_shape(cls, value):
+        if isinstance(value, dict) and "games" not in value:
+            legacy = {"tracks": value.get("tracks", []), "classes": value.get("classes", [])}
+            return {
+                **legacy,
+                "games": {
+                    "ACC": legacy,
+                    "AC": {"tracks": [], "classes": []},
+                    "iRacing": {"tracks": [], "classes": []},
+                },
+            }
+        return value
+
+    @model_validator(mode="after")
+    def sync_legacy_acc_fields(self):
+        allowed_games = ("ACC", "AC", "iRacing")
+        self.games = {game: self.games.get(game, RaceAssetGameConfig()) for game in allowed_games}
+        if not self.tracks and not self.classes:
+            acc = self.games["ACC"]
+            self.tracks = list(acc.tracks)
+            self.classes = list(acc.classes)
+        self.games["ACC"] = RaceAssetGameConfig(tracks=self.tracks, classes=self.classes)
         return self
 
 
@@ -280,6 +328,8 @@ class RaceUpdate(BaseModel):
     results: dict | list | None = None
     game: GameCode | None = None
     has_qualification: bool | None = None
+    scoring_system: ChampionshipScoringSystem | None = None
+    pole_bonus_enabled: bool | None = None
     is_official: bool | None = None
 
 
@@ -292,6 +342,8 @@ class RaceRead(RaceBase):
     video_url: str | None = None
     video_filename: str | None = None
     video_uploaded_at: datetime | None = None
+    championship_id: int | None = None
+    championship_round: int | None = None
     creator_id: int
     registered_pilots: list[dict]
     created_at: datetime
@@ -314,7 +366,11 @@ class RaceManageRead(BaseModel):
     track: str
     game: str
     has_qualification: bool
+    scoring_system: ChampionshipScoringSystem
+    pole_bonus_enabled: bool
     rating_applied: bool
+    championship_id: int | None = None
+    championship_round: int | None = None
     creator_id: int
     is_official: bool
     created_at: datetime
@@ -374,6 +430,7 @@ class FanVoteCast(BaseModel):
 
 class RaceRegisterRequest(BaseModel):
     car_model: str = Field(min_length=1, max_length=80)
+    pilot_number: int | None = Field(default=None, ge=0, le=999)
 
 
 class ResultsUpload(BaseModel):
@@ -394,6 +451,175 @@ class ManualResultRow(BaseModel):
 
 class ManualResultsUpload(BaseModel):
     rows: list[ManualResultRow] = Field(min_length=1)
+
+
+class ChampionshipStageCreate(BaseModel):
+    name: str | None = Field(default=None, max_length=100)
+    datetime_start: datetime
+    track: str | None = Field(default=None, max_length=100)
+    server_link: str | None = Field(default="", max_length=255)
+    has_qualification: bool = True
+    scoring_system: ChampionshipScoringSystem = ChampionshipScoringSystem.fia
+    pole_bonus_enabled: bool = False
+
+
+class ChampionshipCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=3000)
+    classes: list[str] = Field(default_factory=list, min_length=1, max_length=8)
+    registration_start: datetime
+    registration_end: datetime
+    championship_start: datetime
+    championship_end: datetime
+    video_url: str | None = Field(default=None, max_length=255)
+    game: GameCode = "ACC"
+    car_change_allowed: bool = False
+    scoring_system: ChampionshipScoringSystem = ChampionshipScoringSystem.fia
+    pole_bonus_enabled: bool = False
+    is_published: bool = False
+    stages: list[ChampionshipStageCreate] = Field(default_factory=list, max_length=50)
+
+    @model_validator(mode="after")
+    def validate_dates_and_classes(self):
+        if self.registration_end <= self.registration_start:
+            raise ValueError("Registration end must be after registration start")
+        if self.championship_end <= self.championship_start:
+            raise ValueError("Championship end must be after championship start")
+        if self.registration_end > self.championship_end:
+            raise ValueError("Registration must end before the championship ends")
+        seen: set[str] = set()
+        self.classes = [item for item in (value.strip() for value in self.classes) if item and not (item.lower() in seen or seen.add(item.lower()))]
+        if not self.classes:
+            raise ValueError("Choose at least one class")
+        return self
+
+
+class ChampionshipUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=3000)
+    classes: list[str] | None = Field(default=None, min_length=1, max_length=8)
+    registration_start: datetime | None = None
+    registration_end: datetime | None = None
+    championship_start: datetime | None = None
+    championship_end: datetime | None = None
+    video_url: str | None = Field(default=None, max_length=255)
+    game: GameCode | None = None
+    car_change_allowed: bool | None = None
+    scoring_system: ChampionshipScoringSystem | None = None
+    pole_bonus_enabled: bool | None = None
+    is_published: bool | None = None
+
+    @model_validator(mode="after")
+    def normalize_items(self):
+        if self.classes is not None:
+            seen: set[str] = set()
+            self.classes = [item for item in (value.strip() for value in self.classes) if item and not (item.lower() in seen or seen.add(item.lower()))]
+            if not self.classes:
+                raise ValueError("Choose at least one class")
+        return self
+
+
+class ChampionshipStageAdd(ChampionshipStageCreate):
+    pass
+
+
+class ChampionshipStageUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    datetime_start: datetime | None = None
+    track: str | None = Field(default=None, max_length=100)
+    server_link: str | None = Field(default=None, max_length=255)
+    has_qualification: bool | None = None
+    scoring_system: ChampionshipScoringSystem | None = None
+    pole_bonus_enabled: bool | None = None
+
+
+class ChampionshipApplyRequest(BaseModel):
+    pilot_number: int = Field(ge=0, le=999)
+    car_model: str = Field(min_length=1, max_length=80)
+
+
+class ChampionshipRegistrationModeration(BaseModel):
+    status: TeamApplicationStatus
+    car_model: str | None = Field(default=None, max_length=80)
+    pilot_number: int | None = Field(default=None, ge=0, le=999)
+
+    @field_validator("status")
+    @classmethod
+    def valid_status(cls, value: TeamApplicationStatus):
+        if value not in {TeamApplicationStatus.approved, TeamApplicationStatus.rejected}:
+            raise ValueError("Use approved or rejected")
+        return value
+
+
+class ChampionshipParticipantAdd(BaseModel):
+    user_id: int = Field(ge=1)
+    car_model: str = Field(min_length=1, max_length=80)
+    pilot_number: int = Field(ge=0, le=999)
+
+
+class ChampionshipCarUpdate(BaseModel):
+    car_model: str = Field(min_length=1, max_length=80)
+
+
+class ChampionshipRegistrationRead(BaseModel):
+    id: int
+    championship_id: int
+    user_id: int
+    status: TeamApplicationStatus
+    car_model: str | None = None
+    pilot_number: int
+    created_at: datetime
+    updated_at: datetime
+    resolved_at: datetime | None = None
+    resolved_by: int | None = None
+    user: TeamMemberRead
+
+
+class ChampionshipStandingRead(BaseModel):
+    user_id: int
+    login: str
+    first_name: str
+    last_name: str
+    nickname: str
+    pilot_number: int
+    team_id: int | None = None
+    team_name: str | None = None
+    avatar_color: str
+    avatar_url: str | None = None
+    rating: int
+    sr: float
+    points: int
+    pole_points: int = 0
+    starts: int = 0
+    best_finish: int | None = None
+
+
+class ChampionshipRead(BaseModel):
+    id: int
+    name: str
+    description: str
+    classes: list[str]
+    registration_start: datetime
+    registration_end: datetime
+    championship_start: datetime
+    championship_end: datetime
+    video_url: str | None = None
+    game: str
+    car_change_allowed: bool
+    scoring_system: ChampionshipScoringSystem
+    pole_bonus_enabled: bool
+    is_published: bool
+    creator_id: int
+    status: str
+    can_apply: bool = False
+    my_registration_status: TeamApplicationStatus | None = None
+    participant_count: int = 0
+    pending_count: int = 0
+    stages: list[RaceRead] = Field(default_factory=list)
+    registrations: list[ChampionshipRegistrationRead] = Field(default_factory=list)
+    standings: list[ChampionshipStandingRead] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
 
 
 class PenaltyCreate(BaseModel):

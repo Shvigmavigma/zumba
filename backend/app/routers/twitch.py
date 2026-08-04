@@ -111,6 +111,25 @@ def video_metadata_from_payload(video: dict | None) -> dict[str, str]:
     }
 
 
+def live_status_from_stream(base_status: TwitchStatus, stream: dict, *, is_configured: bool) -> TwitchStatus:
+    game = stream.get("game")
+    return TwitchStatus(
+        channel_login=base_status.channel_login,
+        channel_url=base_status.channel_url,
+        is_configured=is_configured,
+        is_live=True,
+        status="live",
+        embed_type="channel",
+        embed_value=base_status.channel_login,
+        external_url=base_status.channel_url,
+        title=stream.get("title"),
+        game_name=stream.get("game_name") or (game.get("name") if isinstance(game, dict) else None),
+        thumbnail_url=thumbnail_url(stream.get("thumbnail_url") or stream.get("previewImageURL")),
+        viewer_count=stream.get("viewer_count") or stream.get("viewersCount"),
+        started_at=parse_twitch_datetime(stream.get("started_at") or stream.get("createdAt")),
+    )
+
+
 def fallback_status() -> TwitchStatus:
     channel_login = settings.twitch_channel_login.strip() or "bmrlracing"
     channel_url = f"https://www.twitch.tv/{channel_login}"
@@ -252,6 +271,27 @@ async def load_twitch_video_metadata_from_web(
     }
 
 
+async def load_twitch_live_status_from_web(client: httpx.AsyncClient, base_status: TwitchStatus) -> TwitchStatus | None:
+    response = await client.post(
+        "https://gql.twitch.tv/gql",
+        json={
+            "operationName": "StreamMetadata",
+            "query": (
+                "query StreamMetadata($channelLogin: String!) { "
+                "user(login: $channelLogin) { "
+                "stream { id title type viewersCount createdAt game { name } previewImageURL(width: 640, height: 360) } "
+                "} "
+                "}"
+            ),
+            "variables": {"channelLogin": base_status.channel_login},
+        },
+        headers={"Client-Id": TWITCH_WEB_CLIENT_ID},
+    )
+    response.raise_for_status()
+    stream = ((response.json().get("data") or {}).get("user") or {}).get("stream")
+    return live_status_from_stream(base_status, stream, is_configured=base_status.is_configured) if stream else None
+
+
 @router.get("/status", response_model=TwitchStatus)
 @limiter.limit("600/minute")
 async def twitch_status(request: Request, session: AsyncSession = Depends(get_session)):
@@ -265,8 +305,18 @@ async def twitch_status(request: Request, session: AsyncSession = Depends(get_se
     configured_video = fallback_video_status(status, twitch_config)
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
-            token = await get_app_access_token(client)
+            try:
+                token = await get_app_access_token(client)
+            except httpx.HTTPError:
+                token = None
             if not token:
+                try:
+                    live_status = await load_twitch_live_status_from_web(client, status)
+                except httpx.HTTPError:
+                    live_status = None
+                if live_status is not None:
+                    _status_cache = (now + settings.twitch_status_cache_seconds, live_status)
+                    return live_status
                 if configured_video is not None:
                     if not configured_video.thumbnail_url and twitch_config.fallback_video_id:
                         try:
@@ -277,27 +327,13 @@ async def twitch_status(request: Request, session: AsyncSession = Depends(get_se
                         if not configured_video.title:
                             configured_video.title = metadata.get("title") or None
                     status = configured_video
-                _status_cache = (now + settings.twitch_status_cache_seconds, status)
+                _status_cache = (now + min(settings.twitch_status_cache_seconds, 15), status)
                 return status
 
             streams = await helix_get(client, token, "streams", {"user_login": status.channel_login})
             live_stream = next(iter(streams.get("data") or []), None)
             if live_stream:
-                status = TwitchStatus(
-                    channel_login=status.channel_login,
-                    channel_url=status.channel_url,
-                    is_configured=True,
-                    is_live=True,
-                    status="live",
-                    embed_type="channel",
-                    embed_value=status.channel_login,
-                    external_url=status.channel_url,
-                    title=live_stream.get("title"),
-                    game_name=live_stream.get("game_name"),
-                    thumbnail_url=thumbnail_url(live_stream.get("thumbnail_url")),
-                    viewer_count=live_stream.get("viewer_count"),
-                    started_at=parse_twitch_datetime(live_stream.get("started_at")),
-                )
+                status = live_status_from_stream(status, live_stream, is_configured=True)
                 _status_cache = (now + settings.twitch_status_cache_seconds, status)
                 return status
 

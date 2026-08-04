@@ -21,7 +21,7 @@ const form = ref({
   first_name: '',
   last_name: '',
   nickname: '',
-  pilot_number: 0,
+  pilot_number: '',
   steam_auth_token: '',
   country: '',
   discord: '',
@@ -107,7 +107,7 @@ onMounted(() => {
       </div>
       <div class="form-row">
         <label class="field"><span class="required-label">{{ t('fields.nickname') }}</span><input v-model="form.nickname" required minlength="1" maxlength="80" /></label>
-        <label class="field"><span class="required-label">{{ t('fields.pilotNumber') }}</span><input v-model.number="form.pilot_number" type="number" min="1" max="9999" required /></label>
+        <label class="field"><span class="required-label">{{ t('fields.pilotNumber') }}</span><input v-model="form.pilot_number" inputmode="numeric" pattern="[0-9]{3}" minlength="3" maxlength="3" placeholder="000" required /></label>
       </div>
       <section class="steam-connect">
         <div>

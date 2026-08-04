@@ -2,7 +2,7 @@
 import { X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { statusLabel } from '../i18nLabels'
-import { formatRating, teamShortName } from '../pilotDisplay'
+import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
 
 defineProps({
   penalty: {
@@ -112,7 +112,7 @@ function userMeta(rating, teamName) {
           </div>
           <div>
             <dt>{{ t('fields.target') }}</dt>
-            <dd>{{ targetName(penalty) }} <span v-if="penalty.target_pilot_number" class="muted">#{{ penalty.target_pilot_number }} · {{ userMeta(penalty.target_rating, penalty.target_team_name) }}</span></dd>
+            <dd>{{ targetName(penalty) }} <span v-if="penalty.target_pilot_number !== null && penalty.target_pilot_number !== undefined" class="muted">#{{ formatPilotNumber(penalty.target_pilot_number) }} · {{ userMeta(penalty.target_rating, penalty.target_team_name) }}</span></dd>
           </div>
           <div>
             <dt>{{ t('fields.issuer') }}</dt>

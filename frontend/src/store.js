@@ -1,10 +1,13 @@
 import { reactive } from 'vue'
 
+const savedLocale = localStorage.getItem('locale')
+const initialLocale = savedLocale === 'en' ? 'en' : 'ru'
+
 export const state = reactive({
   token: localStorage.getItem('token') || '',
   user: JSON.parse(localStorage.getItem('user') || 'null'),
   theme: localStorage.getItem('theme') || 'light',
-  locale: localStorage.getItem('locale') || 'ru'
+  locale: initialLocale
 })
 
 export function setSession(token, user) {
@@ -20,4 +23,3 @@ export function clearSession() {
   localStorage.removeItem('token')
   localStorage.removeItem('user')
 }
-

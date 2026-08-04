@@ -6,7 +6,7 @@ import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
 import TeamAvatar from '../components/TeamAvatar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
-import { formatRating, pilotName, teamShortName } from '../pilotDisplay'
+import { formatPilotNumber, formatRating, pilotName, teamShortName } from '../pilotDisplay'
 
 const { t } = useI18n()
 
@@ -42,7 +42,7 @@ function pilotTitle(pilot) {
 }
 
 function pilotLine(pilot) {
-  return `#${pilot.pilot_number} - ${pilot.nickname || pilot.login}`
+  return `#${formatPilotNumber(pilot.pilot_number)} - ${pilot.nickname || pilot.login}`
 }
 
 function pilotSearchText(pilot) {
@@ -251,7 +251,7 @@ watch(visibleTeams, () => {
                 <UserAvatar mini :src="team.best_pilot.avatar_url" :color="team.best_pilot.avatar_color" :label="pilotTitle(team.best_pilot)" />
                 <span>
                   <strong>{{ pilotTitle(team.best_pilot) }}</strong>
-                  <small>#{{ team.best_pilot.pilot_number }} - {{ teamShortName(team.best_pilot.team_name) }}</small>
+                  <small>#{{ formatPilotNumber(team.best_pilot.pilot_number) }} - {{ teamShortName(team.best_pilot.team_name) }}</small>
                 </span>
               </RouterLink>
               <span v-else>{{ t('common.none') }}</span>

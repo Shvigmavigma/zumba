@@ -2988,6 +2988,13 @@ textarea {
   min-width: 0;
 }
 
+.admin-race-assets-tabs {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .admin-race-assets-tracks textarea {
   min-height: 220px;
 }
@@ -4870,10 +4877,87 @@ textarea {
   text-transform: capitalize;
 }
 
+.calendar-board-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 280px);
+  gap: 14px;
+  align-items: start;
+}
+
 .calendar-shell {
   display: grid;
   gap: 10px;
   padding: 14px;
+}
+
+.calendar-source-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.calendar-source-head {
+  display: grid;
+  gap: 4px;
+}
+
+.calendar-source-head strong {
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.calendar-source-head span,
+.calendar-source-option span {
+  color: var(--muted);
+  font-size: var(--small-text-size);
+  line-height: 1.35;
+}
+
+.calendar-source-list {
+  display: grid;
+  gap: 8px;
+  max-height: 438px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.calendar-source-option {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, var(--panel-shine));
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel-muted) 76%, var(--panel));
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.calendar-source-option strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--body-text-size);
+  font-weight: 950;
+}
+
+.calendar-source-option:hover,
+.calendar-source-option.active {
+  border-color: color-mix(in srgb, var(--primary) 54%, var(--border));
+  background: color-mix(in srgb, var(--primary) 10%, var(--panel));
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.calendar-source-option.active span {
+  color: var(--primary-strong);
+}
+
+.calendar-source-empty {
+  margin: 0;
 }
 
 .calendar-weekdays {
@@ -5654,6 +5738,16 @@ select,
   :root {
     --main-menu-top-height: 205px;
     --banner-height: 135px;
+  }
+
+  .calendar-board-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .calendar-source-list {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    max-height: none;
+    padding-right: 0;
   }
 
   .main-menu-layout {
@@ -7211,6 +7305,14 @@ select,
     var(--race-surface);
 }
 
+:root[data-theme='dark'] .championship-results-table tbody tr.is-gold td,
+:root[data-theme='dark'] .championship-results-table tbody tr.is-silver td,
+:root[data-theme='dark'] .championship-results-table tbody tr.is-bronze td {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--podium-color) 12%, transparent), transparent 60%),
+    var(--race-surface);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -7350,15 +7452,22 @@ body {
 
 .hall-medal-value.gold,
 .hall-rank.is-gold {
-  border-color: color-mix(in srgb, #d6a235 24%, var(--border));
-  background: color-mix(in srgb, #d6a235 5%, var(--panel));
+  border-color: color-mix(in srgb, #d6a235 44%, var(--border));
+  background: linear-gradient(180deg, color-mix(in srgb, #d6a235 18%, var(--panel)), var(--panel));
   color: color-mix(in srgb, #8a5a0a 72%, var(--text));
+}
+
+.hall-medal-value.silver,
+.hall-rank.is-silver {
+  border-color: color-mix(in srgb, #94a3b8 44%, var(--border));
+  background: linear-gradient(180deg, color-mix(in srgb, #94a3b8 15%, var(--panel)), var(--panel));
+  color: color-mix(in srgb, #475569 72%, var(--text));
 }
 
 .hall-medal-value.bronze,
 .hall-rank.is-bronze {
-  border-color: color-mix(in srgb, #9f6b42 20%, var(--border));
-  background: color-mix(in srgb, #9f6b42 4%, var(--panel));
+  border-color: color-mix(in srgb, #9f6b42 40%, var(--border));
+  background: linear-gradient(180deg, color-mix(in srgb, #9f6b42 14%, var(--panel)), var(--panel));
   color: color-mix(in srgb, #7a3d16 64%, var(--text));
 }
 
@@ -9480,6 +9589,510 @@ textarea::placeholder {
   margin: 0;
 }
 
+.main-championship-callout {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  text-decoration: none;
+  border-color: color-mix(in srgb, var(--primary) 48%, var(--border));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 14%, transparent), transparent 60%),
+    var(--panel);
+}
+
+.main-championship-callout small,
+.main-championship-callout strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-championship-callout small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.main-championship-callout strong {
+  margin-top: 3px;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.main-championship-meta {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.main-championship-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--primary) 10%, var(--panel));
+}
+
+.championships-page {
+  display: grid;
+  gap: 18px;
+}
+
+.championships-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.championships-list,
+.championship-detail,
+.championship-editor,
+.championship-admin-panel,
+.championship-stages,
+.championship-standings {
+  min-width: 0;
+}
+
+.championships-list {
+  display: grid;
+  gap: 12px;
+  position: static;
+  max-height: none;
+  overflow: hidden;
+}
+
+.championship-filter-tabs,
+.championship-eyebrow,
+.championship-switches {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.championship-filter-tabs button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--panel-muted);
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.championship-filter-tabs button.active {
+  color: var(--primary-contrast);
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.championship-card-strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(270px, 1fr);
+  gap: 10px;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.championship-list-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 74px;
+  padding: 12px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.championship-list-card.active {
+  border-color: color-mix(in srgb, var(--primary) 62%, var(--border));
+  background: color-mix(in srgb, var(--primary) 10%, var(--panel));
+}
+
+.championship-list-card strong,
+.championship-list-card small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.championship-list-card small {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.championship-list-icon,
+.championship-round {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 44%, var(--border));
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--primary) 9%, var(--panel));
+}
+
+.championship-detail {
+  display: grid;
+  gap: 18px;
+}
+
+.championship-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.championship-eyebrow span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 900;
+  border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--panel));
+}
+
+.championship-hero h2 {
+  margin: 12px 0 8px;
+  font-size: clamp(28px, 4vw, 48px);
+  line-height: 1.02;
+}
+
+.championship-hero p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.championship-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.championship-meta-grid span,
+.championship-action-card {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  background: var(--panel-muted);
+}
+
+.championship-meta-grid small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.championship-meta-grid strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.championship-action-card {
+  align-content: start;
+}
+
+.championship-my-car-form {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.championship-my-car-form .button {
+  width: 100%;
+}
+
+.championship-class-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.championship-class-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--panel-muted);
+  color: var(--text);
+  font-weight: 900;
+}
+
+.championship-class-chip.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+}
+
+.championship-stage-editor,
+.championship-stage-list,
+.championship-request-list,
+.championship-participant-list {
+  display: grid;
+  gap: 10px;
+}
+
+.championship-stage-draft,
+.championship-request-card,
+.championship-participant-card,
+.championship-add-pilot {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr)) auto auto;
+  align-items: end;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  background: var(--panel-muted);
+}
+
+.championship-request-card {
+  grid-template-columns: auto minmax(0, 1fr) minmax(110px, 150px) minmax(180px, 240px) auto auto;
+  align-items: center;
+}
+
+.championship-participant-card {
+  grid-template-columns: auto minmax(0, 1fr) minmax(180px, 240px) auto auto;
+  align-items: center;
+}
+
+.championship-request-card strong,
+.championship-request-card small,
+.championship-participant-card strong,
+.championship-participant-card small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.championship-request-card small,
+.championship-participant-card small {
+  color: var(--muted);
+}
+
+.championship-add-pilot {
+  grid-template-columns: minmax(220px, 1.3fr) minmax(180px, 1fr) minmax(110px, 0.55fr) minmax(160px, 1fr) auto;
+  margin-top: 12px;
+}
+
+.championship-stage-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 12px;
+  color: var(--text);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  background: var(--panel-muted);
+}
+
+.championship-stage-scoring {
+  display: inline-flex !important;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--panel));
+  color: var(--primary) !important;
+  font-size: var(--tiny-text-size);
+  font-weight: 950;
+}
+
+.championship-stage-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  min-width: 0;
+}
+
+.championship-stage-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.championship-stage-edit-form {
+  grid-column: 1 / -1;
+}
+
+.championship-standings {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  overflow: hidden;
+}
+
+.championship-standings .section-header.compact {
+  margin: 0;
+}
+
+.championship-table-scroll {
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-radius: var(--control-radius);
+  background: var(--panel);
+}
+
+.championship-results-table {
+  min-width: 1040px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.championship-podium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0;
+}
+
+.championship-podium .result-podium-card {
+  min-width: 0;
+  min-height: 62px;
+}
+
+.championship-podium .result-podium-time {
+  min-width: 44px;
+  text-align: right;
+}
+
+.championship-results-table tbody tr.is-gold td,
+.championship-results-table .result-position-badge.is-gold {
+  --podium-color: #d6a11f;
+}
+
+.championship-results-table tbody tr.is-silver td,
+.championship-results-table .result-position-badge.is-silver {
+  --podium-color: #aeb7c2;
+}
+
+.championship-results-table tbody tr.is-bronze td,
+.championship-results-table .result-position-badge.is-bronze {
+  --podium-color: #b87333;
+}
+
+.championship-results-table tbody tr.is-gold td,
+.championship-results-table tbody tr.is-silver td,
+.championship-results-table tbody tr.is-bronze td {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--podium-color) 13%, transparent), transparent 58%),
+    color-mix(in srgb, var(--panel) 94%, var(--podium-color));
+}
+
+.championship-results-table tbody tr.is-gold td:first-child,
+.championship-results-table tbody tr.is-silver td:first-child,
+.championship-results-table tbody tr.is-bronze td:first-child {
+  box-shadow: inset 4px 0 0 var(--podium-color);
+}
+
+.championship-stage-card strong,
+.championship-stage-card small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.championship-stage-card small {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.championship-round {
+  color: var(--text);
+  font-weight: 900;
+}
+
+.race-results-table {
+  min-width: 1040px;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.race-results-table th,
+.race-results-table td {
+  height: auto;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+
+.race-results-table th:nth-child(2),
+.race-results-table td:nth-child(2) {
+  min-width: 260px;
+}
+
+.race-results-table .result-driver-cell {
+  min-width: 240px;
+}
+
+.race-results-table .result-driver-cell span {
+  max-width: 360px;
+}
+
+.status-badge.race-status-draft,
+.status-badge.race-status-upcoming,
+.status-badge.race-status-not_started {
+  color: var(--muted);
+  border-color: var(--border);
+  background: var(--panel-muted);
+}
+
+.empty-state {
+  display: grid;
+  place-items: center;
+  min-height: 72px;
+  padding: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+
 :root[data-theme='dark'] .twitch-floating-widget {
   background: #070b12;
   box-shadow: none;
@@ -9537,6 +10150,40 @@ textarea::placeholder {
 }
 
 @media (max-width: 1180px) {
+  .championships-layout,
+  .championship-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .championships-list {
+    position: static;
+    max-height: none;
+  }
+
+  .championship-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .championship-stage-draft,
+  .championship-request-card,
+  .championship-participant-card,
+  .championship-add-pilot {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .championship-stage-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .championship-stage-actions {
+    justify-content: flex-end;
+  }
+
+  .championship-card-strip {
+    grid-auto-columns: minmax(250px, 82vw);
+  }
+
   .main-menu-side-rail {
     grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1fr);
     grid-template-rows: auto;
@@ -9596,5 +10243,141 @@ textarea::placeholder {
 
   .twitch-viewer-header h2 {
     white-space: normal;
+  }
+}
+
+/* Fuel calculator page */
+.fuel-page {
+  max-width: 1320px;
+  margin-inline: auto;
+}
+
+.fuel-page .section-header p {
+  margin: 8px 0 0;
+}
+
+.fuel-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.fuel-form,
+.fuel-results {
+  display: grid;
+  gap: 14px;
+}
+
+.fuel-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.fuel-mode-switch .toggle-field,
+.fuel-wide-toggle {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.fuel-note,
+.fuel-summary {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel-muted) 72%, transparent);
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.fuel-results-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fuel-results-head h2 {
+  margin: 0;
+}
+
+.fuel-results-head span {
+  min-width: 0;
+  max-width: 52%;
+  overflow: hidden;
+  color: var(--muted);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fuel-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.fuel-metric {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 10px;
+  min-width: 0;
+  min-height: 112px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  background: color-mix(in srgb, var(--panel-muted) 62%, transparent);
+}
+
+.fuel-metric svg {
+  color: var(--primary);
+}
+
+.fuel-metric span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--small-text-size);
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fuel-metric strong {
+  grid-column: 1 / -1;
+  align-self: end;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: clamp(28px, 4vw, 46px);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.fuel-metric.is-primary {
+  min-height: 132px;
+  border-color: color-mix(in srgb, var(--primary) 46%, var(--border));
+  background: color-mix(in srgb, var(--primary) 14%, var(--panel));
+}
+
+.fuel-summary {
+  display: grid;
+  gap: 8px;
+}
+
+.fuel-summary p {
+  margin: 0;
+}
+
+@media (max-width: 980px) {
+  .fuel-layout,
+  .fuel-mode-switch,
+  .fuel-metrics-grid {
+    grid-template-columns: 1fr;
   }
 }

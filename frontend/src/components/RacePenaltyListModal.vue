@@ -4,7 +4,7 @@ import { X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import UserAvatar from './UserAvatar.vue'
 import { statusLabel } from '../i18nLabels'
-import { formatRating, teamShortName } from '../pilotDisplay'
+import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
 
 const props = defineProps({
@@ -64,7 +64,7 @@ function participantName(item) {
 }
 
 function participantSubtitle(item) {
-  const number = item.pilot_number ? `#${item.pilot_number}` : `ID ${item.user_id}`
+  const number = item.pilot_number !== null && item.pilot_number !== undefined ? `#${formatPilotNumber(item.pilot_number)}` : `ID ${item.user_id}`
   return item.nickname ? `${number} - ${item.nickname}` : number
 }
 
@@ -204,7 +204,7 @@ function submitPenalty() {
             <select v-model="penaltyDraft.target_id" required>
               <option value="" disabled>{{ t('raceDetails.selectPenaltyPilot') }}</option>
               <option v-for="item in participants" :key="item.user_id" :value="item.user_id">
-                {{ participantName(item) }} #{{ item.pilot_number || item.user_id }}
+                {{ participantName(item) }} #{{ item.pilot_number !== null && item.pilot_number !== undefined ? formatPilotNumber(item.pilot_number) : item.user_id }}
               </option>
             </select>
           </label>

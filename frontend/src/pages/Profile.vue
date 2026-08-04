@@ -6,7 +6,7 @@ import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
-import { formatRating, pilotName, teamShortName } from '../pilotDisplay'
+import { formatPilotNumber, formatRating, pilotName, teamShortName } from '../pilotDisplay'
 import { setSession, state } from '../store'
 
 const { t } = useI18n()
@@ -33,7 +33,7 @@ const profileFields = computed(() => {
     { label: t('fields.nickname'), value: user.value.nickname },
     { label: t('fields.firstName'), value: user.value.first_name },
     { label: t('fields.lastName'), value: user.value.last_name },
-    { label: t('fields.pilotNumber'), value: user.value.pilot_number ? `#${user.value.pilot_number}` : null },
+    { label: t('fields.pilotNumber'), value: user.value.pilot_number !== null && user.value.pilot_number !== undefined ? `#${formatPilotNumber(user.value.pilot_number)}` : null },
     { label: t('fields.country'), value: countryLabel(t, user.value.country) },
     { label: t('fields.team'), value: user.value.team_name || t('common.none') },
     { label: t('fields.steam'), value: user.value.steam_id },
@@ -130,7 +130,7 @@ onMounted(refreshProfile)
         <div class="pilot-profile-badges">
           <span class="pill">RER {{ formatRating(user.rating) }}</span>
           <span class="pill">SR {{ Number(user.sr).toFixed(1) }}</span>
-          <span class="pill">#{{ user.pilot_number }}</span>
+          <span class="pill">#{{ formatPilotNumber(user.pilot_number) }}</span>
           <span class="team-mini-chip" :title="user.team_name || t('common.none')">{{ teamShortName(user.team_name) }}</span>
           <span class="status-badge" :class="`status-${user.status}`">{{ statusLabel(t, user.status) }}</span>
           <span class="pill">{{ roleLabel(t, user.role) }}</span>

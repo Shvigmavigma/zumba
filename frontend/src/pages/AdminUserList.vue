@@ -10,7 +10,7 @@ import PaginationControls from '../components/PaginationControls.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryOptionsWithCurrent } from '../countries'
 import { roleLabel, statusLabel } from '../i18nLabels'
-import { formatRating, teamShortName } from '../pilotDisplay'
+import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
 import { setSession, state } from '../store'
 
 const { t } = useI18n()
@@ -36,8 +36,9 @@ const fanVoteSaved = ref(false)
 const twitchConfig = ref({ fallback_video_url: '', fallback_video_title: '' })
 const twitchConfigSaving = ref(false)
 const twitchConfigSaved = ref(false)
-const raceAssetsTracksText = ref('')
-const raceAssetsClasses = ref([])
+const raceAssetGames = ['ACC', 'AC', 'iRacing']
+const raceAssetGame = ref('ACC')
+const raceAssetsByGame = ref(defaultRaceAssetsByGame())
 const raceAssetsSaving = ref(false)
 const raceAssetsSaved = ref(false)
 const dangerDialog = ref(null)
@@ -66,6 +67,7 @@ const dangerActions = {
   }
 }
 const activeDangerAction = computed(() => (dangerDialog.value ? dangerActions[dangerDialog.value] : null))
+const activeRaceAssetsDraft = computed(() => raceAssetsByGame.value[raceAssetGame.value])
 const dangerFormValid = computed(() => {
   const action = activeDangerAction.value
   if (!action) return false
@@ -75,6 +77,45 @@ const dangerFormValid = computed(() => {
     dangerForm.value.password.length > 0
   )
 })
+
+function emptyRaceAssetDraft() {
+  return { tracksText: '', classes: [] }
+}
+
+function defaultRaceAssetsByGame() {
+  return Object.fromEntries(raceAssetGames.map((game) => [game, emptyRaceAssetDraft()]))
+}
+
+function draftFromConfig(config = {}) {
+  return {
+    tracksText: (config.tracks || []).join('\n'),
+    classes: (config.classes || []).map((item) => ({
+      name: item.name,
+      carsText: (item.cars || []).join('\n')
+    }))
+  }
+}
+
+function normalizeRaceAssetsDraft(config = {}) {
+  const games = config.games || {}
+  return {
+    ACC: draftFromConfig(games.ACC || config),
+    AC: draftFromConfig(games.AC),
+    iRacing: draftFromConfig(games.iRacing)
+  }
+}
+
+function configFromDraft(draft = emptyRaceAssetDraft()) {
+  return {
+    tracks: draft.tracksText.split('\n').map((item) => item.trim()).filter(Boolean),
+    classes: draft.classes
+      .map((item) => ({
+        name: item.name.trim(),
+        cars: item.carsText.split('\n').map((car) => car.trim()).filter(Boolean)
+      }))
+      .filter((item) => item.name)
+  }
+}
 
 function datetimeLocalValue(date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
@@ -119,11 +160,7 @@ async function load() {
       fallback_video_url: loadedTwitchConfig.fallback_video_url || '',
       fallback_video_title: loadedTwitchConfig.fallback_video_title || ''
     }
-    raceAssetsTracksText.value = (loadedRaceAssets.tracks || []).join('\n')
-    raceAssetsClasses.value = (loadedRaceAssets.classes || []).map((item) => ({
-      name: item.name,
-      carsText: (item.cars || []).join('\n')
-    }))
+    raceAssetsByGame.value = normalizeRaceAssetsDraft(loadedRaceAssets)
   } catch (err) {
     error.value = err.message
   }
@@ -198,11 +235,11 @@ async function saveTwitchConfig() {
 }
 
 function addRaceAssetClass() {
-  raceAssetsClasses.value = [...raceAssetsClasses.value, { name: '', carsText: '' }]
+  activeRaceAssetsDraft.value.classes = [...activeRaceAssetsDraft.value.classes, { name: '', carsText: '' }]
 }
 
 function removeRaceAssetClass(index) {
-  raceAssetsClasses.value = raceAssetsClasses.value.filter((_, itemIndex) => itemIndex !== index)
+  activeRaceAssetsDraft.value.classes = activeRaceAssetsDraft.value.classes.filter((_, itemIndex) => itemIndex !== index)
 }
 
 async function saveRaceAssets() {
@@ -210,23 +247,15 @@ async function saveRaceAssets() {
   raceAssetsSaved.value = false
   error.value = ''
   try {
+    const games = Object.fromEntries(raceAssetGames.map((game) => [game, configFromDraft(raceAssetsByGame.value[game])]))
     const config = await api('/race-assets', {
       method: 'PATCH',
       body: {
-        tracks: raceAssetsTracksText.value.split('\n').map((item) => item.trim()).filter(Boolean),
-        classes: raceAssetsClasses.value
-          .map((item) => ({
-            name: item.name.trim(),
-            cars: item.carsText.split('\n').map((car) => car.trim()).filter(Boolean)
-          }))
-          .filter((item) => item.name)
+        ...games.ACC,
+        games
       }
     })
-    raceAssetsTracksText.value = (config.tracks || []).join('\n')
-    raceAssetsClasses.value = (config.classes || []).map((item) => ({
-      name: item.name,
-      carsText: (item.cars || []).join('\n')
-    }))
+    raceAssetsByGame.value = normalizeRaceAssetsDraft(config)
     raceAssetsSaved.value = true
   } catch (err) {
     error.value = err.message
@@ -333,7 +362,7 @@ function openEditDialog(user) {
     first_name: user.first_name || '',
     last_name: user.last_name || '',
     nickname: user.nickname || '',
-    pilot_number: user.pilot_number || 1,
+    pilot_number: formatPilotNumber(user.pilot_number),
     country: user.country || '',
     discord: user.discord || '',
     games: user.games?.length ? [...user.games] : ['ACC']
@@ -527,16 +556,28 @@ watch([userSearch, userSort], resetUserPageAndLoad)
         <h2>{{ t('adminUsers.raceAssetsTitle') }}</h2>
         <p class="muted">{{ t('adminUsers.raceAssetsHint') }}</p>
       </div>
+      <div class="admin-race-assets-tabs">
+        <button
+          v-for="game in raceAssetGames"
+          :key="game"
+          class="button small"
+          :class="{ primary: raceAssetGame === game }"
+          type="button"
+          @click="raceAssetGame = game"
+        >
+          {{ game }}
+        </button>
+      </div>
       <label class="field admin-race-assets-tracks">
         <span>{{ t('adminUsers.raceAssetsTracks') }}</span>
-        <textarea v-model="raceAssetsTracksText" required></textarea>
+        <textarea v-model="activeRaceAssetsDraft.tracksText" required></textarea>
       </label>
       <div class="admin-race-assets-classes">
         <div class="section-header">
           <h3>{{ t('adminUsers.raceAssetsClasses') }}</h3>
           <button class="button small" type="button" @click="addRaceAssetClass">{{ t('adminUsers.addRaceClass') }}</button>
         </div>
-        <article v-for="(item, index) in raceAssetsClasses" :key="index" class="admin-race-class-row">
+        <article v-for="(item, index) in activeRaceAssetsDraft.classes" :key="index" class="admin-race-class-row">
           <label class="field">
             <span>{{ t('fields.class') }}</span>
             <input v-model="item.name" required />
@@ -605,7 +646,7 @@ watch([userSearch, userSort], resetUserPageAndLoad)
                 <UserAvatar mini :src="user.avatar_url" :color="user.avatar_color" :label="user.login" />
                 <div class="admin-user-info">
                   <strong>{{ user.login }}</strong>
-                  <span>#{{ user.pilot_number }} · RER {{ formatRating(user.rating) }} · {{ teamShortName(user.team_name) }}</span>
+                  <span>#{{ formatPilotNumber(user.pilot_number) }} · RER {{ formatRating(user.rating) }} · {{ teamShortName(user.team_name) }}</span>
                 </div>
               </div>
             </td>
@@ -775,7 +816,7 @@ watch([userSearch, userSort], resetUserPageAndLoad)
         <div class="penalty-modal-head section-header">
           <div>
             <h2>{{ t('adminUsers.editProfileTitle') }}</h2>
-            <p>{{ editDialogUser.login }} · #{{ editDialogUser.pilot_number }}</p>
+            <p>{{ editDialogUser.login }} · #{{ formatPilotNumber(editDialogUser.pilot_number) }}</p>
           </div>
           <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="closeEditDialog">
             <X :size="18" />
@@ -822,7 +863,7 @@ watch([userSearch, userSort], resetUserPageAndLoad)
           </label>
           <label class="field">
             <span>{{ t('fields.pilotNumber') }}</span>
-            <input v-model.number="editForm.pilot_number" type="number" min="1" max="9999" required />
+            <input v-model="editForm.pilot_number" inputmode="numeric" pattern="[0-9]{3}" minlength="3" maxlength="3" placeholder="000" required />
           </label>
           <div class="field">
             <span>{{ t('fields.country') }}</span>

@@ -236,3 +236,152 @@ async def init_db() -> None:
                 """
             )
         )
+        await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS championship_id INTEGER"))
+        await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS championship_round INTEGER"))
+        await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS scoring_system VARCHAR(20)"))
+        await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS pole_bonus_enabled BOOLEAN"))
+        await conn.execute(
+            text(
+                """
+                UPDATE races
+                SET scoring_system = COALESCE(races.scoring_system, championships.scoring_system, 'fia')
+                FROM championships
+                WHERE races.championship_id = championships.id
+                  AND races.scoring_system IS NULL
+                """
+            )
+        )
+        await conn.execute(text("UPDATE races SET scoring_system = 'fia' WHERE scoring_system IS NULL OR scoring_system NOT IN ('fia', 'endurance', 'linear')"))
+        await conn.execute(
+            text(
+                """
+                UPDATE races
+                SET pole_bonus_enabled = COALESCE(races.pole_bonus_enabled, championships.pole_bonus_enabled, FALSE)
+                FROM championships
+                WHERE races.championship_id = championships.id
+                  AND races.pole_bonus_enabled IS NULL
+                """
+            )
+        )
+        await conn.execute(text("UPDATE races SET pole_bonus_enabled = FALSE WHERE pole_bonus_enabled IS NULL"))
+        await conn.execute(text("ALTER TABLE races ALTER COLUMN scoring_system SET DEFAULT 'fia'"))
+        await conn.execute(text("ALTER TABLE races ALTER COLUMN pole_bonus_enabled SET DEFAULT FALSE"))
+        await conn.execute(text("ALTER TABLE races ALTER COLUMN scoring_system SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE races ALTER COLUMN pole_bonus_enabled SET NOT NULL"))
+        await conn.execute(
+            text(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname = 'fk_races_championship_id'
+                    ) THEN
+                        ALTER TABLE races
+                        ADD CONSTRAINT fk_races_championship_id
+                        FOREIGN KEY (championship_id) REFERENCES championships(id)
+                        ON DELETE CASCADE;
+                    END IF;
+                END $$;
+                """
+            )
+        )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_races_championship_id ON races (championship_id)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_races_championship_round ON races (championship_id, championship_round)"))
+        await conn.execute(text("UPDATE championships SET classes = '[]'::jsonb WHERE classes IS NULL OR jsonb_typeof(classes) <> 'array'"))
+        await conn.execute(text("ALTER TABLE championships ALTER COLUMN classes SET DEFAULT '[]'::jsonb"))
+        await conn.execute(text("ALTER TABLE championships ALTER COLUMN classes SET NOT NULL"))
+        await conn.execute(text("UPDATE championships SET game = 'ACC' WHERE game IS NULL OR game NOT IN ('ACC', 'AC', 'iRacing', 'LMU')"))
+        await conn.execute(text("ALTER TABLE championships ALTER COLUMN game SET DEFAULT 'ACC'"))
+        await conn.execute(text("ALTER TABLE championships ALTER COLUMN game SET NOT NULL"))
+        await conn.execute(text("UPDATE championships SET car_change_allowed = FALSE WHERE car_change_allowed IS NULL"))
+        await conn.execute(text("UPDATE championships SET pole_bonus_enabled = FALSE WHERE pole_bonus_enabled IS NULL"))
+        await conn.execute(text("UPDATE championships SET is_published = FALSE WHERE is_published IS NULL"))
+        await conn.execute(text("ALTER TABLE championships ALTER COLUMN car_change_allowed SET DEFAULT FALSE"))
+        await conn.execute(text("ALTER TABLE championships ALTER COLUMN pole_bonus_enabled SET DEFAULT FALSE"))
+        await conn.execute(text("ALTER TABLE championships ALTER COLUMN is_published SET DEFAULT FALSE"))
+        await conn.execute(text("ALTER TABLE championships ALTER COLUMN car_change_allowed SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE championships ALTER COLUMN pole_bonus_enabled SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE championships ALTER COLUMN is_published SET NOT NULL"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_championships_published_registration ON championships (is_published, registration_start, registration_end)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_championships_published_dates ON championships (is_published, championship_start, championship_end)"))
+        await conn.execute(text("ALTER TABLE race_registrations ADD COLUMN IF NOT EXISTS pilot_number INTEGER"))
+        await conn.execute(
+            text(
+                """
+                UPDATE race_registrations
+                SET pilot_number = users.pilot_number
+                FROM users
+                WHERE race_registrations.user_id = users.id
+                  AND race_registrations.pilot_number IS NULL
+                """
+            )
+        )
+        await conn.execute(text("ALTER TABLE race_registrations DROP CONSTRAINT IF EXISTS ck_race_registrations_pilot_number_range"))
+        await conn.execute(text("UPDATE race_registrations SET pilot_number = 10000 + id WHERE pilot_number IS NOT NULL"))
+        await conn.execute(
+            text(
+                """
+                WITH ranked AS (
+                    SELECT id, row_number() OVER (PARTITION BY race_id ORDER BY id) - 1 AS normalized_number
+                    FROM race_registrations
+                )
+                UPDATE race_registrations
+                SET pilot_number = ranked.normalized_number
+                FROM ranked
+                WHERE race_registrations.id = ranked.id
+                """
+            )
+        )
+        await conn.execute(text("ALTER TABLE race_registrations ADD CONSTRAINT ck_race_registrations_pilot_number_range CHECK (pilot_number >= 0 AND pilot_number <= 999)"))
+        await conn.execute(text("ALTER TABLE race_registrations ALTER COLUMN pilot_number SET NOT NULL"))
+        await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_race_registration_race_pilot_number ON race_registrations (race_id, pilot_number)"))
+        await conn.execute(text("ALTER TABLE championship_registrations ADD COLUMN IF NOT EXISTS pilot_number INTEGER"))
+        await conn.execute(
+            text(
+                """
+                UPDATE championship_registrations
+                SET pilot_number = users.pilot_number
+                FROM users
+                WHERE championship_registrations.user_id = users.id
+                  AND championship_registrations.pilot_number IS NULL
+                """
+            )
+        )
+        await conn.execute(text("ALTER TABLE championship_registrations DROP CONSTRAINT IF EXISTS ck_championship_registrations_pilot_number_range"))
+        await conn.execute(text("UPDATE championship_registrations SET pilot_number = 10000 + id WHERE pilot_number IS NOT NULL"))
+        await conn.execute(
+            text(
+                """
+                WITH ranked AS (
+                    SELECT id, row_number() OVER (PARTITION BY championship_id ORDER BY id) - 1 AS normalized_number
+                    FROM championship_registrations
+                )
+                UPDATE championship_registrations
+                SET pilot_number = ranked.normalized_number
+                FROM ranked
+                WHERE championship_registrations.id = ranked.id
+                """
+            )
+        )
+        await conn.execute(text("ALTER TABLE championship_registrations ADD CONSTRAINT ck_championship_registrations_pilot_number_range CHECK (pilot_number >= 0 AND pilot_number <= 999)"))
+        await conn.execute(text("ALTER TABLE championship_registrations ALTER COLUMN pilot_number SET NOT NULL"))
+        await conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_championship_registration_pilot_number
+                ON championship_registrations (championship_id, pilot_number)
+                WHERE status <> 'rejected'
+                """
+            )
+        )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_championship_registrations_status ON championship_registrations (championship_id, status)"))
+        await conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_championship_registration_pending_user
+                ON championship_registrations (championship_id, user_id)
+                """
+            )
+        )

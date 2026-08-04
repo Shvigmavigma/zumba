@@ -35,14 +35,15 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def enum_column(enum_type: type[StrEnum], length: int = 30):
+def enum_column(enum_type: type[StrEnum], length: int = 30, **kwargs):
     return mapped_column(
         SQLEnum(
             enum_type,
             values_callable=lambda enum: [item.value for item in enum],
             native_enum=False,
             length=length,
-        )
+        ),
+        **kwargs,
     )
 
 
@@ -62,6 +63,7 @@ class UserStatus(StrEnum):
 
 
 class RaceStatus(StrEnum):
+    not_started = "not_started"
     registration_open = "registration_open"
     ongoing = "ongoing"
     finished = "finished"
@@ -89,6 +91,12 @@ class TeamApplicationStatus(StrEnum):
     pending = "pending"
     approved = "approved"
     rejected = "rejected"
+
+
+class ChampionshipScoringSystem(StrEnum):
+    fia = "fia"
+    endurance = "endurance"
+    linear = "linear"
 
 
 class BannerPosition(StrEnum):
@@ -131,7 +139,7 @@ class User(Base):
     avatar_url: Mapped[str | None] = mapped_column(String(255))
     avatar_upload_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     avatar_upload_window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    games: Mapped[list[str]] = mapped_column(JSONB, default=lambda: list(DEFAULT_USER_GAMES), server_default=text("""'["ACC", "AC", "iRacing"]'::jsonb"""))
+    games: Mapped[list[str]] = mapped_column(JSONB, default=lambda: list(DEFAULT_USER_GAMES), server_default=text("""'["ACC", "AC", "iRacing", "LMU"]'::jsonb"""))
     team_id: Mapped[int | None] = mapped_column(
         ForeignKey("teams.id", ondelete="SET NULL", use_alter=True, name="fk_users_team_id"),
         index=True,
@@ -202,6 +210,60 @@ class TeamApplication(Base):
     resolver: Mapped[User | None] = relationship(foreign_keys=[resolved_by])
 
 
+class Championship(Base):
+    __tablename__ = "championships"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), index=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    classes: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    registration_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    registration_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    championship_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    championship_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    video_url: Mapped[str | None] = mapped_column(String(255))
+    game: Mapped[str] = mapped_column(String(20), default="ACC", server_default="ACC")
+    car_change_allowed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    default_car: Mapped[str | None] = mapped_column(String(80))
+    scoring_system: Mapped[ChampionshipScoringSystem] = enum_column(
+        ChampionshipScoringSystem,
+        length=20,
+        default=ChampionshipScoringSystem.fia,
+        server_default=ChampionshipScoringSystem.fia.value,
+    )
+    pole_bonus_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_published: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", index=True)
+    creator_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    creator: Mapped[User] = relationship(foreign_keys=[creator_id])
+    stages: Mapped[list["Race"]] = relationship(back_populates="championship")
+    registrations: Mapped[list["ChampionshipRegistration"]] = relationship(back_populates="championship", cascade="all, delete-orphan")
+
+
+class ChampionshipRegistration(Base):
+    __tablename__ = "championship_registrations"
+    __table_args__ = (
+        UniqueConstraint("championship_id", "user_id", name="uq_championship_registration_user"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    championship_id: Mapped[int] = mapped_column(ForeignKey("championships.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    status: Mapped[TeamApplicationStatus] = enum_column(TeamApplicationStatus)
+    car_model: Mapped[str | None] = mapped_column(String(80))
+    pilot_number: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+
+    championship: Mapped[Championship] = relationship(back_populates="registrations")
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+    resolver: Mapped[User | None] = relationship(foreign_keys=[resolved_by])
+
+
 class Race(Base):
     __tablename__ = "races"
 
@@ -227,6 +289,15 @@ class Race(Base):
     fan_vote_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     game: Mapped[str] = mapped_column(String(20), default="ACC", server_default="ACC")
     has_qualification: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    scoring_system: Mapped[ChampionshipScoringSystem] = enum_column(
+        ChampionshipScoringSystem,
+        length=20,
+        default=ChampionshipScoringSystem.fia,
+        server_default=ChampionshipScoringSystem.fia.value,
+    )
+    pole_bonus_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    championship_id: Mapped[int | None] = mapped_column(ForeignKey("championships.id", ondelete="CASCADE"), index=True)
+    championship_round: Mapped[int | None] = mapped_column(Integer)
     creator_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     is_official: Mapped[bool] = mapped_column(Boolean, default=False)
     registered_pilots: Mapped[list[dict]] = mapped_column(JSONB, default=list)
@@ -234,6 +305,7 @@ class Race(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
     creator: Mapped[User] = relationship(back_populates="created_races", foreign_keys=[creator_id])
+    championship: Mapped[Championship | None] = relationship(back_populates="stages")
     registrations: Mapped[list["RaceRegistration"]] = relationship(back_populates="race", cascade="all, delete-orphan")
     penalties: Mapped[list["Penalty"]] = relationship(back_populates="race", cascade="all, delete-orphan")
     appeals: Mapped[list["Appeal"]] = relationship(back_populates="race", cascade="all, delete-orphan")
@@ -242,12 +314,16 @@ class Race(Base):
 
 class RaceRegistration(Base):
     __tablename__ = "race_registrations"
-    __table_args__ = (UniqueConstraint("race_id", "user_id", name="uq_race_registration_race_user"),)
+    __table_args__ = (
+        UniqueConstraint("race_id", "user_id", name="uq_race_registration_race_user"),
+        UniqueConstraint("race_id", "pilot_number", name="uq_race_registration_race_pilot_number"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     race_id: Mapped[int] = mapped_column(ForeignKey("races.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     car_model: Mapped[str] = mapped_column(String(80))
+    pilot_number: Mapped[int] = mapped_column(Integer)
     registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     race: Mapped[Race] = relationship(back_populates="registrations")
@@ -398,6 +474,13 @@ Index("ix_races_registered_pilots_gin", Race.registered_pilots, postgresql_using
 Index("ix_races_mods_pack_gin", Race.mods_pack, postgresql_using="gin")
 Index("ix_race_registrations_race_registered_at", RaceRegistration.race_id, RaceRegistration.registered_at)
 Index("ix_race_registrations_user_registered_at", RaceRegistration.user_id, RaceRegistration.registered_at)
+Index(
+    "uq_championship_registration_pilot_number",
+    ChampionshipRegistration.championship_id,
+    ChampionshipRegistration.pilot_number,
+    unique=True,
+    postgresql_where=text("status <> 'rejected'"),
+)
 Index("ix_race_fan_votes_race_target", RaceFanVote.race_id, RaceFanVote.target_id)
 Index("ix_race_fan_votes_user_created", RaceFanVote.user_id, RaceFanVote.created_at)
 Index("ix_penalties_race_target_status", Penalty.race_id, Penalty.target_id, Penalty.status)

@@ -12,7 +12,8 @@ const isEdit = route.params.id && route.path.endsWith('/edit')
 const pageTitle = computed(() => t(isEdit ? 'raceEdit.editTitle' : 'raceEdit.createTitle'))
 const gameChoices = computed(() => gameOptions(t))
 const error = ref('')
-const raceAssets = ref({ tracks: [], classes: [] })
+const raceAssets = ref({ tracks: [], classes: [], games: {} })
+const assetGames = ['ACC', 'AC', 'iRacing']
 const form = ref({
   name: '',
   description: '',
@@ -30,12 +31,16 @@ const form = ref({
 })
 const modsText = ref('')
 const carsText = ref('')
-const isAssetRace = computed(() => form.value.game === 'ACC')
+const isAssetRace = computed(() => assetGames.includes(form.value.game))
 const isLmuRace = computed(() => form.value.game === 'LMU')
-const trackChoices = computed(() => withCurrent(raceAssets.value.tracks, form.value.track))
+const currentRaceAssets = computed(() => {
+  if (form.value.game === 'ACC') return raceAssets.value.games?.ACC || raceAssets.value
+  return raceAssets.value.games?.[form.value.game] || { tracks: [], classes: [] }
+})
+const trackChoices = computed(() => withCurrent(currentRaceAssets.value.tracks || [], form.value.track))
 const classChoices = computed(() => {
   const current = form.value.car_class
-  const classes = raceAssets.value.classes || []
+  const classes = currentRaceAssets.value.classes || []
   if (!current || classes.some((item) => item.name === current)) return classes
   return [...classes, { name: current, cars: form.value.allowed_cars || [] }]
 })
@@ -49,11 +54,11 @@ function withCurrent(items, current) {
 }
 
 function isKnownTrack(value) {
-  return raceAssets.value.tracks.includes(value)
+  return (currentRaceAssets.value.tracks || []).includes(value)
 }
 
 function isKnownClass(value) {
-  return raceAssets.value.classes.some((item) => item.name === value)
+  return (currentRaceAssets.value.classes || []).some((item) => item.name === value)
 }
 
 function toIso(value) {
@@ -79,8 +84,11 @@ function applyAssetDefaults({ forceCars = false } = {}) {
 }
 
 function handleGameChange() {
+  form.value.track = ''
+  form.value.car_class = ''
+  form.value.allowed_cars = []
   if (isLmuRace.value) return
-  applyAssetDefaults()
+  applyAssetDefaults({ forceCars: true })
 }
 
 function handleClassChange() {

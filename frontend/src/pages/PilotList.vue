@@ -6,7 +6,7 @@ import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel } from '../i18nLabels'
-import { formatRating, pilotName, teamShortName } from '../pilotDisplay'
+import { formatPilotNumber, formatRating, pilotName, teamShortName } from '../pilotDisplay'
 
 const { t } = useI18n()
 const pilots = ref([])
@@ -47,7 +47,7 @@ function pilotGames(pilot) {
 }
 
 function pilotNumber(pilot) {
-  return pilot.pilot_number ? `#${pilot.pilot_number}` : '-'
+  return pilot.pilot_number !== null && pilot.pilot_number !== undefined ? `#${formatPilotNumber(pilot.pilot_number)}` : '-'
 }
 
 function pilotCountry(pilot) {

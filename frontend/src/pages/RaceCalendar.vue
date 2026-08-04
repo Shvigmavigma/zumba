@@ -9,11 +9,13 @@ import { state } from '../store'
 
 const { t } = useI18n()
 const races = ref([])
+const championships = ref([])
 const cursor = ref(new Date())
 const selected = ref(dateKey(new Date()))
 const gameFilter = ref('all')
 const statusFilter = ref('not_finished')
 const myGamesOnly = ref(false)
+const raceSource = ref('regular')
 const selectedPage = ref(1)
 const selectedPageSize = 6
 const gameCountMeta = [
@@ -54,6 +56,18 @@ const raceGameOptions = computed(() => gameOptions(t, true))
 const canFilterMyGames = computed(() => Boolean(state.user?.games?.length))
 const monthLabel = computed(() => cursor.value.toLocaleDateString(state.locale, { month: 'long', year: 'numeric' }))
 const selectedLabel = computed(() => new Date(`${selected.value}T00:00:00`).toLocaleDateString(state.locale, { day: 'numeric', month: 'long', year: 'numeric' }))
+const calendarSources = computed(() => [
+  {
+    value: 'regular',
+    title: t('calendar.regularRaces'),
+    meta: t('calendar.regularRacesHint')
+  },
+  ...championships.value.map((championship) => ({
+    value: String(championship.id),
+    title: championship.name,
+    meta: `${gameLabel(t, championship.game)} - ${championship.classes?.join(', ') || t('common.none')}`
+  }))
+])
 const weekdayLabels = computed(() => {
   const monday = new Date(2026, 0, 5)
   return Array.from({ length: 7 }, (_, index) => {
@@ -107,15 +121,29 @@ function shiftMonth(delta) {
 
 async function loadRaces() {
   const params = new URLSearchParams({ limit: '100', game_filter: gameFilter.value, status_filter: statusFilter.value })
+  if (raceSource.value !== 'regular') {
+    params.set('include_championship', 'true')
+    params.set('championship_id', raceSource.value)
+  }
   if (myGamesOnly.value && canFilterMyGames.value) {
     params.set('my_games_only', 'true')
   }
   races.value = await api(`/races?${params.toString()}`)
 }
 
-onMounted(loadRaces)
-watch([gameFilter, statusFilter, myGamesOnly], loadRaces)
-watch([selected, gameFilter, statusFilter, myGamesOnly], () => {
+async function loadChampionships() {
+  championships.value = await api('/championships?limit=100')
+  if (raceSource.value !== 'regular' && !championships.value.some((championship) => String(championship.id) === raceSource.value)) {
+    raceSource.value = 'regular'
+  }
+}
+
+onMounted(() => {
+  loadChampionships()
+  loadRaces()
+})
+watch([gameFilter, statusFilter, myGamesOnly, raceSource], loadRaces)
+watch([selected, gameFilter, statusFilter, myGamesOnly, raceSource], () => {
   selectedPage.value = 1
 })
 watch(selectedRaces, () => {
@@ -157,44 +185,67 @@ watch(selectedRaces, () => {
       </label>
     </div>
 
-    <div class="calendar-shell card">
-      <div class="calendar-weekdays">
-        <span v-for="label in weekdayLabels" :key="label">{{ label }}</span>
-      </div>
-      <div class="calendar-grid">
-        <button
-          v-for="day in days"
-          :key="dateKey(day)"
-          class="calendar-day"
-          :class="{
-            active: dateKey(day) === selected,
-            muted: day.getMonth() !== cursor.getMonth(),
-            today: dateKey(day) === todayKey,
-            'has-races': dayRaces(day).length
-          }"
-          type="button"
-          @click="selected = dateKey(day)"
-        >
-          <span class="calendar-date-row">
-            <strong>{{ day.getDate() }}</strong>
-          </span>
-          <span v-if="dayGameCounts(day).length" class="calendar-game-counts">
-            <span
-              v-for="item in dayGameCounts(day)"
-              :key="item.value"
-              class="calendar-game-count"
-              :style="{ '--calendar-game-color': item.color }"
-            >
-              <small>{{ item.label }}</small>
-              <strong>{{ item.count }}</strong>
+    <div class="calendar-board-layout">
+      <div class="calendar-shell card">
+        <div class="calendar-weekdays">
+          <span v-for="label in weekdayLabels" :key="label">{{ label }}</span>
+        </div>
+        <div class="calendar-grid">
+          <button
+            v-for="day in days"
+            :key="dateKey(day)"
+            class="calendar-day"
+            :class="{
+              active: dateKey(day) === selected,
+              muted: day.getMonth() !== cursor.getMonth(),
+              today: dateKey(day) === todayKey,
+              'has-races': dayRaces(day).length
+            }"
+            type="button"
+            @click="selected = dateKey(day)"
+          >
+            <span class="calendar-date-row">
+              <strong>{{ day.getDate() }}</strong>
             </span>
-          </span>
-          <span class="calendar-race-stack">
-            <span v-for="race in dayRaces(day).slice(0, 2)" :key="race.id" class="pill calendar-race-pill">{{ race.name }}</span>
-            <span v-if="dayRaces(day).length > 2" class="calendar-more">+{{ dayRaces(day).length - 2 }}</span>
-          </span>
-        </button>
+            <span v-if="dayGameCounts(day).length" class="calendar-game-counts">
+              <span
+                v-for="item in dayGameCounts(day)"
+                :key="item.value"
+                class="calendar-game-count"
+                :style="{ '--calendar-game-color': item.color }"
+              >
+                <small>{{ item.label }}</small>
+                <strong>{{ item.count }}</strong>
+              </span>
+            </span>
+            <span class="calendar-race-stack">
+              <span v-for="race in dayRaces(day).slice(0, 2)" :key="race.id" class="pill calendar-race-pill">{{ race.name }}</span>
+              <span v-if="dayRaces(day).length > 2" class="calendar-more">+{{ dayRaces(day).length - 2 }}</span>
+            </span>
+          </button>
+        </div>
       </div>
+
+      <aside class="calendar-source-panel card">
+        <div class="calendar-source-head">
+          <strong>{{ t('calendar.sourceTitle') }}</strong>
+          <span>{{ t('calendar.sourceHint') }}</span>
+        </div>
+        <div class="calendar-source-list">
+          <button
+            v-for="source in calendarSources"
+            :key="source.value"
+            class="calendar-source-option"
+            :class="{ active: raceSource === source.value }"
+            type="button"
+            @click="raceSource = source.value"
+          >
+            <strong>{{ source.title }}</strong>
+            <span>{{ source.meta }}</span>
+          </button>
+        </div>
+        <p v-if="!championships.length" class="muted calendar-source-empty">{{ t('calendar.noChampionships') }}</p>
+      </aside>
     </div>
 
     <section class="section selected-races">
