@@ -1,0 +1,202 @@
+{
+  "node_count": 1544,
+  "unverified_node_count": 0,
+  "raw_edge_count": 4851,
+  "non_object_edges": 0,
+  "missing_endpoint_edges": 0,
+  "dangling_endpoint_edges": 0,
+  "self_loop_edges": 0,
+  "valid_candidate_edges": 4851,
+  "exact_duplicate_edges": 29,
+  "directed_unique_endpoint_pairs": 4732,
+  "directed_same_endpoint_collapsed_edges": 119,
+  "undirected_unique_endpoint_pairs": 4732,
+  "undirected_same_endpoint_collapsed_edges": 119,
+  "same_endpoint_group_count": 97,
+  "relation_variant_groups": 72,
+  "source_file_variant_groups": 0,
+  "source_location_variant_groups": 5,
+  "context_variant_groups": 13,
+  "post_build_graph_type": "Graph",
+  "post_build_node_count": 1544,
+  "post_build_edge_count": 4732,
+  "post_build_error": "",
+  "producer_suppression": {
+    "path": "C:\\Users\\PC\\Desktop\\proga\\LSP\\venv\\Lib\\site-packages\\graphify\\extract.py",
+    "total_sites": 11,
+    "sites": [
+      {
+        "line": 1099,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 1253,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 1255,
+        "name": "seen_doc_refs",
+        "tuple_arity": 0,
+        "sample": "seen_doc_refs: set[str] = set()"
+      },
+      {
+        "line": 1600,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 2069,
+        "name": "seen_keys",
+        "tuple_arity": 0,
+        "sample": "seen_keys: set[tuple] = set()"
+      },
+      {
+        "line": 2147,
+        "name": "seen_keys",
+        "tuple_arity": 0,
+        "sample": "seen_keys: set[tuple] = set()"
+      },
+      {
+        "line": 3191,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 3299,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 3378,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 3893,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 3894,
+        "name": "seen_edges",
+        "tuple_arity": 4,
+        "sample": "seen_edges: set[tuple[str, str, str, str | None]] = set()"
+      }
+    ],
+    "error": ""
+  },
+  "examples": [
+    {
+      "source": "backend_app_routers_twitch_fallback_video_status",
+      "target": "backend_app_schemas_twitchstatus",
+      "edge_count": 4,
+      "relations": [
+        "calls",
+        "references"
+      ],
+      "source_files": [
+        "backend/app/routers/twitch.py"
+      ],
+      "source_locations": [
+        "L88",
+        "L91"
+      ],
+      "contexts": [
+        "call",
+        "parameter_type",
+        "return_type"
+      ]
+    },
+    {
+      "source": "backend_app_routers_twitch_live_status_from_stream",
+      "target": "backend_app_schemas_twitchstatus",
+      "edge_count": 4,
+      "relations": [
+        "calls",
+        "references"
+      ],
+      "source_files": [
+        "backend/app/routers/twitch.py"
+      ],
+      "source_locations": [
+        "L114",
+        "L116"
+      ],
+      "contexts": [
+        "call",
+        "parameter_type",
+        "return_type"
+      ]
+    },
+    {
+      "source": "backend_app_race_assets_assets_for_game",
+      "target": "backend_app_schemas_raceassetgameconfig",
+      "edge_count": 3,
+      "relations": [
+        "calls",
+        "references"
+      ],
+      "source_files": [
+        "backend/app/race_assets.py"
+      ],
+      "source_locations": [
+        "L151",
+        "L153"
+      ],
+      "contexts": [
+        "call",
+        "return_type"
+      ]
+    },
+    {
+      "source": "backend_app_routers_auth_private_user_response",
+      "target": "backend_app_schemas_userprivate",
+      "edge_count": 3,
+      "relations": [
+        "calls",
+        "references"
+      ],
+      "source_files": [
+        "backend/app/routers/auth.py"
+      ],
+      "source_locations": [
+        "L29",
+        "L33"
+      ],
+      "contexts": [
+        "call",
+        "return_type"
+      ]
+    },
+    {
+      "source": "backend_app_routers_banners_file_read",
+      "target": "backend_app_schemas_bannerfileread",
+      "edge_count": 3,
+      "relations": [
+        "calls",
+        "references"
+      ],
+      "source_files": [
+        "backend/app/routers/banners.py"
+      ],
+      "source_locations": [
+        "L44",
+        "L46"
+      ],
+      "contexts": [
+        "call",
+        "return_type"
+      ]
+    }
+  ],
+  "message": "GRAPH HEALTH WARNING: 119 collapsed (directed) edges; 119 collapsed (undirected) edges - graph may be incomplete/corrupt."
+}

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BMRL Graph 3D</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, Segoe UI, Arial, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; overflow: hidden; background: #050914; color: #e8f1ff; }
+    canvas { display: block; width: 100vw; height: 100vh; cursor: grab; }
+    canvas:active { cursor: grabbing; }
+    .hud {
+      position: fixed; inset: 18px auto auto 18px; width: min(420px, calc(100vw - 36px));
+      padding: 14px; border: 1px solid #1e4f95; border-radius: 14px;
+      background: rgba(4, 12, 28, .82); backdrop-filter: blur(12px);
+      box-shadow: 0 18px 50px rgba(0,0,0,.28);
+    }
+    h1 { margin: 0 0 10px; font-size: 18px; line-height: 1.2; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    input, button {
+      border: 1px solid #2b5ea6; border-radius: 10px; color: #e8f1ff;
+      background: #07152c; min-height: 36px; padding: 0 11px; font-weight: 700;
+    }
+    input { flex: 1 1 190px; min-width: 0; outline: none; }
+    button { cursor: pointer; }
+    button:hover { border-color: #65a8ff; }
+    .stats { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; color: #a9bad6; font-size: 12px; }
+    .pill { border: 1px solid #1e4f95; border-radius: 999px; padding: 5px 8px; background: rgba(14,35,72,.8); }
+    .tip {
+      position: fixed; pointer-events: none; max-width: 360px; padding: 10px 12px;
+      border: 1px solid #2b5ea6; border-radius: 12px; background: rgba(3, 10, 24, .92);
+      box-shadow: 0 16px 40px rgba(0,0,0,.28); transform: translate(14px, 14px);
+      font-size: 13px; line-height: 1.35; display: none;
+    }
+    .tip b { display: block; color: #fff; margin-bottom: 3px; }
+    .footer { position: fixed; right: 18px; bottom: 14px; color: #7d90ad; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <canvas id="graph"></canvas>
+  <section class="hud">
+    <h1>3D Graphify Model</h1>
+    <div class="row">
+      <input id="search" placeholder="Поиск узла, файла, сообщества" autocomplete="off" />
+      <button id="reset">Сброс</button>
+    </div>
+    <div class="stats">
+      <span class="pill" id="nodeCount">0 nodes</span>
+      <span class="pill" id="edgeCount">0 edges</span>
+      <span class="pill">drag rotate</span>
+      <span class="pill">wheel zoom</span>
+    </div>
+  </section>
+  <div class="tip" id="tip"></div>
+  <div class="footer">graph-3d.html · local canvas</div>
+  <script src="./graph-3d-data.js"></script>
+  <script>
+    const data = window.GRAPHIFY_DATA || { nodes: [], links: [] };
+    const canvas = document.getElementById('graph');
+    const ctx = canvas.getContext('2d');
+    const tip = document.getElementById('tip');
+    const search = document.getElementById('search');
+    const reset = document.getElementById('reset');
+    const idToNode = new Map(data.nodes.map((n, i) => [n.id, Object.assign(n, { i })]));
+    const links = data.links
+      .map(l => ({ a: idToNode.get(l.source), b: idToNode.get(l.target), relation: l.relation }))
+      .filter(l => l.a && l.b);
+    document.getElementById('nodeCount').textContent = `${data.nodes.length} nodes`;
+    document.getElementById('edgeCount').textContent = `${links.length} edges`;
+
+    let w = 0, h = 0, dpr = 1, rx = -0.45, ry = 0.8, zoom = 720, dragging = false;
+    let lastX = 0, lastY = 0, query = '', hover = null;
+
+    const hash = s => [...s].reduce((a, c) => Math.imul(a ^ c.charCodeAt(0), 2654435761) >>> 0, 2166136261);
+    const color = c => `hsl(${(Number(c || 0) * 47 + 205) % 360} 86% 62%)`;
+    const text = n => `${n.label || ''} ${n.id || ''} ${n.source_file || ''} ${n.community_name || ''}`.toLowerCase();
+
+    data.nodes.forEach((n) => {
+      const community = Number(n.community || 0);
+      const seed = hash(n.id || n.label || '');
+      const a = (community * 2.399963 + (seed % 1000) / 1000) % (Math.PI * 2);
+      const b = Math.acos(2 * (((seed >>> 10) % 1000) / 1000) - 1);
+      const r = 155 + (community % 9) * 28 + ((seed >>> 20) % 90);
+      n.x = Math.cos(a) * Math.sin(b) * r;
+      n.y = Math.sin(a) * Math.sin(b) * r;
+      n.z = Math.cos(b) * r;
+      n.c = color(community);
+      n.match = true;
+    });
+
+    function resize() {
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      w = innerWidth; h = innerHeight;
+      canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr);
+      canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function project(n) {
+      const sx = Math.sin(rx), cx = Math.cos(rx), sy = Math.sin(ry), cy = Math.cos(ry);
+      const x1 = n.x * cy - n.z * sy;
+      const z1 = n.x * sy + n.z * cy;
+      const y1 = n.y * cx - z1 * sx;
+      const z2 = n.y * sx + z1 * cx + zoom;
+      const s = Math.max(0.12, 520 / z2);
+      return { x: w / 2 + x1 * s, y: h / 2 + y1 * s, z: z2, s };
+    }
+
+    function updateFilter() {
+      query = search.value.trim().toLowerCase();
+      data.nodes.forEach(n => n.match = !query || text(n).includes(query));
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, w, h);
+      if (!dragging) ry += 0.0018;
+      const projected = data.nodes.map(project);
+
+      ctx.lineWidth = 1;
+      for (const l of links) {
+        const a = projected[l.a.i], b = projected[l.b.i];
+        const active = l.a.match || l.b.match;
+        ctx.globalAlpha = query ? (active ? .38 : .025) : .13;
+        ctx.strokeStyle = active ? '#72aaff' : '#2f527f';
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+
+      hover = null;
+      let best = 9999;
+      const mx = lastX, my = lastY;
+      const order = projected.map((p, i) => [p.z, i]).sort((a, b) => b[0] - a[0]);
+      for (const [, i] of order) {
+        const n = data.nodes[i], p = projected[i];
+        const r = (query && n.match ? 5.2 : 2.4) * Math.min(1.65, p.s);
+        const dist = Math.hypot(p.x - mx, p.y - my);
+        if (dist < Math.max(10, r + 5) && dist < best) { best = dist; hover = n; }
+        ctx.globalAlpha = query ? (n.match ? .98 : .18) : .86;
+        ctx.fillStyle = n.c;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      if (hover) {
+        tip.style.display = 'block';
+        tip.style.left = mx + 'px'; tip.style.top = my + 'px';
+        tip.innerHTML = `<b>${hover.label || hover.id}</b>${hover.community_name || 'Community ' + hover.community}<br>${hover.source_file || ''}`;
+      } else {
+        tip.style.display = 'none';
+      }
+      requestAnimationFrame(draw);
+    }
+
+    addEventListener('resize', resize);
+    canvas.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener('pointermove', e => {
+      if (dragging) { ry += (e.clientX - lastX) * .006; rx += (e.clientY - lastY) * .006; }
+      lastX = e.clientX; lastY = e.clientY;
+    });
+    canvas.addEventListener('pointerup', () => dragging = false);
+    canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = Math.max(260, Math.min(1400, zoom + e.deltaY * .7)); }, { passive: false });
+    search.addEventListener('input', updateFilter);
+    reset.addEventListener('click', () => { search.value = ''; updateFilter(); rx = -0.45; ry = 0.8; zoom = 720; });
+    resize(); updateFilter(); draw();
+  </script>
+</body>
+</html>

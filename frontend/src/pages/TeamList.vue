@@ -40,11 +40,13 @@ const memberPage = ref(1)
 const memberPageSize = 10
 const createForm = ref({
   name: '',
+  abbreviation: '',
   description: '',
   avatar_color: '#dc2626'
 })
 const editForm = ref({
   name: '',
+  abbreviation: '',
   description: '',
   avatar_color: '#dc2626'
 })
@@ -86,6 +88,7 @@ function setCreateRequestBusy(requestId, value) {
 function resetCreateForm() {
   createForm.value = {
     name: '',
+    abbreviation: '',
     description: '',
     avatar_color: '#dc2626'
   }
@@ -94,10 +97,23 @@ function resetCreateForm() {
 function fillEditForm(team) {
   editForm.value = {
     name: team?.name || '',
+    abbreviation: team?.abbreviation || '',
     description: team?.description || '',
     avatar_color: team?.avatar_color || '#dc2626'
   }
   transferOwnerId.value = team?.members?.find((member) => member.id !== team.owner_id)?.id || ''
+}
+
+function normalizeTeamAbbreviation(value) {
+  return String(value || '').replace(/[^a-z]/gi, '').slice(0, 3).toUpperCase()
+}
+
+function setCreateAbbreviation(event) {
+  createForm.value.abbreviation = normalizeTeamAbbreviation(event.target.value)
+}
+
+function setEditAbbreviation(event) {
+  editForm.value.abbreviation = normalizeTeamAbbreviation(event.target.value)
 }
 
 function setTeamAvatarFile(event) {
@@ -110,6 +126,10 @@ function memberTitle(member) {
 
 function memberTeamName(member) {
   return member.team_name || selectedTeam.value?.name || ''
+}
+
+function memberTeamAbbreviation(member) {
+  return member.team_abbreviation || selectedTeam.value?.abbreviation || ''
 }
 
 function ownerLabel(team) {
@@ -195,6 +215,7 @@ async function createTeam() {
       method: 'POST',
       body: {
         name: createForm.value.name.trim(),
+        abbreviation: normalizeTeamAbbreviation(createForm.value.abbreviation),
         description: createForm.value.description.trim(),
         avatar_color: createForm.value.avatar_color
       }
@@ -251,6 +272,7 @@ async function saveTeam() {
       method: 'PATCH',
       body: {
         name: editForm.value.name.trim(),
+        abbreviation: normalizeTeamAbbreviation(editForm.value.abbreviation),
         description: editForm.value.description.trim(),
         avatar_color: editForm.value.avatar_color
       }
@@ -487,6 +509,10 @@ watch(visibleTeamMembers, () => {
           <span>{{ t('fields.name') }}</span>
           <input v-model="createForm.name" type="text" maxlength="80" required />
         </label>
+        <label class="field">
+          <span>{{ t('teams.abbreviation') }}</span>
+          <input :value="createForm.abbreviation" type="text" maxlength="3" minlength="3" :placeholder="t('teams.abbreviationPlaceholder')" required @input="setCreateAbbreviation" />
+        </label>
         <label class="field team-form-description">
           <span>{{ t('fields.description') }}</span>
           <textarea v-model="createForm.description" maxlength="1000" :placeholder="t('teams.descriptionPlaceholder')" />
@@ -511,7 +537,7 @@ watch(visibleTeamMembers, () => {
           <TeamAvatar mini :src="requestItem.avatar_url" :color="requestItem.avatar_color" :label="requestItem.name" />
           <span class="team-application-main">
             <strong>{{ requestItem.name }}</strong>
-            <span>{{ t('teams.requestedBy', { name: memberTitle(requestItem.requester) }) }}</span>
+            <span>{{ requestItem.abbreviation }} · {{ t('teams.requestedBy', { name: memberTitle(requestItem.requester) }) }}</span>
           </span>
           <span class="team-member-stat">
             <strong>#{{ formatPilotNumber(requestItem.requester.pilot_number) }}</strong>
@@ -538,7 +564,7 @@ watch(visibleTeamMembers, () => {
             <TeamAvatar mini :src="team.avatar_url" :color="team.avatar_color" :label="team.name" />
             <span class="team-list-main">
               <strong>{{ team.name }}</strong>
-              <span>{{ t('teams.ownerLine', { owner: ownerLabel(team) }) }} · RER {{ formatRating(team.average_rating) }}</span>
+              <span>{{ team.abbreviation }} · {{ t('teams.ownerLine', { owner: ownerLabel(team) }) }} · RER {{ formatRating(team.average_rating) }}</span>
             </span>
             <span class="team-list-side">
               <span v-if="team.pending_application_count > 0" class="team-notification-badge" :title="pendingApplicationsTitle(team)" :aria-label="pendingApplicationsTitle(team)">
@@ -567,6 +593,7 @@ watch(visibleTeamMembers, () => {
           <div class="team-detail-main">
             <div class="team-detail-title">
               <h2>{{ selectedTeam.name }}</h2>
+              <span class="team-mini-chip">{{ selectedTeam.abbreviation }}</span>
               <span class="status-badge">{{ selectedTeam.member_count }}/{{ selectedTeam.member_limit }}</span>
             </div>
             <p>{{ selectedTeam.description || t('teams.noDescription') }}</p>
@@ -603,6 +630,10 @@ watch(visibleTeamMembers, () => {
             <label class="field">
               <span>{{ t('fields.name') }}</span>
               <input v-model="editForm.name" type="text" maxlength="80" required />
+            </label>
+            <label class="field">
+              <span>{{ t('teams.abbreviation') }}</span>
+              <input :value="editForm.abbreviation" type="text" maxlength="3" minlength="3" :placeholder="t('teams.abbreviationPlaceholder')" required @input="setEditAbbreviation" />
             </label>
             <label class="field team-form-description">
               <span>{{ t('fields.description') }}</span>
@@ -664,7 +695,7 @@ watch(visibleTeamMembers, () => {
               <UserAvatar mini :src="application.user.avatar_url" :color="application.user.avatar_color" :label="application.user.login" />
               <span class="team-application-main">
                 <strong>{{ memberTitle(application.user) }}</strong>
-                <span>{{ application.user.login }} · #{{ formatPilotNumber(application.user.pilot_number) }} · RER {{ formatRating(application.user.rating) }} · {{ teamShortName(application.user.team_name) }}</span>
+                <span>{{ application.user.login }} · #{{ formatPilotNumber(application.user.pilot_number) }} · RER {{ formatRating(application.user.rating) }} · {{ teamShortName(application.user.team_name, application.user.team_abbreviation) }}</span>
               </span>
               <span class="team-member-stat">
                 <strong>{{ application.user.sr.toFixed(1) }}</strong>
@@ -704,7 +735,7 @@ watch(visibleTeamMembers, () => {
               <UserAvatar mini :src="member.avatar_url" :color="member.avatar_color" :label="member.login" />
               <RouterLink class="team-member-main" :to="`/pilots/${member.id}`">
                 <strong>{{ memberTitle(member) }}</strong>
-                <span>{{ member.login }} · #{{ formatPilotNumber(member.pilot_number) }} · {{ teamShortName(memberTeamName(member)) }}</span>
+                <span>{{ member.login }} · #{{ formatPilotNumber(member.pilot_number) }} · {{ teamShortName(memberTeamName(member), memberTeamAbbreviation(member)) }}</span>
               </RouterLink>
               <span class="team-member-stat">
                 <strong>{{ formatRating(member.rating) }}</strong>

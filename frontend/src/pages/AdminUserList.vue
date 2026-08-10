@@ -646,7 +646,7 @@ watch([userSearch, userSort], resetUserPageAndLoad)
                 <UserAvatar mini :src="user.avatar_url" :color="user.avatar_color" :label="user.login" />
                 <div class="admin-user-info">
                   <strong>{{ user.login }}</strong>
-                  <span>#{{ formatPilotNumber(user.pilot_number) }} · RER {{ formatRating(user.rating) }} · {{ teamShortName(user.team_name) }}</span>
+                  <span>#{{ formatPilotNumber(user.pilot_number) }} · RER {{ formatRating(user.rating) }} · {{ teamShortName(user.team_name, user.team_abbreviation) }}</span>
                 </div>
               </div>
             </td>

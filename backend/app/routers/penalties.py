@@ -66,10 +66,12 @@ async def get_penalty(
             "target_avatar_url": penalty.target.avatar_url if penalty.target else None,
             "target_rating": int(round(float(penalty.target.rating))) if penalty.target else None,
             "target_team_name": penalty.target.team.name if penalty.target and penalty.target.team else None,
+            "target_team_abbreviation": penalty.target.team.abbreviation if penalty.target and penalty.target.team else None,
             "issuer_login": penalty.issuer.login if penalty.issuer else None,
             "issuer_nickname": penalty.issuer.nickname if penalty.issuer else None,
             "issuer_rating": int(round(float(penalty.issuer.rating))) if penalty.issuer else None,
             "issuer_team_name": penalty.issuer.team.name if penalty.issuer and penalty.issuer.team else None,
+            "issuer_team_abbreviation": penalty.issuer.team.abbreviation if penalty.issuer and penalty.issuer.team else None,
         }
     )
     return data

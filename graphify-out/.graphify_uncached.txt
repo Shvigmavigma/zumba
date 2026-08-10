@@ -1,0 +1,13 @@
+C:\Users\PC\Desktop\proga\zumba\DEPLOY.md
+C:\Users\PC\Desktop\proga\zumba\README.md
+C:\Users\PC\Desktop\proga\zumba\backend\requirements.txt
+C:\Users\PC\Desktop\proga\zumba\design-mockups\bmrl-redesign.html
+C:\Users\PC\Desktop\proga\zumba\docker-compose.yml
+C:\Users\PC\Desktop\proga\zumba\frontend\index.html
+C:\Users\PC\Desktop\proga\zumba\frontend\pnpm-workspace.yaml
+C:\Users\PC\Desktop\proga\zumba\frontend\public\assets\avatar-template.jpg
+C:\Users\PC\Desktop\proga\zumba\frontend\public\assets\banner-bottom.svg
+C:\Users\PC\Desktop\proga\zumba\frontend\public\assets\banner-side.svg
+C:\Users\PC\Desktop\proga\zumba\frontend\public\assets\banner-top.svg
+C:\Users\PC\Desktop\proga\zumba\frontend\public\assets\bmrl-logo-nav.png
+C:\Users\PC\Desktop\proga\zumba\frontend\public\assets\team-avatar-template.jpg

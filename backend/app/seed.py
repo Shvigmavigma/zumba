@@ -137,6 +137,7 @@ DEMO_RACE_PREFIX = "BMRL Demo Race"
 DEMO_TEAM_SPECS = [
     {
         "name": "BMRL Factory",
+        "abbreviation": "BMF",
         "description": "System-backed factory team for race control checks and admin-owned scenarios.",
         "avatar_color": "#dc2626",
         "owner_login": "admin",
@@ -144,6 +145,7 @@ DEMO_TEAM_SPECS = [
     },
     {
         "name": "Apex Line",
+        "abbreviation": "APL",
         "description": "ACC sprint roster focused on clean qualifying pace and stable race starts.",
         "avatar_color": "#0ea5e9",
         "owner_login": "bmrl_moder",
@@ -151,6 +153,7 @@ DEMO_TEAM_SPECS = [
     },
     {
         "name": "Curb Hunters",
+        "abbreviation": "CRB",
         "description": "Mixed AC group for track-learning sessions, setups and replay reviews.",
         "avatar_color": "#22c55e",
         "owner_login": "bmrl_marshall",
@@ -158,6 +161,7 @@ DEMO_TEAM_SPECS = [
     },
     {
         "name": "Sector Ghosts",
+        "abbreviation": "SGH",
         "description": "iRacing squad that experiments with endurance strategy and stint consistency.",
         "avatar_color": "#8b5cf6",
         "owner_login": "bmrl_smm",
@@ -165,6 +169,7 @@ DEMO_TEAM_SPECS = [
     },
     {
         "name": "Redline Union",
+        "abbreviation": "RDU",
         "description": "Open community team for pilots who want shared practice and race-day support.",
         "avatar_color": "#f59e0b",
         "owner_login": "bmrl_pilot",
@@ -234,6 +239,7 @@ async def seed_demo_teams(session: AsyncSession) -> None:
         if team is None:
             team = Team(
                 name=spec["name"],
+                abbreviation=spec["abbreviation"],
                 description=spec["description"],
                 avatar_color=spec["avatar_color"],
                 owner_id=owner.id,
@@ -242,6 +248,7 @@ async def seed_demo_teams(session: AsyncSession) -> None:
             await session.flush()
         else:
             team.description = spec["description"]
+            team.abbreviation = spec["abbreviation"]
             team.avatar_color = spec["avatar_color"]
             team.owner_id = owner.id
 

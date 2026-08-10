@@ -184,7 +184,7 @@ function fanVotePilotName(item) {
 }
 
 function fanVotePilotSubtitle(item) {
-  const team = teamShortName(item.team_name)
+  const team = teamShortName(item.team_name, item.team_abbreviation)
   const number = item.pilot_number !== null && item.pilot_number !== undefined ? `#${formatPilotNumber(item.pilot_number)}` : `ID ${item.user_id}`
   return [number, `RER ${formatRating(item.rating)}`, `SR ${item.sr ?? '-'}`, team].filter(Boolean).join(' - ')
 }
@@ -253,7 +253,8 @@ function resultPilotAvatar(row) {
 }
 
 function resultPilotTeam(row) {
-  return teamShortName(participantById(row.user_id)?.team_name)
+  const participant = participantById(row.user_id)
+  return teamShortName(participant?.team_name, participant?.team_abbreviation)
 }
 
 function resultPilotRating(row) {
@@ -300,7 +301,7 @@ function resultGap(row) {
 }
 
 function pilotTeamChip(item) {
-  return teamShortName(item?.team_name)
+  return teamShortName(item?.team_name, item?.team_abbreviation)
 }
 
 function openPenaltyCreator() {

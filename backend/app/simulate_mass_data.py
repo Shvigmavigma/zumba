@@ -75,6 +75,29 @@ TEAM_NAMES = [
     "Victory Lane",
 ]
 
+
+def team_abbreviation(name: str, index: int, used: set[str] | None = None) -> str:
+    raw = "".join(part[0] for part in name.replace("-", " ").split() if part).upper()
+    abbreviation = (raw + "XXX")[:3]
+    used = used if used is not None else set()
+    if abbreviation not in used:
+        used.add(abbreviation)
+        return abbreviation
+    alphabet_index = index % 17576
+    while True:
+        candidate = "".join(
+            chr(65 + value)
+            for value in (
+                (alphabet_index // 676) % 26,
+                (alphabet_index // 26) % 26,
+                alphabet_index % 26,
+            )
+        )
+        if candidate not in used:
+            used.add(candidate)
+            return candidate
+        alphabet_index = (alphabet_index + 1) % 17576
+
 COUNTRIES = [
     "Germany",
     "Italy",
@@ -292,11 +315,13 @@ async def create_teams(session, admin: User, users: list[User], now: datetime) -
     active_users = [user for user in users if user.status == UserStatus.active]
     owner_candidates = [admin] + active_users[: SIM_TEAM_COUNT - 1]
     teams: list[Team] = []
+    used_abbreviations: set[str] = set()
 
     for index, name in enumerate(TEAM_NAMES, start=1):
         owner = owner_candidates[index - 1]
         team = Team(
             name=name,
+            abbreviation=team_abbreviation(name, index, used_abbreviations),
             description=f"Simulated roster #{index:02d} with mixed pace, applications, and race history.",
             avatar_color=COLORS[(index * 3) % len(COLORS)],
             owner_id=owner.id,
@@ -324,6 +349,7 @@ async def create_teams(session, admin: User, users: list[User], now: datetime) -
         request = TeamCreationRequest(
             requester_id=team.owner_id,
             name=f"{team.name} request",
+            abbreviation=team.abbreviation,
             description=team.description,
             avatar_color=team.avatar_color,
             status=TeamApplicationStatus.approved,
@@ -339,6 +365,7 @@ async def create_teams(session, admin: User, users: list[User], now: datetime) -
             TeamCreationRequest(
                 requester_id=user.id,
                 name=f"Pending Sim Team {index:02d}",
+                abbreviation=team_abbreviation(f"Pending Sim Team {index:02d}", 100 + index, used_abbreviations),
                 description="Pending simulated team creation request.",
                 avatar_color=COLORS[index % len(COLORS)],
                 status=TeamApplicationStatus.pending,
@@ -349,6 +376,7 @@ async def create_teams(session, admin: User, users: list[User], now: datetime) -
             TeamCreationRequest(
                 requester_id=user.id,
                 name=f"Rejected Sim Team {index:02d}",
+                abbreviation=team_abbreviation(f"Rejected Sim Team {index:02d}", 200 + index, used_abbreviations),
                 description="Rejected simulated team creation request.",
                 avatar_color=COLORS[(index + 4) % len(COLORS)],
                 status=TeamApplicationStatus.rejected,

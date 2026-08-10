@@ -79,7 +79,7 @@ function penaltyTargetName(penalty) {
 
 function penaltyTargetSubtitle(penalty) {
   const target = participantById(penalty.target_id)
-  return target ? `${participantSubtitle(target)} · RER ${formatRating(target.rating)} · ${teamShortName(target.team_name)}` : `ID ${penalty.target_id}`
+  return target ? `${participantSubtitle(target)} · RER ${formatRating(target.rating)} · ${teamShortName(target.team_name, target.team_abbreviation)}` : `ID ${penalty.target_id}`
 }
 
 function penaltyTargetColor(penalty) {

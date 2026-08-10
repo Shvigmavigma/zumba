@@ -113,6 +113,22 @@ def can_manage_team(user: User | None, team: Team) -> bool:
     return team.owner_id == user.id or user.role in TEAM_MANAGER_ROLES
 
 
+async def ensure_team_name_available(session: AsyncSession, name: str, exclude_team_id: int | None = None) -> None:
+    stmt = select(Team).where(Team.name == name)
+    if exclude_team_id is not None:
+        stmt = stmt.where(Team.id != exclude_team_id)
+    if await session.scalar(stmt) is not None:
+        raise HTTPException(status_code=409, detail="Team name already exists")
+
+
+async def ensure_team_abbreviation_available(session: AsyncSession, abbreviation: str, exclude_team_id: int | None = None) -> None:
+    stmt = select(Team).where(Team.abbreviation == abbreviation)
+    if exclude_team_id is not None:
+        stmt = stmt.where(Team.id != exclude_team_id)
+    if await session.scalar(stmt) is not None:
+        raise HTTPException(status_code=409, detail="Team abbreviation already exists")
+
+
 async def load_pending_application_counts(session: AsyncSession, team_ids: list[int], current_user: User | None) -> dict[int, int]:
     if current_user is None or not team_ids:
         return {}
@@ -175,6 +191,7 @@ def team_payload(
     return {
         "id": team.id,
         "name": team.name,
+        "abbreviation": team.abbreviation,
         "description": team.description or "",
         "avatar_color": team.avatar_color,
         "avatar_url": team.avatar_url,
@@ -224,6 +241,7 @@ def creation_request_payload(request: TeamCreationRequest, requester: User) -> T
         id=request.id,
         requester_id=request.requester_id,
         name=request.name,
+        abbreviation=request.abbreviation,
         description=request.description or "",
         avatar_color=request.avatar_color,
         status=request.status,
@@ -279,7 +297,7 @@ async def build_team_detail(
         len(pending_applications),
     )
     payload["members"] = [
-        TeamMemberRead(**{**TeamMemberRead.model_validate(member).model_dump(), "team_name": team.name})
+        TeamMemberRead(**{**TeamMemberRead.model_validate(member).model_dump(), "team_name": team.name, "team_abbreviation": team.abbreviation})
         for member in members
     ]
     payload["applications"] = pending_applications
@@ -353,7 +371,7 @@ async def list_teams(
     stmt = select(Team)
     if search:
         like = f"%{search}%"
-        stmt = stmt.where(or_(Team.name.ilike(like), Team.description.ilike(like)))
+        stmt = stmt.where(or_(Team.name.ilike(like), Team.abbreviation.ilike(like), Team.description.ilike(like)))
     teams = (await session.scalars(stmt.order_by(Team.created_at.desc(), Team.id.desc()))).all()
     member_limit = await get_team_member_limit(session)
     counts = await load_member_counts(session, [team.id for team in teams])
@@ -410,12 +428,12 @@ async def approve_team_creation_request(
     if requester.team_id is not None:
         raise HTTPException(status_code=400, detail="Requester is already in a team")
 
-    duplicate = await session.scalar(select(Team).where(Team.name == creation_request.name))
-    if duplicate is not None:
-        raise HTTPException(status_code=409, detail="Team name already exists")
+    await ensure_team_name_available(session, creation_request.name)
+    await ensure_team_abbreviation_available(session, creation_request.abbreviation)
 
     team = Team(
         name=creation_request.name,
+        abbreviation=creation_request.abbreviation,
         description=creation_request.description or "",
         avatar_color=creation_request.avatar_color,
         owner_id=requester.id,
@@ -437,7 +455,7 @@ async def approve_team_creation_request(
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
-        raise HTTPException(status_code=409, detail="Team name already exists") from exc
+        raise HTTPException(status_code=409, detail="Team name or abbreviation already exists") from exc
 
     await session.refresh(creation_request)
     await session.refresh(requester)
@@ -476,9 +494,8 @@ async def create_team_request(
 ):
     if user.team_id is not None:
         raise HTTPException(status_code=400, detail="Leave your current team before requesting a new one")
-    duplicate_team = await session.scalar(select(Team).where(Team.name == payload.name))
-    if duplicate_team is not None:
-        raise HTTPException(status_code=409, detail="Team name already exists")
+    await ensure_team_name_available(session, payload.name)
+    await ensure_team_abbreviation_available(session, payload.abbreviation)
     existing_pending = await session.scalar(
         select(TeamCreationRequest).where(
             TeamCreationRequest.requester_id == user.id,
@@ -495,10 +512,19 @@ async def create_team_request(
     )
     if duplicate_pending_name is not None:
         raise HTTPException(status_code=409, detail="Team creation request with this name already exists")
+    duplicate_pending_abbreviation = await session.scalar(
+        select(TeamCreationRequest).where(
+            TeamCreationRequest.abbreviation == payload.abbreviation,
+            TeamCreationRequest.status == TeamApplicationStatus.pending,
+        )
+    )
+    if duplicate_pending_abbreviation is not None:
+        raise HTTPException(status_code=409, detail="Team creation request with this abbreviation already exists")
 
     creation_request = TeamCreationRequest(
         requester_id=user.id,
         name=payload.name,
+        abbreviation=payload.abbreviation,
         description=payload.description or "",
         avatar_color=payload.avatar_color,
         status=TeamApplicationStatus.pending,
@@ -537,13 +563,18 @@ async def update_team(
     team = await get_team_or_404(session, team_id)
     if not can_manage_team(user, team):
         raise HTTPException(status_code=403, detail="Only the team owner or moderators can edit this team")
-    for field, value in payload.model_dump(exclude_unset=True, exclude_none=True).items():
+    data = payload.model_dump(exclude_unset=True, exclude_none=True)
+    if "name" in data:
+        await ensure_team_name_available(session, data["name"], team.id)
+    if "abbreviation" in data:
+        await ensure_team_abbreviation_available(session, data["abbreviation"], team.id)
+    for field, value in data.items():
         setattr(team, field, value)
     try:
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
-        raise HTTPException(status_code=409, detail="Team name already exists") from exc
+        raise HTTPException(status_code=409, detail="Team name or abbreviation already exists") from exc
     await session.refresh(team)
     return await build_team_detail(session, team, user)
 

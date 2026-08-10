@@ -57,7 +57,7 @@ watch(users, () => {
           </div>
         </div>
         <div class="user-moderation-meta">
-          <p class="muted">#{{ formatPilotNumber(user.pilot_number) }} - RER {{ formatRating(user.rating) }} - {{ teamShortName(user.team_name) }} - {{ user.email }} - {{ t('fields.steam') }} {{ user.steam_id }}</p>
+          <p class="muted">#{{ formatPilotNumber(user.pilot_number) }} - RER {{ formatRating(user.rating) }} - {{ teamShortName(user.team_name, user.team_abbreviation) }} - {{ user.email }} - {{ t('fields.steam') }} {{ user.steam_id }}</p>
           <p v-if="user.pending_profile_changes" class="muted">{{ t('moderation.pendingProfileChanges', { changes: user.pending_profile_changes }) }}</p>
         </div>
         <div class="toolbar">

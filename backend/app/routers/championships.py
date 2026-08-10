@@ -90,7 +90,7 @@ def score_for_position(system: ChampionshipScoringSystem, position: int, partici
     return max(0, participant_count - position + 2)
 
 
-def user_payload(user: User, team_name: str | None = None) -> dict:
+def user_payload(user: User, team_name: str | None = None, team_abbreviation: str | None = None) -> dict:
     return {
         "id": user.id,
         "login": user.login,
@@ -104,6 +104,7 @@ def user_payload(user: User, team_name: str | None = None) -> dict:
         "rating_race_count": int(user.rating_race_count or 0),
         "team_id": user.team_id,
         "team_name": team_name,
+        "team_abbreviation": team_abbreviation,
         "avatar_color": user.avatar_color,
         "avatar_url": user.avatar_url,
         "games": user.games or [],
@@ -111,8 +112,8 @@ def user_payload(user: User, team_name: str | None = None) -> dict:
     }
 
 
-def race_registration_payload(registration: RaceRegistration, user: User, team_name: str | None = None) -> dict:
-    data = user_payload(user, team_name)
+def race_registration_payload(registration: RaceRegistration, user: User, team_name: str | None = None, team_abbreviation: str | None = None) -> dict:
+    data = user_payload(user, team_name, team_abbreviation)
     data.update(
         {
             "user_id": registration.user_id,
@@ -132,23 +133,23 @@ async def attach_registered_pilots(session: AsyncSession, races: list[Race]) -> 
     grouped: dict[int, list[dict]] = {race_id: [] for race_id in race_ids}
     rows = (
         await session.execute(
-            select(RaceRegistration, User, Team.name)
+            select(RaceRegistration, User, Team.name, Team.abbreviation)
             .join(User, User.id == RaceRegistration.user_id)
             .outerjoin(Team, Team.id == User.team_id)
             .where(RaceRegistration.race_id.in_(race_ids))
             .order_by(RaceRegistration.race_id, RaceRegistration.registered_at, RaceRegistration.id)
         )
     ).all()
-    for registration, user, team_name in rows:
-        grouped.setdefault(registration.race_id, []).append(race_registration_payload(registration, user, team_name))
+    for registration, user, team_name, team_abbreviation in rows:
+        grouped.setdefault(registration.race_id, []).append(race_registration_payload(registration, user, team_name, team_abbreviation))
     for race in races:
         set_committed_value(race, "registered_pilots", grouped.get(race.id, []))
 
 
-async def championship_registration_rows(session: AsyncSession, championship_id: int) -> list[tuple[ChampionshipRegistration, User, str | None]]:
+async def championship_registration_rows(session: AsyncSession, championship_id: int) -> list[tuple[ChampionshipRegistration, User, str | None, str | None]]:
     return (
         await session.execute(
-            select(ChampionshipRegistration, User, Team.name)
+            select(ChampionshipRegistration, User, Team.name, Team.abbreviation)
             .join(User, User.id == ChampionshipRegistration.user_id)
             .outerjoin(Team, Team.id == User.team_id)
             .where(ChampionshipRegistration.championship_id == championship_id)
@@ -166,14 +167,14 @@ def result_position(row: dict, fallback: int) -> int:
     return position if position > 0 else fallback
 
 
-def build_standings(championship: Championship, stages: list[Race], registration_rows: list[tuple[ChampionshipRegistration, User, str | None]]) -> list[dict]:
-    approved_users: dict[int, tuple[ChampionshipRegistration, User, str | None]] = {
-        registration.user_id: (registration, user, team_name)
-        for registration, user, team_name in registration_rows
+def build_standings(championship: Championship, stages: list[Race], registration_rows: list[tuple[ChampionshipRegistration, User, str | None, str | None]]) -> list[dict]:
+    approved_users: dict[int, tuple[ChampionshipRegistration, User, str | None, str | None]] = {
+        registration.user_id: (registration, user, team_name, team_abbreviation)
+        for registration, user, team_name, team_abbreviation in registration_rows
         if registration.status == TeamApplicationStatus.approved
     }
     standings: dict[int, dict] = {}
-    for user_id, (registration, user, team_name) in approved_users.items():
+    for user_id, (registration, user, team_name, team_abbreviation) in approved_users.items():
         standings[user_id] = {
             "user_id": user.id,
             "login": user.login,
@@ -183,6 +184,7 @@ def build_standings(championship: Championship, stages: list[Race], registration
             "pilot_number": registration.pilot_number,
             "team_id": user.team_id,
             "team_name": team_name,
+            "team_abbreviation": team_abbreviation,
             "avatar_color": user.avatar_color,
             "avatar_url": user.avatar_url,
             "rating": int(round(float(user.rating))),
@@ -383,9 +385,9 @@ async def serialize_championship(session: AsyncSession, championship: Championsh
     await attach_registered_pilots(session, stages)
     registrations = await championship_registration_rows(session, championship.id)
     current_status = championship_status(championship)
-    my_registration = next((registration for registration, _, _ in registrations if registration.user_id == current_user.id), None) if current_user else None
-    participant_count = sum(1 for registration, _, _ in registrations if registration.status == TeamApplicationStatus.approved)
-    pending_count = sum(1 for registration, _, _ in registrations if registration.status == TeamApplicationStatus.pending)
+    my_registration = next((registration for registration, _, _, _ in registrations if registration.user_id == current_user.id), None) if current_user else None
+    participant_count = sum(1 for registration, _, _, _ in registrations if registration.status == TeamApplicationStatus.approved)
+    pending_count = sum(1 for registration, _, _, _ in registrations if registration.status == TeamApplicationStatus.pending)
     public_registrations = [
         {
             "id": registration.id,
@@ -398,9 +400,9 @@ async def serialize_championship(session: AsyncSession, championship: Championsh
             "updated_at": registration.updated_at,
             "resolved_at": registration.resolved_at,
             "resolved_by": registration.resolved_by,
-            "user": user_payload(user, team_name),
+            "user": user_payload(user, team_name, team_abbreviation),
         }
-        for registration, user, team_name in registrations
+        for registration, user, team_name, team_abbreviation in registrations
         if can_manage_championship(current_user) or registration.status == TeamApplicationStatus.approved or registration.user_id == getattr(current_user, "id", None)
     ]
     return {

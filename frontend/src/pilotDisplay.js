@@ -8,14 +8,16 @@ export function formatPilotNumber(value) {
   return Number.isInteger(number) && number >= 0 ? String(number % 1000).padStart(3, '0') : '-'
 }
 
-export function teamShortName(name) {
+export function teamShortName(name, abbreviation = '') {
+  const custom = String(abbreviation || '').trim().toUpperCase()
+  if (/^[A-Z]{3}$/.test(custom)) return custom
   const raw = String(name || '').trim()
   if (!raw) return '-'
   const words = raw.split(/[\s_-]+/).filter(Boolean)
   if (words.length > 1) {
-    return words.map((word) => word[0]).join('').slice(0, 4).toUpperCase()
+    return words.map((word) => word[0]).join('').slice(0, 3).toUpperCase()
   }
-  return raw.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 4).toUpperCase() || '-'
+  return raw.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase() || '-'
 }
 
 export function pilotName(user, fallback = '') {
@@ -31,6 +33,7 @@ export function pilotSearchText(user) {
     user?.last_name,
     user?.pilot_number,
     user?.team_name,
+    user?.team_abbreviation,
     formatRating(user?.rating),
     user?.sr
   ]

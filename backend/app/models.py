@@ -153,9 +153,13 @@ class User(Base):
 
 class Team(Base):
     __tablename__ = "teams"
+    __table_args__ = (
+        CheckConstraint("abbreviation ~ '^[A-Z]{3}$'", name="ck_teams_abbreviation_format"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    abbreviation: Mapped[str] = mapped_column(String(3), unique=True, index=True)
     description: Mapped[str] = mapped_column(Text, default="")
     avatar_color: Mapped[str] = mapped_column(String(7), default="#dc2626")
     avatar_url: Mapped[str | None] = mapped_column(String(255))
@@ -175,10 +179,14 @@ class Team(Base):
 
 class TeamCreationRequest(Base):
     __tablename__ = "team_creation_requests"
+    __table_args__ = (
+        CheckConstraint("abbreviation ~ '^[A-Z]{3}$'", name="ck_team_creation_requests_abbreviation_format"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     requester_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(80))
+    abbreviation: Mapped[str] = mapped_column(String(3))
     description: Mapped[str] = mapped_column(Text, default="")
     avatar_color: Mapped[str] = mapped_column(String(7), default="#dc2626")
     status: Mapped[TeamApplicationStatus] = enum_column(TeamApplicationStatus)
