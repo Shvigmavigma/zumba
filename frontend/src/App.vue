@@ -170,7 +170,8 @@ watch(navItems, () => {
   <div class="app-shell">
     <header class="topbar">
       <RouterLink class="brand" to="/">
-        <img class="brand-logo" src="/assets/bmrl-logo-nav.png" alt="" />
+        <img class="brand-logo brand-logo-light" src="/assets/bmrl-logo-light-cutout.png" alt="" />
+        <img class="brand-logo brand-logo-dark" src="/assets/bmrl-logo-dark-cutout.png" alt="" />
         <span class="brand-text">BMRL</span>
       </RouterLink>
 

@@ -1,4 +1,5 @@
 from datetime import datetime
+import re
 from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator, model_validator
@@ -21,6 +22,14 @@ from app.models import (
 
 GameCode = Literal["ACC", "AC", "iRacing", "LMU"]
 AssetGameCode = Literal["ACC", "AC", "iRacing"]
+TEAM_ABBREVIATION_RE = re.compile(r"^[A-Z]{3}$")
+
+
+def normalize_team_abbreviation(value: str) -> str:
+    abbreviation = str(value or "").strip().upper()
+    if not TEAM_ABBREVIATION_RE.fullmatch(abbreviation):
+        raise ValueError("Team abbreviation must be exactly 3 latin letters")
+    return abbreviation
 
 
 class TokenResponse(BaseModel):
@@ -77,6 +86,7 @@ class UserPublic(BaseModel):
     games: list[str] = Field(default_factory=list)
     team_id: int | None = None
     team_name: str | None = None
+    team_abbreviation: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -109,8 +119,14 @@ class UserAdminUpdate(UserUpdate):
 
 class TeamBase(BaseModel):
     name: str = Field(min_length=1, max_length=80)
+    abbreviation: str = Field(min_length=3, max_length=3)
     description: str = Field(default="", max_length=1000)
     avatar_color: str = Field(default="#dc2626", pattern=r"^#[0-9A-Fa-f]{6}$")
+
+    @field_validator("abbreviation")
+    @classmethod
+    def valid_abbreviation(cls, value: str):
+        return normalize_team_abbreviation(value)
 
 
 class TeamCreate(TeamBase):
@@ -119,8 +135,14 @@ class TeamCreate(TeamBase):
 
 class TeamUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=80)
+    abbreviation: str | None = Field(default=None, min_length=3, max_length=3)
     description: str | None = Field(default=None, max_length=1000)
     avatar_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+    @field_validator("abbreviation")
+    @classmethod
+    def valid_abbreviation(cls, value: str | None):
+        return normalize_team_abbreviation(value) if value is not None else value
 
 
 class TeamOwnerTransfer(BaseModel):
@@ -138,6 +160,7 @@ class TeamMemberRead(BaseModel):
     rating_race_count: int = Field(ge=0)
     team_id: int | None = None
     team_name: str | None = None
+    team_abbreviation: str | None = None
     avatar_color: str
     avatar_url: str | None = None
     games: list[str] = Field(default_factory=list)
@@ -162,6 +185,7 @@ class TeamCreationRequestRead(BaseModel):
     id: int
     requester_id: int
     name: str
+    abbreviation: str
     description: str
     avatar_color: str
     avatar_url: str | None = None
@@ -177,6 +201,7 @@ class TeamCreationRequestRead(BaseModel):
 class TeamRead(BaseModel):
     id: int
     name: str
+    abbreviation: str
     description: str
     avatar_color: str
     avatar_url: str | None = None
@@ -393,6 +418,7 @@ class FanVoteOptionRead(BaseModel):
     last_name: str
     pilot_number: int
     team_name: str | None = None
+    team_abbreviation: str | None = None
     avatar_color: str
     avatar_url: str | None = None
     rating: int
@@ -584,6 +610,7 @@ class ChampionshipStandingRead(BaseModel):
     pilot_number: int
     team_id: int | None = None
     team_name: str | None = None
+    team_abbreviation: str | None = None
     avatar_color: str
     avatar_url: str | None = None
     rating: int
@@ -664,10 +691,12 @@ class PenaltyDetailRead(PenaltyRead):
     target_avatar_url: str | None = None
     target_rating: int | None = None
     target_team_name: str | None = None
+    target_team_abbreviation: str | None = None
     issuer_login: str | None = None
     issuer_nickname: str | None = None
     issuer_rating: int | None = None
     issuer_team_name: str | None = None
+    issuer_team_abbreviation: str | None = None
 
 
 class AppealCreate(BaseModel):
@@ -796,6 +825,7 @@ class HallOfFamePilotRead(BaseModel):
     avatar_url: str | None = None
     team_id: int | None = None
     team_name: str | None = None
+    team_abbreviation: str | None = None
     points: int = Field(ge=0)
     gold: int = Field(ge=0)
     silver: int = Field(ge=0)
@@ -806,6 +836,7 @@ class HallOfFamePilotRead(BaseModel):
 class HallOfFameTeamRead(BaseModel):
     id: int
     name: str
+    abbreviation: str
     description: str
     avatar_color: str
     avatar_url: str | None = None

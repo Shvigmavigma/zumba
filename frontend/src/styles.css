@@ -10381,3 +10381,473 @@ textarea::placeholder {
     grid-template-columns: 1fr;
   }
 }
+
+/* BMRL blue theme refresh */
+:root {
+  --brand-blue: #1652D8;
+  --brand-blue-deep: #0D2F8F;
+  --bg: #f7faff;
+  --bg-top: #ffffff;
+  --bg-bottom: #eaf1ff;
+  --panel: #ffffff;
+  --panel-muted: #f3f7ff;
+  --panel-shine: #ffffff;
+  --text: #05070d;
+  --muted: #24344f;
+  --border: #c7d7fb;
+  --primary: var(--brand-blue);
+  --primary-strong: var(--brand-blue-deep);
+  --accent: var(--brand-blue);
+  --glass: rgba(255, 255, 255, 0.92);
+  --shadow: 0 18px 42px rgba(13, 47, 143, 0.12);
+  --race-surface: rgba(255, 255, 255, 0.96);
+  --race-surface-strong: color-mix(in srgb, var(--brand-blue) 8%, #ffffff);
+  --race-line: rgba(22, 82, 216, 0.18);
+  --race-warn: rgba(13, 47, 143, 0.14);
+}
+
+:root[data-theme='dark'] {
+  --bg: #02040a;
+  --bg-top: #000000;
+  --bg-bottom: #071326;
+  --panel: #050914;
+  --panel-muted: #0a1222;
+  --panel-shine: #0e1a30;
+  --text: #ffffff;
+  --muted: #c8d3e5;
+  --border: #173574;
+  --primary: var(--brand-blue);
+  --primary-strong: #ffffff;
+  --accent: var(--brand-blue);
+  --glass: rgba(5, 9, 20, 0.92);
+  --shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+  --race-surface: rgba(5, 9, 20, 0.95);
+  --race-surface-strong: color-mix(in srgb, var(--brand-blue) 14%, #050914);
+  --race-line: rgba(22, 82, 216, 0.24);
+  --race-warn: rgba(13, 47, 143, 0.18);
+}
+
+body,
+:root[data-theme='dark'] body {
+  background:
+    linear-gradient(116deg, transparent 0 18%, rgba(22, 82, 216, 0.16) 18% calc(18% + 2px), transparent calc(18% + 2px) 100%),
+    linear-gradient(116deg, transparent 0 84%, rgba(13, 47, 143, 0.14) 84% calc(84% + 2px), transparent calc(84% + 2px) 100%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-top) 86%, transparent), color-mix(in srgb, var(--bg-bottom) 88%, transparent)),
+    linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+  background-attachment: fixed, fixed, fixed, fixed;
+  background-position: center, center, center, center;
+  background-repeat: no-repeat;
+  background-size: auto, auto, auto, cover;
+  color: var(--text);
+}
+
+:root[data-theme='dark'] body {
+  background:
+    linear-gradient(116deg, transparent 0 18%, rgba(22, 82, 216, 0.18) 18% calc(18% + 2px), transparent calc(18% + 2px) 100%),
+    linear-gradient(116deg, transparent 0 84%, rgba(13, 47, 143, 0.18) 84% calc(84% + 2px), transparent calc(84% + 2px) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.2), rgba(2, 4, 10, 0.86)),
+    linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+  background-attachment: fixed, fixed, fixed, fixed;
+  background-position: center, center, center, center;
+  background-repeat: no-repeat;
+  background-size: auto, auto, auto, cover;
+}
+
+.topbar,
+:root[data-theme='dark'] .topbar {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--brand-blue) 10%, transparent), transparent 34%),
+    var(--glass);
+  border-bottom-color: color-mix(in srgb, var(--brand-blue) 42%, var(--border));
+}
+
+:root[data-theme='light'] .brand,
+:root[data-theme='dark'] .brand,
+.brand {
+  border-color: color-mix(in srgb, var(--brand-blue) 62%, var(--border));
+  background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-deep));
+  box-shadow: 0 14px 30px rgba(13, 47, 143, 0.24);
+}
+
+.brand-logo {
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.18));
+}
+
+.nav-links a,
+.nav-more-button,
+.button,
+.icon-button,
+input,
+textarea,
+select,
+.country-combobox-trigger,
+.pilot-control-field,
+.pilot-list-search,
+.pilot-list-sort,
+.hall-search,
+.teams-search-field {
+  border-color: color-mix(in srgb, var(--brand-blue) 24%, var(--border));
+  background: color-mix(in srgb, var(--panel) 92%, var(--panel-muted));
+  color: var(--text);
+}
+
+.button.primary,
+.nav-links a.router-link-active,
+.nav-more-button.is-open,
+.race-status-toggle button.active,
+.hall-tabs button.active,
+.tab-button.active,
+.role-segment-option.is-selected,
+.status-badge,
+.race-status-ongoing,
+.race-status-registration_open,
+.status-active,
+.status-approved,
+.status-pending,
+.status-appealed,
+.status-timeout,
+.status-unapproved {
+  border-color: var(--brand-blue);
+  background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-deep));
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(13, 47, 143, 0.18);
+}
+
+.button:not(.primary):not(.danger):hover,
+.icon-button:hover,
+.nav-links a:hover:not(.router-link-active),
+.nav-more-menu a:hover {
+  color: var(--brand-blue-deep);
+  border-color: color-mix(in srgb, var(--brand-blue) 52%, var(--border));
+  background: color-mix(in srgb, var(--brand-blue) 9%, var(--panel));
+}
+
+:root[data-theme='dark'] .button:not(.primary):not(.danger):hover,
+:root[data-theme='dark'] .icon-button:hover,
+:root[data-theme='dark'] .nav-links a:hover:not(.router-link-active),
+:root[data-theme='dark'] .nav-more-menu a:hover {
+  color: #ffffff;
+  background: color-mix(in srgb, var(--brand-blue) 18%, var(--panel));
+}
+
+.card,
+.news-strip,
+.pilot-roster,
+.race-filter-bar,
+.hall-controls,
+.race-results-tabs,
+.hall-tabs,
+.role-segment,
+.avatar-edit-panel,
+.steam-connect,
+.race-results-upload,
+.championship-table-scroll,
+.fuel-note,
+.fuel-summary,
+.fuel-metric {
+  border-color: color-mix(in srgb, var(--brand-blue) 34%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-shine) 88%, var(--brand-blue) 5%), var(--race-surface)),
+    var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.card::before,
+.section-header h1::after,
+.section-header h2::after {
+  background: linear-gradient(90deg, var(--brand-blue), var(--brand-blue-deep));
+}
+
+.main-stat-card,
+.main-race-card,
+.race-item,
+.team-list-item,
+.team-member-row,
+.team-application-row,
+.race-participant-row,
+.race-penalty-card,
+.appeal-card,
+.calendar-day,
+.pilot-roster-row {
+  border-color: color-mix(in srgb, var(--brand-blue) 32%, var(--border));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--brand-blue) 8%, transparent), transparent 56%),
+    var(--race-surface);
+}
+
+.main-stat-card {
+  border-left-color: var(--brand-blue);
+}
+
+.main-stat-card .muted,
+:root[data-theme='light'] .main-stat-card .muted {
+  color: #05070d;
+}
+
+.main-stat-card strong,
+.pilot-roster-number,
+.main-race-title a,
+.race-admin-title a,
+.team-list-main strong,
+.user-list-main strong,
+.result-driver-cell strong,
+.race-participant-main strong,
+.fuel-metric strong {
+  color: var(--text);
+}
+
+:root[data-theme='light'] .pilot-roster-number,
+:root[data-theme='light'] .main-race-title a,
+:root[data-theme='light'] .race-admin-title a,
+:root[data-theme='light'] .team-list-main strong,
+:root[data-theme='light'] .user-list-main strong,
+:root[data-theme='light'] .result-driver-cell strong,
+:root[data-theme='light'] .race-participant-main strong {
+  color: #05070d;
+}
+
+.main-race-subtitle span,
+.race-details-meta span:not(.status-badge),
+.team-detail-meta span,
+.appeal-meta span,
+.main-race-meta span,
+.pilot-roster-metric,
+.team-mini-chip,
+.pill,
+.badge,
+.button-count,
+.result-position-badge {
+  border-color: color-mix(in srgb, var(--brand-blue) 42%, var(--border));
+  background: color-mix(in srgb, var(--brand-blue) 10%, var(--panel));
+  color: var(--brand-blue-deep);
+}
+
+:root[data-theme='dark'] .main-race-subtitle span,
+:root[data-theme='dark'] .race-details-meta span:not(.status-badge),
+:root[data-theme='dark'] .team-detail-meta span,
+:root[data-theme='dark'] .appeal-meta span,
+:root[data-theme='dark'] .main-race-meta span,
+:root[data-theme='dark'] .pilot-roster-metric,
+:root[data-theme='dark'] .team-mini-chip,
+:root[data-theme='dark'] .pill,
+:root[data-theme='dark'] .badge,
+:root[data-theme='dark'] .button-count,
+:root[data-theme='dark'] .result-position-badge {
+  color: #ffffff;
+  background: color-mix(in srgb, var(--brand-blue) 18%, var(--panel));
+}
+
+.table th,
+.admin-users-table th,
+.race-admin-table th,
+.hall-table th,
+.race-results-table th,
+.championship-results-table th,
+.pilot-roster-head {
+  background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-deep));
+  color: #ffffff;
+}
+
+.table td,
+.admin-users-table td,
+.race-admin-table td,
+.hall-table td,
+.race-results-table td,
+.championship-results-table td,
+.pilot-roster-row {
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+}
+
+.table tr:hover td,
+.admin-users-table tbody tr:hover td,
+.race-admin-table tbody tr:hover td,
+.hall-table tbody tr:hover td,
+.race-results-table tbody tr:hover td,
+.championship-results-table tbody tr:hover td,
+.pilot-roster-row:hover {
+  background: color-mix(in srgb, var(--brand-blue) 9%, var(--panel));
+}
+
+.race-registration-meter span,
+.main-race-card::before,
+.main-stat-card::after {
+  background: linear-gradient(180deg, var(--brand-blue), var(--brand-blue-deep));
+}
+
+.banner {
+  border-color: color-mix(in srgb, var(--brand-blue) 42%, var(--border));
+  box-shadow: 0 16px 34px rgba(13, 47, 143, 0.14);
+}
+
+.race-status-finished {
+  color: #ffffff;
+  border-color: var(--brand-blue-deep);
+  background: linear-gradient(135deg, var(--brand-blue-deep), var(--brand-blue));
+}
+
+:root[data-theme='dark'] .card,
+:root[data-theme='dark'] .news-strip,
+:root[data-theme='dark'] .pilot-roster,
+:root[data-theme='dark'] .race-filter-bar,
+:root[data-theme='dark'] .hall-controls,
+:root[data-theme='dark'] .race-results-tabs,
+:root[data-theme='dark'] .hall-tabs,
+:root[data-theme='dark'] .role-segment,
+:root[data-theme='dark'] .avatar-edit-panel,
+:root[data-theme='dark'] .steam-connect,
+:root[data-theme='dark'] .race-results-upload,
+:root[data-theme='dark'] .championship-table-scroll,
+:root[data-theme='dark'] .fuel-note,
+:root[data-theme='dark'] .fuel-summary,
+:root[data-theme='dark'] .fuel-metric {
+  border-color: color-mix(in srgb, var(--brand-blue) 38%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--brand-blue) 9%, var(--panel)), var(--race-surface)),
+    var(--panel);
+  box-shadow: none;
+}
+
+:root[data-theme='dark'] .table td,
+:root[data-theme='dark'] .admin-users-table td,
+:root[data-theme='dark'] .race-admin-table td,
+:root[data-theme='dark'] .hall-table td,
+:root[data-theme='dark'] .race-results-table td,
+:root[data-theme='dark'] .championship-results-table td,
+:root[data-theme='dark'] .pilot-roster-row {
+  color: #ffffff;
+  background: color-mix(in srgb, var(--panel) 94%, #000000);
+}
+
+@media (max-width: 900px) {
+  body,
+  :root[data-theme='dark'] body {
+    background-size: auto, auto, auto, min(720px, 92vw) auto, cover;
+    background-position: center, center, center, center 26vh, center;
+  }
+}
+
+/* Theme-specific BMRL logo, no photo layer in the page background */
+body {
+  background:
+    linear-gradient(116deg, transparent 0 84%, rgba(22, 82, 216, 0.1) 84% calc(84% + 1px), transparent calc(84% + 1px) 100%),
+    linear-gradient(116deg, transparent 0 84%, rgba(13, 47, 143, 0.14) 84% calc(84% + 2px), transparent calc(84% + 2px) 100%),
+    linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+  background-attachment: fixed, fixed, fixed;
+  background-position: center, center, center;
+  background-repeat: no-repeat;
+  background-size: auto, auto, cover;
+}
+
+:root[data-theme='dark'] body {
+  background:
+    linear-gradient(116deg, transparent 0 84%, rgba(22, 82, 216, 0.13) 84% calc(84% + 1px), transparent calc(84% + 1px) 100%),
+    linear-gradient(116deg, transparent 0 84%, rgba(13, 47, 143, 0.18) 84% calc(84% + 2px), transparent calc(84% + 2px) 100%),
+    linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+  background-attachment: fixed, fixed, fixed;
+  background-position: center, center, center;
+  background-repeat: no-repeat;
+  background-size: auto, auto, cover;
+}
+
+:root[data-theme='light'] .brand,
+:root[data-theme='dark'] .brand,
+.brand {
+  padding: 6px 10px;
+  background: var(--panel);
+  border-color: color-mix(in srgb, var(--brand-blue) 48%, var(--border));
+  box-shadow: 0 12px 26px rgba(13, 47, 143, 0.16);
+}
+
+:root[data-theme='dark'] .brand {
+  background: #050914;
+  box-shadow: none;
+}
+
+.brand-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  filter: none;
+}
+
+.brand-logo-light {
+  display: block;
+}
+
+.brand-logo-dark {
+  display: none;
+}
+
+:root[data-theme='dark'] .brand-logo-light {
+  display: none;
+}
+
+:root[data-theme='dark'] .brand-logo-dark {
+  display: block;
+}
+
+@media (max-width: 900px) {
+  body,
+  :root[data-theme='dark'] body {
+    background-size: auto, auto, cover;
+    background-position: center, center, center;
+  }
+}
+
+/* Unified result table headers and centered status controls */
+:root {
+  --result-header-gradient: linear-gradient(90deg, var(--brand-blue) 0%, var(--brand-blue-deep) 100%);
+}
+
+.race-results-table,
+.championship-results-table,
+.hall-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.race-results-table thead,
+.race-results-table thead tr,
+.championship-results-table thead,
+.championship-results-table thead tr,
+.hall-table thead,
+.hall-table thead tr {
+  background: var(--result-header-gradient);
+}
+
+.race-results-table th,
+.championship-results-table th,
+.hall-table th {
+  background: transparent;
+  color: #ffffff;
+  border-bottom-color: color-mix(in srgb, #ffffff 18%, transparent);
+}
+
+.race-results-table th:first-child,
+.championship-results-table th:first-child,
+.hall-table th:first-child {
+  border-top-left-radius: calc(var(--control-radius) - 1px);
+}
+
+.race-results-table th:last-child,
+.championship-results-table th:last-child,
+.hall-table th:last-child {
+  border-top-right-radius: calc(var(--control-radius) - 1px);
+}
+
+.race-status-toggle {
+  width: 260px;
+  margin-inline: 0;
+  align-items: center;
+  justify-content: stretch;
+  justify-self: start;
+}
+
+.race-status-toggle button {
+  min-height: 34px;
+  height: 34px;
+  padding-inline: 12px;
+  text-align: center;
+}

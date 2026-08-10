@@ -1,0 +1,407 @@
+{
+  "backend/app/__init__.py": {
+    "mtime": 1784500988.8727345,
+    "ast_hash": "c23c53e9221a69a0730f1711a4528e48",
+    "semantic_hash": "c23c53e9221a69a0730f1711a4528e48"
+  },
+  "backend/app/avatar_uploads.py": {
+    "mtime": 1785621966.4742067,
+    "ast_hash": "f655d3e4d107f294bc09a90ac58980dc",
+    "semantic_hash": "f655d3e4d107f294bc09a90ac58980dc"
+  },
+  "backend/app/config.py": {
+    "mtime": 1785751685.1943147,
+    "ast_hash": "6b6cb6c6b0ba9c3d22d46d4539af0af1",
+    "semantic_hash": "6b6cb6c6b0ba9c3d22d46d4539af0af1"
+  },
+  "backend/app/db.py": {
+    "mtime": 1785845449.479545,
+    "ast_hash": "0793859420c3b364f3fa3105ff614abc",
+    "semantic_hash": "0793859420c3b364f3fa3105ff614abc"
+  },
+  "backend/app/deps.py": {
+    "mtime": 1784680742.9624417,
+    "ast_hash": "b6ed0e58a210a9b7925dc3f4b46d0544",
+    "semantic_hash": "b6ed0e58a210a9b7925dc3f4b46d0544"
+  },
+  "backend/app/main.py": {
+    "mtime": 1785799923.0202725,
+    "ast_hash": "a73eadf2d8ff60fcbb9889ee750863b5",
+    "semantic_hash": "a73eadf2d8ff60fcbb9889ee750863b5"
+  },
+  "backend/app/models.py": {
+    "mtime": 1785844176.0359156,
+    "ast_hash": "e198db06efa00aca1f73252928e5ae5a",
+    "semantic_hash": "e198db06efa00aca1f73252928e5ae5a"
+  },
+  "backend/app/race_assets.py": {
+    "mtime": 1785845410.9994094,
+    "ast_hash": "d7cd84bca22f6ef972814cb34df5500d",
+    "semantic_hash": "d7cd84bca22f6ef972814cb34df5500d"
+  },
+  "backend/app/race_videos.py": {
+    "mtime": 1785751681.186626,
+    "ast_hash": "f9ff2cecfd6daff1f8a1f8c50fe55780",
+    "semantic_hash": "f9ff2cecfd6daff1f8a1f8c50fe55780"
+  },
+  "backend/app/rate_limit.py": {
+    "mtime": 1784539865.3220303,
+    "ast_hash": "cc33a2b7f84b8b8ad1b24746031dea17",
+    "semantic_hash": "cc33a2b7f84b8b8ad1b24746031dea17"
+  },
+  "backend/app/routers/__init__.py": {
+    "mtime": 1784328080.9665122,
+    "ast_hash": "a5f63551b3a99510da356a8abe013deb",
+    "semantic_hash": "a5f63551b3a99510da356a8abe013deb"
+  },
+  "backend/app/routers/appeals.py": {
+    "mtime": 1785608379.911798,
+    "ast_hash": "e46b988f44deeed648558b79d75e52d7",
+    "semantic_hash": "e46b988f44deeed648558b79d75e52d7"
+  },
+  "backend/app/routers/auth.py": {
+    "mtime": 1785078475.9213698,
+    "ast_hash": "19ad843293af6bc503c93d2447a0814c",
+    "semantic_hash": "19ad843293af6bc503c93d2447a0814c"
+  },
+  "backend/app/routers/banners.py": {
+    "mtime": 1784536086.3253622,
+    "ast_hash": "06c55112725ac03fa238c63cc0b02f93",
+    "semantic_hash": "06c55112725ac03fa238c63cc0b02f93"
+  },
+  "backend/app/routers/championships.py": {
+    "mtime": 1785848133.0069642,
+    "ast_hash": "a624b2234646c9f486b8f69562b59e53",
+    "semantic_hash": "a624b2234646c9f486b8f69562b59e53"
+  },
+  "backend/app/routers/dashboard.py": {
+    "mtime": 1784536044.0834198,
+    "ast_hash": "4331157de50abd22acdd728d34f2d937",
+    "semantic_hash": "4331157de50abd22acdd728d34f2d937"
+  },
+  "backend/app/routers/hall_of_fame.py": {
+    "mtime": 1785622118.0450819,
+    "ast_hash": "bd63f475a4f5940a4256e43465230254",
+    "semantic_hash": "bd63f475a4f5940a4256e43465230254"
+  },
+  "backend/app/routers/news.py": {
+    "mtime": 1784613404.1600368,
+    "ast_hash": "36a3c6478939e6fe14ab0c3e2ac20302",
+    "semantic_hash": "36a3c6478939e6fe14ab0c3e2ac20302"
+  },
+  "backend/app/routers/penalties.py": {
+    "mtime": 1785622111.2254107,
+    "ast_hash": "778feacff60d2ccbb44c6de98456cc36",
+    "semantic_hash": "778feacff60d2ccbb44c6de98456cc36"
+  },
+  "backend/app/routers/race_assets.py": {
+    "mtime": 1785717195.6786861,
+    "ast_hash": "00247fb9ff7ba99cac79cc19c28e386d",
+    "semantic_hash": "00247fb9ff7ba99cac79cc19c28e386d"
+  },
+  "backend/app/routers/races.py": {
+    "mtime": 1785844286.5764441,
+    "ast_hash": "fbf0aba21c627d061e299505e9223961",
+    "semantic_hash": "fbf0aba21c627d061e299505e9223961"
+  },
+  "backend/app/routers/setups.py": {
+    "mtime": 1784536109.771791,
+    "ast_hash": "cc2fdd988c473ccd99b3b6feac6b52ee",
+    "semantic_hash": "cc2fdd988c473ccd99b3b6feac6b52ee"
+  },
+  "backend/app/routers/teams.py": {
+    "mtime": 1785751885.9215019,
+    "ast_hash": "e5808b7a046c2103258b3ffc6f6daaea",
+    "semantic_hash": "e5808b7a046c2103258b3ffc6f6daaea"
+  },
+  "backend/app/routers/twitch.py": {
+    "mtime": 1785874130.9036257,
+    "ast_hash": "ef9772b6ec717db936713e0dc03b1950",
+    "semantic_hash": "ef9772b6ec717db936713e0dc03b1950"
+  },
+  "backend/app/routers/users.py": {
+    "mtime": 1785800003.4797425,
+    "ast_hash": "b7c2db6251c994bd45963dac073a4c79",
+    "semantic_hash": "b7c2db6251c994bd45963dac073a4c79"
+  },
+  "backend/app/schemas.py": {
+    "mtime": 1785848127.8129115,
+    "ast_hash": "8629941ad92de586b956af82ab5a9eb5",
+    "semantic_hash": "8629941ad92de586b956af82ab5a9eb5"
+  },
+  "backend/app/security.py": {
+    "mtime": 1784411836.6337829,
+    "ast_hash": "46f9d0ddb182ab28020b05ea48aed0c8",
+    "semantic_hash": "46f9d0ddb182ab28020b05ea48aed0c8"
+  },
+  "backend/app/seed.py": {
+    "mtime": 1785845683.8450136,
+    "ast_hash": "4c1d76eaa8b79035cdfb5bd0797886da",
+    "semantic_hash": "4c1d76eaa8b79035cdfb5bd0797886da"
+  },
+  "backend/app/services.py": {
+    "mtime": 1785608340.1500666,
+    "ast_hash": "d57daf61925ef24fe8609f5aeaf905c7",
+    "semantic_hash": "d57daf61925ef24fe8609f5aeaf905c7"
+  },
+  "backend/app/simulate_mass_data.py": {
+    "mtime": 1785845688.2699192,
+    "ast_hash": "bea199a8c2ae18a4ff3561ccbedcd67c",
+    "semantic_hash": "bea199a8c2ae18a4ff3561ccbedcd67c"
+  },
+  "frontend/package.json": {
+    "mtime": 1784501001.0061145,
+    "ast_hash": "0615ec63f7eb8c56e4852fa1eb1e4307",
+    "semantic_hash": "0615ec63f7eb8c56e4852fa1eb1e4307"
+  },
+  "frontend/src/App.vue": {
+    "mtime": 1785873742.7423942,
+    "ast_hash": "9e75687444a23d6fb7d88ddd2fdf5ce8",
+    "semantic_hash": "9e75687444a23d6fb7d88ddd2fdf5ce8"
+  },
+  "frontend/src/api.js": {
+    "mtime": 1785847754.5887058,
+    "ast_hash": "e2626f670701a916372a11dd42c8d280",
+    "semantic_hash": "e2626f670701a916372a11dd42c8d280"
+  },
+  "frontend/src/components/AvatarViewer.vue": {
+    "mtime": 1785622570.9112036,
+    "ast_hash": "9a3b1d1d4a93f6832c36dbbdfc66cab0",
+    "semantic_hash": "9a3b1d1d4a93f6832c36dbbdfc66cab0"
+  },
+  "frontend/src/components/CountryCombobox.vue": {
+    "mtime": 1784588462.5432851,
+    "ast_hash": "31fa3e4647018745f81b84f4515e0883",
+    "semantic_hash": "31fa3e4647018745f81b84f4515e0883"
+  },
+  "frontend/src/components/GameCheckboxGroup.vue": {
+    "mtime": 1784679468.8426526,
+    "ast_hash": "044ccb6647f1f080a0b7f2d48f344f50",
+    "semantic_hash": "044ccb6647f1f080a0b7f2d48f344f50"
+  },
+  "frontend/src/components/PaginationControls.vue": {
+    "mtime": 1785605476.002032,
+    "ast_hash": "26f3719e4cbbe163b0fb88eae90f54af",
+    "semantic_hash": "26f3719e4cbbe163b0fb88eae90f54af"
+  },
+  "frontend/src/components/PenaltyDetailsModal.vue": {
+    "mtime": 1785845916.467454,
+    "ast_hash": "c5ccb3b138292da4aad65ff67ca1cb9a",
+    "semantic_hash": "c5ccb3b138292da4aad65ff67ca1cb9a"
+  },
+  "frontend/src/components/RacePenaltyListModal.vue": {
+    "mtime": 1785845893.9141433,
+    "ast_hash": "f5b2e19befacdd5d032f4053cb3d05cb",
+    "semantic_hash": "f5b2e19befacdd5d032f4053cb3d05cb"
+  },
+  "frontend/src/components/TeamAvatar.vue": {
+    "mtime": 1785622891.9012313,
+    "ast_hash": "141a7c597238a7d0725a56e94b7ef2b0",
+    "semantic_hash": "141a7c597238a7d0725a56e94b7ef2b0"
+  },
+  "frontend/src/components/UserAvatar.vue": {
+    "mtime": 1785622884.5410478,
+    "ast_hash": "8cf35163fe4589c3b64818d989eeaeaf",
+    "semantic_hash": "8cf35163fe4589c3b64818d989eeaeaf"
+  },
+  "frontend/src/countries.js": {
+    "mtime": 1784586021.412128,
+    "ast_hash": "8425ba5b29a72d5ea04275a62917758b",
+    "semantic_hash": "8425ba5b29a72d5ea04275a62917758b"
+  },
+  "frontend/src/i18nLabels.js": {
+    "mtime": 1785795469.9301314,
+    "ast_hash": "020dbdbf93765e38d359b88ad7b97818",
+    "semantic_hash": "020dbdbf93765e38d359b88ad7b97818"
+  },
+  "frontend/src/main.js": {
+    "mtime": 1784270053.4516916,
+    "ast_hash": "dc3479fee40b85d9e6bf6fa0ba7a7d8a",
+    "semantic_hash": "dc3479fee40b85d9e6bf6fa0ba7a7d8a"
+  },
+  "frontend/src/messages.js": {
+    "mtime": 1785873831.8019378,
+    "ast_hash": "f5fb1555dd20fb246150e3e559abc0a9",
+    "semantic_hash": "f5fb1555dd20fb246150e3e559abc0a9"
+  },
+  "frontend/src/pages/AdminUserList.vue": {
+    "mtime": 1785845578.9216843,
+    "ast_hash": "7040cd9cf90debf393ae64cf29c5b395",
+    "semantic_hash": "7040cd9cf90debf393ae64cf29c5b395"
+  },
+  "frontend/src/pages/AppealModeration.vue": {
+    "mtime": 1784676739.6012871,
+    "ast_hash": "ff9c5245759a5fa34518c1ffc569fa7c",
+    "semantic_hash": "ff9c5245759a5fa34518c1ffc569fa7c"
+  },
+  "frontend/src/pages/BannerEdit.vue": {
+    "mtime": 1785623701.5390687,
+    "ast_hash": "acb064d300a757693fd3c7534678293e",
+    "semantic_hash": "acb064d300a757693fd3c7534678293e"
+  },
+  "frontend/src/pages/ChampionshipList.vue": {
+    "mtime": 1785873244.075405,
+    "ast_hash": "bd1e5dd6176455774d23c543834ff6ac",
+    "semantic_hash": "bd1e5dd6176455774d23c543834ff6ac"
+  },
+  "frontend/src/pages/FuelCalculator.vue": {
+    "mtime": 1785848761.4677596,
+    "ast_hash": "8f2b77e682d504568c491bc14d6612cc",
+    "semantic_hash": "8f2b77e682d504568c491bc14d6612cc"
+  },
+  "frontend/src/pages/HallOfFame.vue": {
+    "mtime": 1785845870.5205507,
+    "ast_hash": "9ed24becc6c065526f25d54eab2f9b10",
+    "semantic_hash": "9ed24becc6c065526f25d54eab2f9b10"
+  },
+  "frontend/src/pages/Login.vue": {
+    "mtime": 1784589276.8465989,
+    "ast_hash": "9376876a34c3f61913387f290c040cfb",
+    "semantic_hash": "9376876a34c3f61913387f290c040cfb"
+  },
+  "frontend/src/pages/MainMenu.vue": {
+    "mtime": 1785873259.1285424,
+    "ast_hash": "e2583784c8bcd6d687cdbbd0246bb409",
+    "semantic_hash": "e2583784c8bcd6d687cdbbd0246bb409"
+  },
+  "frontend/src/pages/NewsManage.vue": {
+    "mtime": 1784615176.2082896,
+    "ast_hash": "266261b46c53214d080079ed1a010ebb",
+    "semantic_hash": "266261b46c53214d080079ed1a010ebb"
+  },
+  "frontend/src/pages/PilotDetails.vue": {
+    "mtime": 1785845834.317145,
+    "ast_hash": "7b93a2321d0dfc6c4c112d49deea780c",
+    "semantic_hash": "7b93a2321d0dfc6c4c112d49deea780c"
+  },
+  "frontend/src/pages/PilotList.vue": {
+    "mtime": 1785845784.8366876,
+    "ast_hash": "b0527fc582bc462bb444a00c8cf794a6",
+    "semantic_hash": "b0527fc582bc462bb444a00c8cf794a6"
+  },
+  "frontend/src/pages/Profile.vue": {
+    "mtime": 1785845848.1811135,
+    "ast_hash": "744872f80e246db3e9068d85c9cec446",
+    "semantic_hash": "744872f80e246db3e9068d85c9cec446"
+  },
+  "frontend/src/pages/ProfileEdit.vue": {
+    "mtime": 1785767024.224009,
+    "ast_hash": "569c584be8de57d466e8c0b315957555",
+    "semantic_hash": "569c584be8de57d466e8c0b315957555"
+  },
+  "frontend/src/pages/RaceAdminList.vue": {
+    "mtime": 1785796672.2116196,
+    "ast_hash": "af0b395fb1cb2951676fa15810854f1f",
+    "semantic_hash": "af0b395fb1cb2951676fa15810854f1f"
+  },
+  "frontend/src/pages/RaceCalendar.vue": {
+    "mtime": 1785841037.2889853,
+    "ast_hash": "79afee4419f044f6fe761bf81ed830e4",
+    "semantic_hash": "79afee4419f044f6fe761bf81ed830e4"
+  },
+  "frontend/src/pages/RaceDetails.vue": {
+    "mtime": 1785873820.6752274,
+    "ast_hash": "09ec51ac9d3e5c69092741b0bcfc9ddf",
+    "semantic_hash": "09ec51ac9d3e5c69092741b0bcfc9ddf"
+  },
+  "frontend/src/pages/RaceEdit.vue": {
+    "mtime": 1785845615.1384597,
+    "ast_hash": "4f04367384c7c3905875a799e98878e6",
+    "semantic_hash": "4f04367384c7c3905875a799e98878e6"
+  },
+  "frontend/src/pages/Registration.vue": {
+    "mtime": 1785845506.1311321,
+    "ast_hash": "82628342a6a6b60c7780e7da00f9b792",
+    "semantic_hash": "82628342a6a6b60c7780e7da00f9b792"
+  },
+  "frontend/src/pages/TeamList.vue": {
+    "mtime": 1785845946.216691,
+    "ast_hash": "032ad2694c0c3923e8d794d01bb04da4",
+    "semantic_hash": "032ad2694c0c3923e8d794d01bb04da4"
+  },
+  "frontend/src/pages/UserEditModeration.vue": {
+    "mtime": 1785845978.8387702,
+    "ast_hash": "64342cf2724cc2434436f54771f07f41",
+    "semantic_hash": "64342cf2724cc2434436f54771f07f41"
+  },
+  "frontend/src/pilotDisplay.js": {
+    "mtime": 1785846057.5389647,
+    "ast_hash": "db1b69a40b5bd90bdf6925807a98359f",
+    "semantic_hash": "db1b69a40b5bd90bdf6925807a98359f"
+  },
+  "frontend/src/router.js": {
+    "mtime": 1785848582.5313237,
+    "ast_hash": "09f0575a864da83d639a32965c920c1f",
+    "semantic_hash": "09f0575a864da83d639a32965c920c1f"
+  },
+  "frontend/src/store.js": {
+    "mtime": 1785873733.6061149,
+    "ast_hash": "b3cdb59bfb1554d766ee720d16ac7676",
+    "semantic_hash": "b3cdb59bfb1554d766ee720d16ac7676"
+  },
+  "frontend/vite.config.js": {
+    "mtime": 1784240394.514884,
+    "ast_hash": "0c9b5703f606d83fe8a2194b2a1f1393",
+    "semantic_hash": "0c9b5703f606d83fe8a2194b2a1f1393"
+  },
+  "DEPLOY.md": {
+    "mtime": 1784501569.5262675,
+    "ast_hash": "6c794eca93e6b2fed9f77e1e130bb8f0",
+    "semantic_hash": "6c794eca93e6b2fed9f77e1e130bb8f0"
+  },
+  "README.md": {
+    "mtime": 1784501566.279325,
+    "ast_hash": "2c47233100a300c180ff935eb8303c57",
+    "semantic_hash": "2c47233100a300c180ff935eb8303c57"
+  },
+  "design-mockups/bmrl-redesign.html": {
+    "mtime": 1785242047.505042,
+    "ast_hash": "67c9bc7aac456d0d718f5402e0286d3e",
+    "semantic_hash": "67c9bc7aac456d0d718f5402e0286d3e"
+  },
+  "docker-compose.yml": {
+    "mtime": 1784536166.3154862,
+    "ast_hash": "3970172a9180bdeefe7582acdb5b5203",
+    "semantic_hash": "3970172a9180bdeefe7582acdb5b5203"
+  },
+  "frontend/index.html": {
+    "mtime": 1784501005.5236025,
+    "ast_hash": "c67d46de8e6ab27ba6f5b58dead15725",
+    "semantic_hash": "c67d46de8e6ab27ba6f5b58dead15725"
+  },
+  "frontend/pnpm-workspace.yaml": {
+    "mtime": 1784273073.0116189,
+    "ast_hash": "313bc17996b42ef199f6f660afba7630",
+    "semantic_hash": "313bc17996b42ef199f6f660afba7630"
+  },
+  "frontend/public/assets/avatar-template.jpg": {
+    "mtime": 1784676216.3101842,
+    "ast_hash": "73753255e72756dd66a0b3b01f19ea5d",
+    "semantic_hash": "73753255e72756dd66a0b3b01f19ea5d"
+  },
+  "frontend/public/assets/banner-bottom.svg": {
+    "mtime": 1784240394.5309384,
+    "ast_hash": "c68e92b5f38ad9e7b8b6aa86786682d3",
+    "semantic_hash": "c68e92b5f38ad9e7b8b6aa86786682d3"
+  },
+  "frontend/public/assets/banner-side.svg": {
+    "mtime": 1784501037.518891,
+    "ast_hash": "94f8f49bd02eba4473f8a681ea0b2598",
+    "semantic_hash": "94f8f49bd02eba4473f8a681ea0b2598"
+  },
+  "frontend/public/assets/banner-top.svg": {
+    "mtime": 1784501031.7597015,
+    "ast_hash": "cad0488bcca643034227e8d7bb5939c8",
+    "semantic_hash": "cad0488bcca643034227e8d7bb5939c8"
+  },
+  "frontend/public/assets/bmrl-logo-nav.png": {
+    "mtime": 1785630883.998704,
+    "ast_hash": "7904ecad9cda8cdaa85e81df4268a16f",
+    "semantic_hash": "7904ecad9cda8cdaa85e81df4268a16f"
+  },
+  "frontend/public/assets/team-avatar-template.jpg": {
+    "mtime": 1784972568.3452516,
+    "ast_hash": "b0cf9c4aa5ba29af96847b42d86b92eb",
+    "semantic_hash": "b0cf9c4aa5ba29af96847b42d86b92eb"
+  }
+}

@@ -131,7 +131,7 @@ onMounted(refreshProfile)
           <span class="pill">RER {{ formatRating(user.rating) }}</span>
           <span class="pill">SR {{ Number(user.sr).toFixed(1) }}</span>
           <span class="pill">#{{ formatPilotNumber(user.pilot_number) }}</span>
-          <span class="team-mini-chip" :title="user.team_name || t('common.none')">{{ teamShortName(user.team_name) }}</span>
+          <span class="team-mini-chip" :title="user.team_name || t('common.none')">{{ teamShortName(user.team_name, user.team_abbreviation) }}</span>
           <span class="status-badge" :class="`status-${user.status}`">{{ statusLabel(t, user.status) }}</span>
           <span class="pill">{{ roleLabel(t, user.role) }}</span>
         </div>

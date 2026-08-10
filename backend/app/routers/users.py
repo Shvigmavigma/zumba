@@ -20,18 +20,19 @@ router = APIRouter()
 settings = get_settings()
 
 
-def user_response(user: User, team_name: str | None = None, private: bool = False) -> dict:
+def user_response(user: User, team_name: str | None = None, team_abbreviation: str | None = None, private: bool = False) -> dict:
     schema = UserPrivate if private else UserPublic
     data = schema.model_validate(user).model_dump()
     data["team_name"] = team_name
+    data["team_abbreviation"] = team_abbreviation
     return data
 
 
-async def user_team_name(session: AsyncSession, user: User) -> str | None:
+async def user_team_info(session: AsyncSession, user: User) -> tuple[str | None, str | None]:
     if user.team_id is None:
-        return None
+        return None, None
     team = await session.get(Team, user.team_id)
-    return team.name if team else None
+    return (team.name, team.abbreviation) if team else (None, None)
 
 
 async def set_user_avatar(session: AsyncSession, user: User, file: UploadFile) -> dict:
@@ -48,7 +49,8 @@ async def set_user_avatar(session: AsyncSession, user: User, file: UploadFile) -
         raise
     await session.refresh(user)
     remove_avatar_file(previous_avatar_url)
-    return user_response(user, await user_team_name(session, user), private=True)
+    team_name, team_abbreviation = await user_team_info(session, user)
+    return user_response(user, team_name, team_abbreviation, private=True)
 
 
 def ensure_danger_request(payload: AdminDangerDeleteRequest, admin: User, expected_confirmation: str) -> None:
@@ -96,7 +98,7 @@ async def list_pilots(
     session: AsyncSession = Depends(get_session),
 ):
     limit = min(limit, 100)
-    stmt = select(User, Team.name).outerjoin(Team, Team.id == User.team_id).where(User.status == UserStatus.active)
+    stmt = select(User, Team.name, Team.abbreviation).outerjoin(Team, Team.id == User.team_id).where(User.status == UserStatus.active)
     if country:
         stmt = stmt.where(User.country == country)
     if search:
@@ -109,10 +111,11 @@ async def list_pilots(
                 User.last_name.ilike(like),
                 cast(User.pilot_number, String).ilike(like),
                 Team.name.ilike(like),
+                Team.abbreviation.ilike(like),
             )
         )
     rows = (await session.execute(stmt.order_by(*user_sort_columns(sort)).offset(offset).limit(limit))).all()
-    return [user_response(user, team_name) for user, team_name in rows]
+    return [user_response(user, team_name, team_abbreviation) for user, team_name, team_abbreviation in rows]
 
 
 @router.get("/moderation/pending", response_model=list[UserPrivate])
@@ -120,13 +123,13 @@ async def list_pilots(
 async def pending_users(request: Request, _: User = Depends(require_moder_plus), session: AsyncSession = Depends(get_session)):
     rows = (
         await session.execute(
-            select(User, Team.name)
+            select(User, Team.name, Team.abbreviation)
             .outerjoin(Team, Team.id == User.team_id)
             .where(or_(User.status == UserStatus.unapproved, User.pending_profile_changes.is_not(None)))
             .order_by(User.created_at)
         )
     ).all()
-    return [user_response(user, team_name, private=True) for user, team_name in rows]
+    return [user_response(user, team_name, team_abbreviation, private=True) for user, team_name, team_abbreviation in rows]
 
 
 @router.get("/admin", response_model=list[UserPrivate])
@@ -140,7 +143,7 @@ async def admin_user_list(
     limit: int = 100,
     session: AsyncSession = Depends(get_session),
 ):
-    stmt = select(User, Team.name).outerjoin(Team, Team.id == User.team_id)
+    stmt = select(User, Team.name, Team.abbreviation).outerjoin(Team, Team.id == User.team_id)
     if search:
         like = f"%{search}%"
         stmt = stmt.where(
@@ -152,6 +155,7 @@ async def admin_user_list(
                 User.last_name.ilike(like),
                 cast(User.pilot_number, String).ilike(like),
                 Team.name.ilike(like),
+                Team.abbreviation.ilike(like),
             )
         )
     rows = (
@@ -162,7 +166,7 @@ async def admin_user_list(
             .limit(min(limit, 200))
         )
     ).all()
-    users = [user for user, _ in rows]
+    users = [user for user, _, _ in rows]
     now = datetime.now(timezone.utc)
     has_expired_timeouts = False
     for user in users:
@@ -171,7 +175,7 @@ async def admin_user_list(
         await session.commit()
         for user in users:
             await session.refresh(user)
-    return [user_response(user, team_name, private=True) for user, team_name in rows]
+    return [user_response(user, team_name, team_abbreviation, private=True) for user, team_name, team_abbreviation in rows]
 
 
 @router.post("/admin/delete-pilots")
@@ -261,12 +265,12 @@ async def delete_all_races(
 @router.get("/{user_id}", response_model=UserPublic)
 @limiter.limit("600/minute")
 async def get_user(user_id: int, request: Request, session: AsyncSession = Depends(get_session)):
-    row = await session.execute(select(User, Team.name).outerjoin(Team, Team.id == User.team_id).where(User.id == user_id))
+    row = await session.execute(select(User, Team.name, Team.abbreviation).outerjoin(Team, Team.id == User.team_id).where(User.id == user_id))
     result = row.first()
     if result is None:
         raise HTTPException(status_code=404, detail="User not found")
-    user, team_name = result
-    return user_response(user, team_name)
+    user, team_name, team_abbreviation = result
+    return user_response(user, team_name, team_abbreviation)
 
 
 @router.patch("/me", response_model=UserPrivate)
@@ -288,7 +292,8 @@ async def update_me(
         user.pending_profile_changes = data
     await session.commit()
     await session.refresh(user)
-    return user_response(user, await user_team_name(session, user), private=True)
+    team_name, team_abbreviation = await user_team_info(session, user)
+    return user_response(user, team_name, team_abbreviation, private=True)
 
 
 @router.post("/me/avatar", response_model=UserPrivate)
@@ -326,7 +331,8 @@ async def update_user_profile(
     user.pending_profile_changes = None
     await session.commit()
     await session.refresh(user)
-    return user_response(user, await user_team_name(session, user), private=True)
+    team_name, team_abbreviation = await user_team_info(session, user)
+    return user_response(user, team_name, team_abbreviation, private=True)
 
 
 @router.post("/{user_id}/avatar", response_model=UserPrivate)

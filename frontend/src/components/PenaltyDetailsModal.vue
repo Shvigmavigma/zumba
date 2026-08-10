@@ -79,8 +79,8 @@ function issuerName(penalty) {
   return penalty?.issuer_nickname || penalty?.issuer_login || `#${penalty?.issuer_id}`
 }
 
-function userMeta(rating, teamName) {
-  return `RER ${formatRating(rating)} · ${teamShortName(teamName)}`
+function userMeta(rating, teamName, teamAbbreviation) {
+  return `RER ${formatRating(rating)} · ${teamShortName(teamName, teamAbbreviation)}`
 }
 </script>
 
@@ -112,11 +112,11 @@ function userMeta(rating, teamName) {
           </div>
           <div>
             <dt>{{ t('fields.target') }}</dt>
-            <dd>{{ targetName(penalty) }} <span v-if="penalty.target_pilot_number !== null && penalty.target_pilot_number !== undefined" class="muted">#{{ formatPilotNumber(penalty.target_pilot_number) }} · {{ userMeta(penalty.target_rating, penalty.target_team_name) }}</span></dd>
+            <dd>{{ targetName(penalty) }} <span v-if="penalty.target_pilot_number !== null && penalty.target_pilot_number !== undefined" class="muted">#{{ formatPilotNumber(penalty.target_pilot_number) }} · {{ userMeta(penalty.target_rating, penalty.target_team_name, penalty.target_team_abbreviation) }}</span></dd>
           </div>
           <div>
             <dt>{{ t('fields.issuer') }}</dt>
-            <dd>{{ issuerName(penalty) }} <span class="muted">{{ userMeta(penalty.issuer_rating, penalty.issuer_team_name) }}</span></dd>
+            <dd>{{ issuerName(penalty) }} <span class="muted">{{ userMeta(penalty.issuer_rating, penalty.issuer_team_name, penalty.issuer_team_abbreviation) }}</span></dd>
           </div>
           <div>
             <dt>{{ t('fields.type') }}</dt>

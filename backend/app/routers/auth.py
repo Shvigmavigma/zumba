@@ -30,6 +30,7 @@ async def private_user_response(session: AsyncSession, user: User) -> UserPrivat
     team = await session.get(Team, user.team_id) if user.team_id is not None else None
     data = UserPrivate.model_validate(user).model_dump()
     data["team_name"] = team.name if team else None
+    data["team_abbreviation"] = team.abbreviation if team else None
     return UserPrivate(**data)
 
 

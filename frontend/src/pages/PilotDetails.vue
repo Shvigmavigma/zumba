@@ -58,7 +58,7 @@ onMounted(async () => {
 
         <div class="pilot-profile-badges">
           <span class="pill">#{{ formatPilotNumber(pilot.pilot_number) }}</span>
-          <span class="pill" :title="pilot.team_name || t('common.none')">{{ t('fields.team') }} {{ teamShortName(pilot.team_name) }}</span>
+          <span class="pill" :title="pilot.team_name || t('common.none')">{{ t('fields.team') }} {{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span>
           <span class="pill">{{ countryLabel(t, pilot.country) }}</span>
           <span class="status-badge" :class="`status-${pilot.status}`">{{ statusLabel(t, pilot.status) }}</span>
           <span class="pill">{{ roleLabel(t, pilot.role) }}</span>

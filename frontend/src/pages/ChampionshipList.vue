@@ -209,7 +209,7 @@ function parseCar(value) {
 }
 
 function pilotLine(user, pilotNumber = user.pilot_number) {
-  return [`#${formatPilotNumber(pilotNumber)}`, user.nickname, teamShortName(user.team_name), `RER ${formatRating(user.rating)}`].filter(Boolean).join(' - ')
+  return [`#${formatPilotNumber(pilotNumber)}`, user.nickname, teamShortName(user.team_name, user.team_abbreviation), `RER ${formatRating(user.rating)}`].filter(Boolean).join(' - ')
 }
 
 function registrationPilotName(item) {
@@ -1027,7 +1027,7 @@ watch(standings, () => {
               <span class="result-position-badge" :class="podiumRankClass(index + 1)">{{ index + 1 }}</span>
               <div>
                 <strong>{{ pilotTitle(pilot) }}</strong>
-                <span>#{{ formatPilotNumber(pilot.pilot_number) }} - {{ teamShortName(pilot.team_name) || t('championships.noTeam') }}</span>
+                <span>#{{ formatPilotNumber(pilot.pilot_number) }} - {{ teamShortName(pilot.team_name, pilot.team_abbreviation) || t('championships.noTeam') }}</span>
               </div>
               <strong class="result-podium-time">{{ pilot.points }}</strong>
             </article>
@@ -1063,7 +1063,7 @@ watch(standings, () => {
                       </RouterLink>
                     </div>
                   </td>
-                  <td><span class="team-mini-chip">{{ teamShortName(pilot.team_name) }}</span></td>
+                  <td><span class="team-mini-chip">{{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span></td>
                   <td><strong>{{ pilot.points }}</strong></td>
                   <td>{{ pilot.pole_points }}</td>
                   <td>{{ pilot.starts }}</td>

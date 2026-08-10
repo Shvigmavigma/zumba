@@ -216,18 +216,18 @@ async def build_fan_vote_payload(session: AsyncSession, race: Race, current_user
 
     user_rows = (
         await session.execute(
-            select(User, Team.name)
+            select(User, Team.name, Team.abbreviation)
             .outerjoin(Team, Team.id == User.team_id)
             .where(User.id.in_(option_ids))
         )
     ).all()
-    users_by_id = {user.id: (user, team_name) for user, team_name in user_rows}
+    users_by_id = {user.id: (user, team_name, team_abbreviation) for user, team_name, team_abbreviation in user_rows}
     options = []
     for user_id in option_ids:
         item = users_by_id.get(user_id)
         if item is None:
             continue
-        user, team_name = item
+        user, team_name, team_abbreviation = item
         votes = counts.get(user.id, 0)
         options.append(
             {
@@ -238,6 +238,7 @@ async def build_fan_vote_payload(session: AsyncSession, race: Race, current_user
                 "last_name": user.last_name,
                 "pilot_number": user.pilot_number,
                 "team_name": team_name,
+                "team_abbreviation": team_abbreviation,
                 "avatar_color": user.avatar_color,
                 "avatar_url": user.avatar_url,
                 "rating": int(round(float(user.rating))),
@@ -279,7 +280,7 @@ async def ensure_fan_vote_options_are_registered(session: AsyncSession, race: Ra
         raise HTTPException(status_code=400, detail=f"Fan vote pilots must be registered for this race: {', '.join(map(str, missing_ids))}")
 
 
-def registration_to_json(registration: RaceRegistration, user: User | None = None, team_name: str | None = None) -> dict:
+def registration_to_json(registration: RaceRegistration, user: User | None = None, team_name: str | None = None, team_abbreviation: str | None = None) -> dict:
     data = {
         "user_id": registration.user_id,
         "car_model": registration.car_model,
@@ -301,6 +302,7 @@ def registration_to_json(registration: RaceRegistration, user: User | None = Non
                 "rating_race_count": user.rating_race_count,
                 "team_id": user.team_id,
                 "team_name": team_name,
+                "team_abbreviation": team_abbreviation,
                 "avatar_color": user.avatar_color,
                 "avatar_url": user.avatar_url,
                 "games": user.games or [],
@@ -650,14 +652,14 @@ def build_manual_results_payload(race: Race, payload: ManualResultsUpload, regis
 async def get_registered_pilots(session: AsyncSession, race_id: int) -> list[dict]:
     rows = (
         await session.execute(
-            select(RaceRegistration, User, Team.name)
+            select(RaceRegistration, User, Team.name, Team.abbreviation)
             .join(User, User.id == RaceRegistration.user_id)
             .outerjoin(Team, Team.id == User.team_id)
             .where(RaceRegistration.race_id == race_id)
             .order_by(RaceRegistration.registered_at, RaceRegistration.id)
         )
     ).all()
-    return [registration_to_json(registration, user, team_name) for registration, user, team_name in rows]
+    return [registration_to_json(registration, user, team_name, team_abbreviation) for registration, user, team_name, team_abbreviation in rows]
 
 
 async def ensure_race_pilot_number_available(session: AsyncSession, race_id: int, pilot_number: int) -> None:
@@ -679,15 +681,15 @@ async def attach_registered_pilots(session: AsyncSession, races: list[Race]) -> 
     grouped: dict[int, list[dict]] = {race_id: [] for race_id in race_ids}
     rows = (
         await session.execute(
-            select(RaceRegistration, User, Team.name)
+            select(RaceRegistration, User, Team.name, Team.abbreviation)
             .join(User, User.id == RaceRegistration.user_id)
             .outerjoin(Team, Team.id == User.team_id)
             .where(RaceRegistration.race_id.in_(race_ids))
             .order_by(RaceRegistration.race_id, RaceRegistration.registered_at, RaceRegistration.id)
         )
     ).all()
-    for registration, user, team_name in rows:
-        grouped.setdefault(registration.race_id, []).append(registration_to_json(registration, user, team_name))
+    for registration, user, team_name, team_abbreviation in rows:
+        grouped.setdefault(registration.race_id, []).append(registration_to_json(registration, user, team_name, team_abbreviation))
     for race in races:
         set_committed_value(race, "registered_pilots", grouped.get(race.id, []))
 

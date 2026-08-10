@@ -1,0 +1,978 @@
+{
+  "nodes": [
+    {
+      "id": "readme_bmrl_race_control",
+      "label": "BMRL Race Control",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_fastapi_rest_api",
+      "label": "FastAPI REST API",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_jwt_roles",
+      "label": "JWT Roles",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_postgresql_async_sqlalchemy",
+      "label": "PostgreSQL Async SQLAlchemy",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_redis_slowapi_rate_limiting",
+      "label": "Redis SlowAPI Rate Limiting",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_vue3_spa",
+      "label": "Vue 3 SPA",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_docker_compose_stack",
+      "label": "Docker Compose Stack",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_performance_targets",
+      "label": "Performance Targets",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_pagination",
+      "label": "Paginated Lists",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_row_lock_registration_rationale",
+      "label": "Row Lock Registration Rationale",
+      "file_type": "rationale",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Race registration uses row locking to avoid duplicate or lost applications under parallel requests."
+    },
+    {
+      "id": "readme_redis_shared_rate_limit_rationale",
+      "label": "Shared Rate Limit Rationale",
+      "file_type": "rationale",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Redis keeps SlowAPI limits shared across backend workers."
+    },
+    {
+      "id": "deploy_transfer_launch_guide",
+      "label": "Transfer And Launch Guide",
+      "file_type": "document",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\DEPLOY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "deploy_env_configuration",
+      "label": "Environment Configuration",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\DEPLOY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "deploy_steam_public_base_url_rationale",
+      "label": "Steam Public Base URL Requirement",
+      "file_type": "rationale",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\DEPLOY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Steam OpenID callback depends on PUBLIC_BASE_URL matching the externally visible site URL."
+    },
+    {
+      "id": "deploy_docker_compose_startup",
+      "label": "Docker Compose Startup",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\DEPLOY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "deploy_https_proxying",
+      "label": "HTTPS Proxying",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\DEPLOY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "deploy_backup_restore",
+      "label": "PostgreSQL Backup And Restore",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\DEPLOY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docker_compose_stack",
+      "label": "Docker Compose Stack",
+      "file_type": "code",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docker_compose_postgres_service",
+      "label": "Postgres Service",
+      "file_type": "code",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docker_compose_redis_service",
+      "label": "Redis Service",
+      "file_type": "code",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docker_compose_backend_service",
+      "label": "Backend Service",
+      "file_type": "code",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docker_compose_web_service",
+      "label": "Web Service",
+      "file_type": "code",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docker_compose_postgres_data_volume",
+      "label": "Postgres Data Volume",
+      "file_type": "code",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docker_compose_backend_uploads_volume",
+      "label": "Backend Uploads Volume",
+      "file_type": "code",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docker_compose_web_port_80",
+      "label": "Published Port 80",
+      "file_type": "code",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_index_html_entrypoint",
+      "label": "HTML Entrypoint",
+      "file_type": "code",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\index.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_index_vue_app_mount",
+      "label": "Vue App Mount",
+      "file_type": "code",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\index.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_index_src_main_js_module",
+      "label": "src/main.js Module",
+      "file_type": "code",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\index.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_pnpm_workspace",
+      "label": "PNPM Workspace",
+      "file_type": "code",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\pnpm-workspace.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "design_mockups_bmrl_redesign_concept",
+      "label": "BMRL Redesign Concept",
+      "file_type": "document",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\design-mockups\\bmrl-redesign.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "design_mockups_bmrl_redesign_race_list",
+      "label": "Race List Design",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\design-mockups\\bmrl-redesign.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "design_mockups_bmrl_redesign_race_detail_screen",
+      "label": "Race Detail Design",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\design-mockups\\bmrl-redesign.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "design_mockups_bmrl_redesign_admin_screen",
+      "label": "Admin Screen Design",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\design-mockups\\bmrl-redesign.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "design_mockups_bmrl_redesign_visual_system",
+      "label": "Racing Visual System",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\design-mockups\\bmrl-redesign.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_public_assets_bmrl_logo_nav",
+      "label": "BMRL Navigation Logo",
+      "file_type": "image",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\public\\assets\\bmrl-logo-nav.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_public_assets_avatar_template",
+      "label": "Driver Avatar Template",
+      "file_type": "image",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\public\\assets\\avatar-template.jpg",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_public_assets_team_avatar_template",
+      "label": "Team Avatar Template",
+      "file_type": "image",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\public\\assets\\team-avatar-template.jpg",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_public_assets_banner_top",
+      "label": "Top Banner Asset",
+      "file_type": "image",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\public\\assets\\banner-top.svg",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_public_assets_banner_side",
+      "label": "Side Banner Asset",
+      "file_type": "image",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\public\\assets\\banner-side.svg",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_public_assets_banner_bottom",
+      "label": "Bottom Banner Asset",
+      "file_type": "image",
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\public\\assets\\banner-bottom.svg",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "readme_bmrl_race_control",
+      "target": "readme_fastapi_rest_api",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_bmrl_race_control",
+      "target": "readme_jwt_roles",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_bmrl_race_control",
+      "target": "readme_postgresql_async_sqlalchemy",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_bmrl_race_control",
+      "target": "readme_redis_slowapi_rate_limiting",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_bmrl_race_control",
+      "target": "readme_vue3_spa",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_bmrl_race_control",
+      "target": "readme_docker_compose_stack",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_bmrl_race_control",
+      "target": "readme_performance_targets",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_bmrl_race_control",
+      "target": "readme_pagination",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_fastapi_rest_api",
+      "target": "backend_app_main",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_jwt_roles",
+      "target": "backend_app_security",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_postgresql_async_sqlalchemy",
+      "target": "backend_app_db_base",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_redis_slowapi_rate_limiting",
+      "target": "backend_app_rate_limit",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_vue3_spa",
+      "target": "frontend_src_app",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_vue3_spa",
+      "target": "frontend_src_router",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_row_lock_registration_rationale",
+      "target": "backend_app_routers_races",
+      "relation": "rationale_for",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_redis_shared_rate_limit_rationale",
+      "target": "backend_app_rate_limit",
+      "relation": "rationale_for",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "deploy_transfer_launch_guide",
+      "target": "deploy_env_configuration",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\DEPLOY.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "deploy_transfer_launch_guide",
+      "target": "deploy_docker_compose_startup",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\DEPLOY.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "deploy_transfer_launch_guide",
+      "target": "deploy_https_proxying",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\DEPLOY.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "deploy_transfer_launch_guide",
+      "target": "deploy_backup_restore",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\DEPLOY.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "deploy_steam_public_base_url_rationale",
+      "target": "deploy_env_configuration",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\DEPLOY.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "deploy_docker_compose_startup",
+      "target": "readme_docker_compose_stack",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\DEPLOY.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docker_compose_stack",
+      "target": "docker_compose_postgres_service",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docker_compose_stack",
+      "target": "docker_compose_redis_service",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docker_compose_stack",
+      "target": "docker_compose_backend_service",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docker_compose_stack",
+      "target": "docker_compose_web_service",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docker_compose_backend_service",
+      "target": "backend_app_main",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docker_compose_web_service",
+      "target": "frontend_src_main",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docker_compose_backend_service",
+      "target": "docker_compose_postgres_service",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docker_compose_backend_service",
+      "target": "docker_compose_redis_service",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docker_compose_postgres_service",
+      "target": "docker_compose_postgres_data_volume",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docker_compose_backend_service",
+      "target": "docker_compose_backend_uploads_volume",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docker_compose_web_service",
+      "target": "docker_compose_web_port_80",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\docker-compose.yml",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_index_html_entrypoint",
+      "target": "frontend_index_vue_app_mount",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\index.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_index_html_entrypoint",
+      "target": "frontend_index_src_main_js_module",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\index.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_index_src_main_js_module",
+      "target": "frontend_src_main",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\index.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_index_vue_app_mount",
+      "target": "frontend_src_app",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\index.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "design_mockups_bmrl_redesign_concept",
+      "target": "design_mockups_bmrl_redesign_visual_system",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\design-mockups\\bmrl-redesign.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "design_mockups_bmrl_redesign_concept",
+      "target": "design_mockups_bmrl_redesign_race_list",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\design-mockups\\bmrl-redesign.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "design_mockups_bmrl_redesign_concept",
+      "target": "design_mockups_bmrl_redesign_race_detail_screen",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\design-mockups\\bmrl-redesign.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "design_mockups_bmrl_redesign_concept",
+      "target": "design_mockups_bmrl_redesign_admin_screen",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\design-mockups\\bmrl-redesign.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "design_mockups_bmrl_redesign_race_list",
+      "target": "frontend_src_pages_mainmenu",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\design-mockups\\bmrl-redesign.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "design_mockups_bmrl_redesign_race_detail_screen",
+      "target": "frontend_src_pages_racedetails",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\design-mockups\\bmrl-redesign.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "design_mockups_bmrl_redesign_admin_screen",
+      "target": "frontend_src_pages_adminuserlist",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\design-mockups\\bmrl-redesign.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_public_assets_bmrl_logo_nav",
+      "target": "frontend_src_app",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\public\\assets\\bmrl-logo-nav.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_public_assets_banner_top",
+      "target": "frontend_src_pages_mainmenu",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\public\\assets\\banner-top.svg",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_public_assets_banner_side",
+      "target": "frontend_src_pages_mainmenu",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\public\\assets\\banner-side.svg",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_public_assets_banner_bottom",
+      "target": "frontend_src_pages_mainmenu",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\public\\assets\\banner-bottom.svg",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "bmrl_application_stack",
+      "label": "BMRL Application Stack",
+      "nodes": [
+        "readme_fastapi_rest_api",
+        "readme_postgresql_async_sqlalchemy",
+        "readme_redis_slowapi_rate_limiting",
+        "readme_vue3_spa",
+        "docker_compose_backend_service",
+        "docker_compose_web_service"
+      ],
+      "relation": "form",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md"
+    },
+    {
+      "id": "race_management_workflow",
+      "label": "Race Management Workflow",
+      "nodes": [
+        "backend_app_routers_races",
+        "frontend_src_pages_racedetails",
+        "design_mockups_bmrl_redesign_race_detail_screen",
+        "readme_row_lock_registration_rationale"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\README.md"
+    },
+    {
+      "id": "bmrl_visual_branding_assets",
+      "label": "BMRL Visual Branding Assets",
+      "nodes": [
+        "design_mockups_bmrl_redesign_visual_system",
+        "frontend_public_assets_bmrl_logo_nav",
+        "frontend_public_assets_banner_top",
+        "frontend_public_assets_banner_side",
+        "frontend_public_assets_banner_bottom"
+      ],
+      "relation": "form",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "C:\\Users\\PC\\Desktop\\proga\\zumba\\frontend\\public\\assets\\bmrl-logo-nav.png"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

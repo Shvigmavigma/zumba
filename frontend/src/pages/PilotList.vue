@@ -101,7 +101,7 @@ function pilotCountry(pilot) {
         </div>
 
         <span class="pilot-roster-team" role="cell" :data-label="t('fields.team')">
-          <span class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name) }}</span>
+          <span class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span>
         </span>
         <span class="pilot-roster-country" role="cell" :data-label="t('fields.country')">{{ pilotCountry(pilot) }}</span>
         <span class="pilot-roster-metric" role="cell" data-label="RER"><strong>{{ formatRating(pilot.rating) }}</strong><small>RER</small></span>

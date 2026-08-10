@@ -54,9 +54,88 @@ async def init_db() -> None:
         await conn.execute(text("ALTER TABLE teams ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(255)"))
         await conn.execute(text("ALTER TABLE teams ADD COLUMN IF NOT EXISTS avatar_upload_count INTEGER DEFAULT 0"))
         await conn.execute(text("ALTER TABLE teams ADD COLUMN IF NOT EXISTS avatar_upload_window_start TIMESTAMP WITH TIME ZONE"))
+        await conn.execute(text("ALTER TABLE teams ADD COLUMN IF NOT EXISTS abbreviation VARCHAR(3)"))
+        await conn.execute(
+            text(
+                """
+                DO $$
+                DECLARE
+                    team_row RECORD;
+                    seed INTEGER;
+                    candidate TEXT;
+                BEGIN
+                    FOR team_row IN
+                        SELECT id
+                        FROM teams
+                        WHERE abbreviation IS NULL OR abbreviation !~ '^[A-Z]{3}$'
+                        ORDER BY id
+                    LOOP
+                        seed := team_row.id % 17576;
+                        LOOP
+                            candidate :=
+                                chr(65 + ((seed / 676)::INTEGER % 26)) ||
+                                chr(65 + ((seed / 26)::INTEGER % 26)) ||
+                                chr(65 + (seed % 26));
+                            EXIT WHEN NOT EXISTS (
+                                SELECT 1 FROM teams WHERE id <> team_row.id AND abbreviation = candidate
+                            );
+                            seed := (seed + 1) % 17576;
+                        END LOOP;
+                        UPDATE teams SET abbreviation = candidate WHERE id = team_row.id;
+                    END LOOP;
+                END $$;
+                """
+            )
+        )
+        await conn.execute(text("ALTER TABLE teams ALTER COLUMN abbreviation SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE teams DROP CONSTRAINT IF EXISTS ck_teams_abbreviation_format"))
+        await conn.execute(text("ALTER TABLE teams ADD CONSTRAINT ck_teams_abbreviation_format CHECK (abbreviation ~ '^[A-Z]{3}$')"))
         await conn.execute(text("UPDATE teams SET avatar_upload_count = 0 WHERE avatar_upload_count IS NULL"))
         await conn.execute(text("ALTER TABLE teams ALTER COLUMN avatar_upload_count SET DEFAULT 0"))
         await conn.execute(text("ALTER TABLE teams ALTER COLUMN avatar_upload_count SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE team_creation_requests ADD COLUMN IF NOT EXISTS abbreviation VARCHAR(3)"))
+        await conn.execute(
+            text(
+                """
+                DO $$
+                DECLARE
+                    request_row RECORD;
+                    seed INTEGER;
+                    candidate TEXT;
+                BEGIN
+                    FOR request_row IN
+                        SELECT id
+                        FROM team_creation_requests
+                        WHERE abbreviation IS NULL OR abbreviation !~ '^[A-Z]{3}$'
+                        ORDER BY id
+                    LOOP
+                        seed := request_row.id % 17576;
+                        LOOP
+                            candidate :=
+                                chr(65 + ((seed / 676)::INTEGER % 26)) ||
+                                chr(65 + ((seed / 26)::INTEGER % 26)) ||
+                                chr(65 + (seed % 26));
+                            EXIT WHEN NOT EXISTS (
+                                SELECT 1
+                                FROM team_creation_requests
+                                WHERE id <> request_row.id
+                                  AND status = 'pending'
+                                  AND abbreviation = candidate
+                            )
+                            AND NOT EXISTS (
+                                SELECT 1 FROM teams WHERE abbreviation = candidate
+                            );
+                            seed := (seed + 1) % 17576;
+                        END LOOP;
+                        UPDATE team_creation_requests SET abbreviation = candidate WHERE id = request_row.id;
+                    END LOOP;
+                END $$;
+                """
+            )
+        )
+        await conn.execute(text("ALTER TABLE team_creation_requests ALTER COLUMN abbreviation SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE team_creation_requests DROP CONSTRAINT IF EXISTS ck_team_creation_requests_abbreviation_format"))
+        await conn.execute(text("ALTER TABLE team_creation_requests ADD CONSTRAINT ck_team_creation_requests_abbreviation_format CHECK (abbreviation ~ '^[A-Z]{3}$')"))
         await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS video_url VARCHAR(255)"))
         await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS video_filename VARCHAR(255)"))
         await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS video_uploaded_at TIMESTAMP WITH TIME ZONE"))
@@ -110,6 +189,7 @@ async def init_db() -> None:
         )
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_team_id ON users (team_id)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_teams_owner_id ON teams (owner_id)"))
+        await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_teams_abbreviation ON teams (abbreviation)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_team_creation_requests_status_created ON team_creation_requests (status, created_at)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_team_creation_requests_requester_status ON team_creation_requests (requester_id, status)"))
         await conn.execute(
@@ -126,6 +206,15 @@ async def init_db() -> None:
                 """
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_team_creation_request_pending_name
                 ON team_creation_requests (name)
+                WHERE status = 'pending'
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_team_creation_request_pending_abbreviation
+                ON team_creation_requests (abbreviation)
                 WHERE status = 'pending'
                 """
             )

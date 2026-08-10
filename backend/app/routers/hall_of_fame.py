@@ -37,7 +37,7 @@ def podium_position(row: dict) -> int | None:
     return normalized if normalized in PODIUM_POINTS else None
 
 
-def pilot_payload(user: User, team_name: str | None, stats: dict[str, int]) -> HallOfFamePilotRead:
+def pilot_payload(user: User, team_name: str | None, team_abbreviation: str | None, stats: dict[str, int]) -> HallOfFamePilotRead:
     return HallOfFamePilotRead(
         id=user.id,
         login=user.login,
@@ -53,6 +53,7 @@ def pilot_payload(user: User, team_name: str | None, stats: dict[str, int]) -> H
         avatar_url=user.avatar_url,
         team_id=user.team_id,
         team_name=team_name,
+        team_abbreviation=team_abbreviation,
         points=stats["points"],
         gold=stats["gold"],
         silver=stats["silver"],
@@ -114,16 +115,16 @@ async def hall_of_fame(request: Request, session: AsyncSession = Depends(get_ses
 
     user_rows = (
         await session.execute(
-            select(User, Team.name)
+            select(User, Team.name, Team.abbreviation)
             .outerjoin(Team, Team.id == User.team_id)
             .where(User.id.in_(pilot_stats.keys()))
         )
     ).all()
-    users_by_id = {user.id: (user, team_name) for user, team_name in user_rows}
+    users_by_id = {user.id: (user, team_name, team_abbreviation) for user, team_name, team_abbreviation in user_rows}
 
     pilots = [
-        pilot_payload(user, team_name, pilot_stats[user.id])
-        for user, team_name in users_by_id.values()
+        pilot_payload(user, team_name, team_abbreviation, pilot_stats[user.id])
+        for user, team_name, team_abbreviation in users_by_id.values()
         if pilot_stats[user.id]["points"] > 0
     ]
     pilots.sort(key=podium_sort_key)
@@ -165,6 +166,7 @@ async def hall_of_fame(request: Request, session: AsyncSession = Depends(get_ses
                 HallOfFameTeamRead(
                     id=team.id,
                     name=team.name,
+                    abbreviation=team.abbreviation,
                     description=team.description or "",
                     avatar_color=team.avatar_color,
                     avatar_url=team.avatar_url,

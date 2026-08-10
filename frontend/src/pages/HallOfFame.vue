@@ -199,7 +199,7 @@ watch(visibleTeams, () => {
                 </RouterLink>
               </div>
             </td>
-            <td><span class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name) }}</span></td>
+            <td><span class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span></td>
             <td><span class="hall-medal-value gold">{{ pilot.gold }}</span></td>
             <td><span class="hall-medal-value silver">{{ pilot.silver }}</span></td>
             <td><span class="hall-medal-value bronze">{{ pilot.bronze }}</span></td>
@@ -236,7 +236,7 @@ watch(visibleTeams, () => {
                 <TeamAvatar mini :src="team.avatar_url" :color="team.avatar_color" :label="team.name" />
                 <span class="hall-title">
                   <strong>{{ team.name }}</strong>
-                  <span>{{ team.description || t('common.none') }}</span>
+                  <span>{{ team.abbreviation }} · {{ team.description || t('common.none') }}</span>
                 </span>
               </div>
             </td>
@@ -251,7 +251,7 @@ watch(visibleTeams, () => {
                 <UserAvatar mini :src="team.best_pilot.avatar_url" :color="team.best_pilot.avatar_color" :label="pilotTitle(team.best_pilot)" />
                 <span>
                   <strong>{{ pilotTitle(team.best_pilot) }}</strong>
-                  <small>#{{ formatPilotNumber(team.best_pilot.pilot_number) }} - {{ teamShortName(team.best_pilot.team_name) }}</small>
+                  <small>#{{ formatPilotNumber(team.best_pilot.pilot_number) }} - {{ teamShortName(team.best_pilot.team_name, team.best_pilot.team_abbreviation) }}</small>
                 </span>
               </RouterLink>
               <span v-else>{{ t('common.none') }}</span>
