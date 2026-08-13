@@ -17,7 +17,7 @@ from app.race_videos import remove_race_video_file, save_race_video_file
 from app.rate_limit import limiter
 from app.schemas import FanVoteCast, FanVoteConfigRead, FanVoteConfigUpdate, FanVoteRead, FanVoteSetup
 from app.schemas import AccResultsUpload, ManualResultsUpload, RaceCreate, RaceManageRead, RaceRead, RaceRegisterRequest, RaceUpdate, ResultsUpload
-from app.services import apply_sr_penalties, recalculate_all_ratings, recalculate_race_results, restore_race_sr_bonus, restore_sr_penalty
+from app.services import apply_sr_penalties, recalculate_all_ratings, recalculate_race_results, restore_race_sr_bonus, restore_sr_penalty, result_rows
 
 
 router = APIRouter()
@@ -101,6 +101,11 @@ ACC_CAR_MODEL_IDS = {
 
 def update_time_based_status(race: Race) -> None:
     now = datetime.now(timezone.utc)
+    if race.game == "LMU" and race.status == RaceStatus.registration_open:
+        open_at = race.lmu_results_at or race.datetime_end
+        if open_at and to_utc(open_at) <= now:
+            race.status = RaceStatus.ongoing
+        return
     if race.status == RaceStatus.not_started and race.datetime_start <= now:
         race.status = RaceStatus.ongoing
     if race.status == RaceStatus.registration_open and race.datetime_end <= now:
@@ -123,11 +128,17 @@ def ensure_can_manage_race(user: User, race: Race, action: str) -> None:
 def normalize_external_race_data(data: dict, race: Race | None = None) -> dict:
     game = data.get("game", race.game if race else None)
     if game != "LMU":
+        if "lmu_results_at" in data:
+            data["lmu_results_at"] = None
         return data
     link = str(data.get("server_link", race.server_link if race else "") or "").strip()
     if not link:
         raise HTTPException(status_code=400, detail="LMU races require an external link")
     data["server_link"] = link
+    lmu_results_at = data.get("lmu_results_at", race.lmu_results_at if race else None)
+    if lmu_results_at is None:
+        lmu_results_at = data.get("datetime_end", race.datetime_end if race else None)
+    data["lmu_results_at"] = lmu_results_at
     data["track"] = "LMU"
     data["car_class"] = "LMU"
     data["has_qualification"] = False
@@ -186,6 +197,10 @@ def normalize_fan_vote_options(value) -> list[int]:
         if user_id > 0 and user_id not in options:
             options.append(user_id)
     return options[:3]
+
+
+def race_result_user_ids(race: Race) -> set[int]:
+    return {int(row["user_id"]) for row in result_rows(race.results) if row.get("user_id") is not None}
 
 
 async def build_fan_vote_payload(session: AsyncSession, race: Race, current_user: User | None) -> FanVoteRead:
@@ -275,9 +290,10 @@ async def ensure_fan_vote_options_are_registered(session: AsyncSession, race: Ra
             )
         ).all()
     )
-    missing_ids = [user_id for user_id in option_user_ids if user_id not in registered_ids]
+    valid_ids = registered_ids | race_result_user_ids(race)
+    missing_ids = [user_id for user_id in option_user_ids if user_id not in valid_ids]
     if missing_ids:
-        raise HTTPException(status_code=400, detail=f"Fan vote pilots must be registered for this race: {', '.join(map(str, missing_ids))}")
+        raise HTTPException(status_code=400, detail=f"Fan vote pilots must be registered or present in race results: {', '.join(map(str, missing_ids))}")
 
 
 def registration_to_json(registration: RaceRegistration, user: User | None = None, team_name: str | None = None, team_abbreviation: str | None = None) -> dict:
@@ -463,6 +479,37 @@ def acc_line_name(line: dict) -> str:
     return " ".join(str(driver.get(part) or "").strip() for part in ("firstName", "lastName")).strip() or str(driver.get("shortName") or "")
 
 
+def normalize_lmu_driver_name(value: str | None) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def lmu_user_keys(user: User) -> set[str]:
+    return {
+        key
+        for key in (
+            normalize_lmu_driver_name(user.nickname),
+            normalize_lmu_driver_name(user.login),
+            normalize_lmu_driver_name(f"{user.first_name} {user.last_name}"),
+        )
+        if key
+    }
+
+
+async def lmu_user_lookup(session: AsyncSession) -> dict[str, tuple[User, str | None, str | None] | None]:
+    rows = list(
+        (
+            await session.execute(
+                select(User, Team.name, Team.abbreviation).outerjoin(Team, Team.id == User.team_id)
+            )
+        ).all()
+    )
+    lookup: dict[str, tuple[User, str | None, str | None] | None] = {}
+    for user, team_name, team_abbreviation in rows:
+        for key in lmu_user_keys(user):
+            lookup[key] = (user, team_name, team_abbreviation) if key not in lookup else None
+    return lookup
+
+
 def acc_best_lap_map(qualification_results: dict | None) -> dict[str, dict]:
     rows: dict[str, dict] = {}
     if not qualification_results:
@@ -522,6 +569,76 @@ def ensure_acc_lines_are_registered(session_name: str, payload: dict, users_by_s
         preview = "; ".join(missing[:8])
         suffix = f"; +{len(missing) - 8} more" if len(missing) > 8 else ""
         raise HTTPException(status_code=400, detail=f"ACC {session_name} JSON contains pilots who are not registered for this race: {preview}{suffix}")
+
+
+async def build_lmu_results_payload(session: AsyncSession, race: Race, qualification_results: dict | None, race_results: dict) -> dict:
+    if qualification_results is not None:
+        validate_acc_session(qualification_results, "Q")
+    validate_acc_session(race_results, "R")
+    users_by_name = await lmu_user_lookup(session)
+    qualification_by_player = acc_best_lap_map(qualification_results)
+
+    rows: list[dict] = []
+    for raw_position, line in enumerate(race_results["sessionResult"]["leaderBoardLines"], start=1):
+        driver_name = acc_line_name(line)
+        user_match = users_by_name.get(normalize_lmu_driver_name(driver_name))
+        user = user_match[0] if user_match else None
+        team_name = user_match[1] if user_match else None
+        team_abbreviation = user_match[2] if user_match else None
+        timing = line.get("timing") or {}
+        player_id = acc_line_player_id(line)
+        race_number = acc_line_race_number(line)
+        finish_ms = timing.get("totalTime")
+        driver_total_times = line.get("driverTotalTimes") if isinstance(line.get("driverTotalTimes"), list) else []
+        qualification = qualification_by_player.get(player_id, {})
+        rows.append(
+            {
+                "user_id": user.id if user else None,
+                "login": user.login if user else None,
+                "nickname": user.nickname if user else None,
+                "first_name": user.first_name if user else "",
+                "last_name": user.last_name if user else "",
+                "pilot_number": user.pilot_number if user else None,
+                "avatar_color": user.avatar_color if user else "#2563eb",
+                "avatar_url": user.avatar_url if user else None,
+                "team_name": team_name,
+                "team_abbreviation": team_abbreviation,
+                "rating": int(round(float(user.rating))) if user else None,
+                "sr": float(user.sr) if user else None,
+                "driver_name": driver_name,
+                "match_status": "matched" if user else "unmatched",
+                "player_id": acc_player_id(player_id),
+                "race_number": race_number,
+                "car_model": line.get("car", {}).get("carModel"),
+                "finish_ms": int(finish_ms) if isinstance(finish_ms, (int, float)) else None,
+                "driver_total_time_ms": int(driver_total_times[0]) if driver_total_times else None,
+                "lap_count": int(timing.get("lapCount") or 0),
+                "best_lap_ms": timing.get("bestLap"),
+                "qualification_position": qualification.get("qualification_position"),
+                "qualification_best_lap_ms": qualification.get("qualification_best_lap_ms"),
+                "raw_position": raw_position,
+                "source": "lmu",
+            }
+        )
+
+    return {
+        "format": "lmu",
+        "track": race_results.get("trackName") or race.track,
+        "qualification_enabled": qualification_results is not None,
+        "qualification": (
+            {
+                "session_type": qualification_results.get("sessionType"),
+                "raw": qualification_results,
+            }
+            if qualification_results is not None
+            else None
+        ),
+        "race": {
+            "session_type": race_results.get("sessionType"),
+            "raw": race_results,
+        },
+        "rows": rows,
+    }
 
 
 def build_acc_results_payload(race: Race, qualification_results: dict | None, race_results: dict, rows: list[tuple[RaceRegistration, User]]) -> dict:
@@ -610,27 +727,77 @@ def build_acc_results_payload(race: Race, qualification_results: dict | None, ra
     }
 
 
-def build_manual_results_payload(race: Race, payload: ManualResultsUpload, registered: list[dict]) -> dict:
+def manual_result_pilot_data(user: User, team_name: str | None = None, team_abbreviation: str | None = None) -> dict:
+    return {
+        "user_id": user.id,
+        "login": user.login,
+        "nickname": user.nickname,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "pilot_number": user.pilot_number,
+        "race_number": user.pilot_number,
+        "avatar_color": user.avatar_color,
+        "avatar_url": user.avatar_url,
+        "team_name": team_name,
+        "team_abbreviation": team_abbreviation,
+        "rating": int(round(float(user.rating))),
+        "sr": float(user.sr),
+        "country": user.country,
+        "driver_name": " ".join(filter(None, [user.first_name, user.last_name])) or user.nickname or user.login,
+    }
+
+
+async def get_manual_result_pilots(session: AsyncSession, user_ids: set[int]) -> dict[int, dict]:
+    if not user_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(User, Team.name, Team.abbreviation)
+            .outerjoin(Team, Team.id == User.team_id)
+            .where(User.id.in_(user_ids))
+        )
+    ).all()
+    return {user.id: manual_result_pilot_data(user, team_name, team_abbreviation) for user, team_name, team_abbreviation in rows}
+
+
+def build_manual_results_payload(race: Race, payload: ManualResultsUpload, registered: list[dict], manual_pilots: dict[int, dict] | None = None) -> dict:
     registered_by_id = {int(item["user_id"]): item for item in registered if item.get("user_id") is not None}
+    pilots_by_id = manual_pilots if race.game == "LMU" else registered_by_id
     rows: list[dict] = []
     seen: set[int] = set()
     for row in payload.rows:
-        if row.user_id not in registered_by_id:
-            raise HTTPException(status_code=400, detail=f"Pilot {row.user_id} is not registered for this race")
-        pilot = registered_by_id[row.user_id]
+        if row.user_id in seen:
+            raise HTTPException(status_code=400, detail=f"Duplicate pilot in results: {row.user_id}")
+        if row.user_id not in pilots_by_id:
+            detail = "Pilot is not found" if race.game == "LMU" else "Pilot is not registered for this race"
+            raise HTTPException(status_code=400, detail=f"{detail}: {row.user_id}")
+        pilot = pilots_by_id[row.user_id]
         seen.add(row.user_id)
         rows.append(
             {
                 "user_id": row.user_id,
                 "login": pilot.get("login"),
                 "nickname": pilot.get("nickname"),
+                "first_name": pilot.get("first_name") or "",
+                "last_name": pilot.get("last_name") or "",
+                "pilot_number": pilot.get("pilot_number"),
+                "race_number": pilot.get("race_number") or pilot.get("pilot_number"),
+                "avatar_color": pilot.get("avatar_color") or "#2563eb",
+                "avatar_url": pilot.get("avatar_url"),
+                "team_name": pilot.get("team_name"),
+                "team_abbreviation": pilot.get("team_abbreviation"),
+                "rating": pilot.get("rating"),
+                "sr": pilot.get("sr"),
+                "country": pilot.get("country"),
                 "driver_name": " ".join(filter(None, [pilot.get("first_name"), pilot.get("last_name")])) or pilot.get("nickname"),
                 "finish_ms": row.finish_ms,
                 "lap_count": row.lap_count,
                 "best_lap_ms": row.best_lap_ms,
-                "source": "manual",
+                "source": "lmu_manual" if race.game == "LMU" else "manual",
             }
         )
+    if race.game == "LMU":
+        return {"format": "lmu_manual", "track": race.track, "qualification_enabled": False, "rows": rows}
     for user_id, pilot in registered_by_id.items():
         if user_id not in seen:
             rows.append(
@@ -638,6 +805,17 @@ def build_manual_results_payload(race: Race, payload: ManualResultsUpload, regis
                     "user_id": user_id,
                     "login": pilot.get("login"),
                     "nickname": pilot.get("nickname"),
+                    "first_name": pilot.get("first_name") or "",
+                    "last_name": pilot.get("last_name") or "",
+                    "pilot_number": pilot.get("pilot_number"),
+                    "race_number": pilot.get("pilot_number"),
+                    "avatar_color": pilot.get("avatar_color") or "#2563eb",
+                    "avatar_url": pilot.get("avatar_url"),
+                    "team_name": pilot.get("team_name"),
+                    "team_abbreviation": pilot.get("team_abbreviation"),
+                    "rating": pilot.get("rating"),
+                    "sr": pilot.get("sr"),
+                    "country": pilot.get("country"),
                     "driver_name": " ".join(filter(None, [pilot.get("first_name"), pilot.get("last_name")])) or pilot.get("nickname"),
                     "finish_ms": None,
                     "lap_count": 0,
@@ -794,6 +972,7 @@ async def manage_races(
             "name": race.name,
             "description": race.description,
             "server_link": race.server_link,
+            "lmu_results_at": race.lmu_results_at,
             "status": race.status,
             "datetime_start": race.datetime_start,
             "datetime_end": race.datetime_end,
@@ -895,6 +1074,11 @@ async def update_race(
         end = data.get("datetime_end", race.datetime_end)
         if end <= start:
             raise HTTPException(status_code=400, detail="Registration end must be after start")
+    if requested_status == RaceStatus.finished:
+        finish_game = data.get("game", race.game)
+        finish_lmu_results_at = data.get("lmu_results_at", race.lmu_results_at)
+        if finish_game == "LMU" and finish_lmu_results_at and to_utc(finish_lmu_results_at) > datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="LMU race can be finished after the configured finish time")
     if requested_status == RaceStatus.finished and requested_results is None and race.results is None:
         raise HTTPException(status_code=400, detail="Upload race results before finishing the race")
     data = await normalize_race_update_assets(session, race, data)
@@ -1214,7 +1398,9 @@ async def upload_results(
     race = await ensure_race(session, race_id)
     ensure_can_manage_race(user, race, "upload results to")
     if race.game == "ACC":
-        raise HTTPException(status_code=400, detail="Use ACC qualification and race JSON upload for ACC races")
+        raise HTTPException(status_code=400, detail="Use simulator JSON upload for ACC races")
+    if race.game == "LMU":
+        raise HTTPException(status_code=400, detail="Use manual result upload for LMU races")
     if race.status == RaceStatus.finished:
         await restore_race_sr_bonus(session, race)
     race.results = payload.results
@@ -1239,9 +1425,9 @@ async def upload_acc_results(
     session: AsyncSession = Depends(get_session),
 ):
     race = await ensure_race(session, race_id)
-    ensure_can_manage_race(user, race, "upload ACC results to")
+    ensure_can_manage_race(user, race, "upload simulator results to")
     if race.game != "ACC":
-        raise HTTPException(status_code=400, detail="ACC result JSON can only be uploaded for ACC races")
+        raise HTTPException(status_code=400, detail="Simulator result JSON can only be uploaded for ACC races")
     registration_rows = await get_registration_rows(session, race.id)
     if race.status == RaceStatus.finished:
         await restore_race_sr_bonus(session, race)
@@ -1269,11 +1455,12 @@ async def upload_manual_results(
     race = await ensure_race(session, race_id)
     ensure_can_manage_race(user, race, "upload manual results to")
     if race.game == "ACC":
-        raise HTTPException(status_code=400, detail="Use ACC result JSON upload for ACC races")
+        raise HTTPException(status_code=400, detail="Use simulator result JSON upload for ACC races")
     registered = await get_registered_pilots(session, race.id)
+    manual_pilots = await get_manual_result_pilots(session, {row.user_id for row in payload.rows}) if race.game == "LMU" else None
     if race.status == RaceStatus.finished:
         await restore_race_sr_bonus(session, race)
-    race.results = build_manual_results_payload(race, payload, registered)
+    race.results = build_manual_results_payload(race, payload, registered, manual_pilots)
     race.status = RaceStatus.finished
     race.is_passed = True
     await recalculate_race_results(session, race)

@@ -24,7 +24,9 @@ export function gameOptions(t, includeAll = false) {
 }
 
 export function isExternalRace(race) {
-  return race?.game === 'LMU' && Boolean(race.server_link)
+  if (race?.game !== 'LMU' || !race.server_link || race.status === 'finished' || race.results) return false
+  const openAt = race.lmu_results_at || race.datetime_end
+  return !openAt || new Date(openAt).getTime() > Date.now()
 }
 
 export function raceOpenHref(race) {

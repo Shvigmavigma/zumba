@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { Eye, EyeOff, Plus, Save, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
-import { state } from '../store'
+import { formatDateTime } from '../timezone'
 
 const { t } = useI18n()
 const items = ref([])
@@ -21,13 +21,7 @@ const form = ref({
 const sortedItems = computed(() => [...items.value].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
 
 function formatDate(value) {
-  return new Date(value).toLocaleString(state.locale, {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  return formatDateTime(value)
 }
 
 async function load() {

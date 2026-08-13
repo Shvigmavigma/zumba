@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
 import { gameLabel, gameOptions, isExternalRace, raceOpenHref, statusLabel } from '../i18nLabels'
-import { state } from '../store'
+import { formatDateTime } from '../timezone'
 
 const { t } = useI18n()
 const races = ref([])
@@ -30,14 +30,7 @@ const visibleCount = computed(() => races.value.length)
 const hasNextPage = computed(() => races.value.length === pageSize)
 
 function formatDate(value) {
-  return new Date(value).toLocaleString(state.locale, {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23'
-  })
+  return formatDateTime(value)
 }
 
 function fillPercent(race) {

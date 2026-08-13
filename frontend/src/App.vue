@@ -1,9 +1,10 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CalendarDays, Calculator, Flag, Home, Languages, ListChecks, LogIn, LogOut, Medal, Moon, MoreHorizontal, Newspaper, Shield, Sun, Trophy, User, Users } from 'lucide-vue-next'
+import { CalendarDays, Calculator, Clock3, Flag, Home, Languages, ListChecks, LogIn, LogOut, Medal, Moon, MoreHorizontal, Newspaper, Shield, Sun, Trophy, User, Users } from 'lucide-vue-next'
 import { statusLabel } from './i18nLabels'
 import { clearSession, state } from './store'
+import { timeZoneOptions } from './timezone'
 
 const { t, locale } = useI18n()
 
@@ -72,12 +73,29 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => state.timeZone,
+  (value) => {
+    const nextTimeZone = timeZoneOptions.some((item) => item.value === value) ? value : 'UTC'
+    if (nextTimeZone !== value) {
+      state.timeZone = nextTimeZone
+      return
+    }
+    localStorage.setItem('timeZone', nextTimeZone)
+  },
+  { immediate: true }
+)
+
 function toggleTheme() {
   state.theme = state.theme === 'light' ? 'dark' : 'light'
 }
 
 function setLocale(value) {
   state.locale = value === 'en' ? 'en' : 'ru'
+}
+
+function setTimeZone(value) {
+  state.timeZone = timeZoneOptions.some((item) => item.value === value) ? value : 'UTC'
 }
 
 function sameKeys(left, right) {
@@ -225,6 +243,12 @@ watch(navItems, () => {
           <Languages :size="18" />
           <span>{{ state.locale.toUpperCase() }}</span>
         </button>
+        <label class="timezone-picker" :title="t('common.timezone')">
+          <Clock3 :size="16" />
+          <select :value="state.timeZone" :aria-label="t('common.timezone')" @change="setTimeZone($event.target.value)">
+            <option v-for="option in timeZoneOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+        </label>
         <RouterLink v-if="!state.user" class="button small" to="/login"><LogIn :size="16" />{{ t('nav.login') }}</RouterLink>
         <RouterLink v-else class="button small" to="/profile">
           <User :size="16" />

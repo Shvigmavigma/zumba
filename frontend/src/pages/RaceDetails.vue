@@ -10,6 +10,7 @@ import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, isExternalRace, statusLabel } from '../i18nLabels'
 import { filterPilots, formatPilotNumber, formatRating, sortPilots, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
+import { formatDateTime } from '../timezone'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -38,6 +39,9 @@ const fanVote = ref(null)
 const fanVoteSelection = ref([])
 const fanVoteSaving = ref(false)
 const fanVoteVoting = ref(false)
+const manualPilotSearch = ref('')
+const manualPilotResults = ref([])
+const manualPilotLoading = ref(false)
 
 const participants = computed(() => race.value?.registered_pilots || [])
 const visibleParticipants = computed(() => sortPilots(filterPilots(participants.value, participantSearch.value), participantSort.value))
@@ -47,11 +51,37 @@ const registered = computed(() => participants.value.some((item) => item.user_id
 const canManageRace = computed(() => ['admin', 'moder'].includes(state.user?.role))
 const canIssuePenalty = computed(() => ['admin', 'moder', 'marshall'].includes(state.user?.role) && ['ongoing', 'finished'].includes(race.value?.status))
 const isChampionshipStage = computed(() => Boolean(race.value?.championship_id))
+const isLmuRace = computed(() => race.value?.game === 'LMU')
+const lmuResultsOpen = computed(() => !isLmuRace.value || race.value?.status === 'finished' || Boolean(race.value?.results) || !race.value?.lmu_results_at || new Date(race.value.lmu_results_at).getTime() <= Date.now())
+const usesSimulatorJsonResults = computed(() => race.value?.game === 'ACC')
+const canEditManualResults = computed(() => canManageRace.value && !usesSimulatorJsonResults.value && (race.value?.status !== 'finished' || isLmuRace.value))
 const canShowRegistrationPanel = computed(() => Boolean(state.user) && (race.value?.status === 'registration_open' || (isChampionshipStage.value && race.value?.status === 'not_started')))
 const resultRows = computed(() => {
   if (Array.isArray(race.value?.results)) return race.value.results
   return race.value?.results?.rows || []
 })
+const resultParticipants = computed(() => {
+  const seen = new Set()
+  return resultRows.value
+    .filter((row) => row.user_id && !seen.has(row.user_id) && seen.add(row.user_id))
+    .map((row) => ({
+      user_id: row.user_id,
+      login: row.login,
+      nickname: row.nickname,
+      first_name: row.first_name || '',
+      last_name: row.last_name || '',
+      pilot_number: row.pilot_number ?? row.race_number,
+      avatar_color: row.avatar_color || '#2563eb',
+      avatar_url: row.avatar_url || '',
+      rating: row.rating,
+      sr: row.sr,
+      car_model: row.car_model,
+      team_name: row.team_name,
+      team_abbreviation: row.team_abbreviation,
+      country: row.country
+    }))
+})
+const penaltyParticipants = computed(() => resultParticipants.value.length ? resultParticipants.value : participants.value)
 const raceRowsByPlayer = computed(() => {
   const rows = new Map()
   resultRows.value.forEach((row) => {
@@ -83,6 +113,12 @@ const qualificationRows = computed(() => {
       user_id: participant?.user_id || raceRow?.user_id || null,
       login: participant?.login || raceRow?.login || null,
       nickname: participant?.nickname || raceRow?.nickname || null,
+      avatar_color: participant?.avatar_color || raceRow?.avatar_color || '#2563eb',
+      avatar_url: participant?.avatar_url || raceRow?.avatar_url || '',
+      rating: participant?.rating ?? raceRow?.rating,
+      sr: participant?.sr ?? raceRow?.sr,
+      team_name: participant?.team_name || raceRow?.team_name,
+      team_abbreviation: participant?.team_abbreviation || raceRow?.team_abbreviation,
       driver_name: accDriverName(driver),
       player_id: playerId,
       race_number: line.car?.raceNumber ?? raceRow?.race_number ?? null,
@@ -104,7 +140,8 @@ const resultTabItems = computed(() => [
   ...(qualificationRows.value.length ? [{ id: 'qualification', label: t('raceDetails.qualificationResultsTab'), count: qualificationRows.value.length }] : [])
 ])
 const fanVoteOptions = computed(() => fanVote.value?.options || [])
-const fanVoteCanSetup = computed(() => canManageRace.value && race.value?.status === 'finished' && participants.value.length >= 3)
+const fanVoteCandidates = computed(() => resultParticipants.value.length ? resultParticipants.value : participants.value)
+const fanVoteCanSetup = computed(() => canManageRace.value && race.value?.status === 'finished' && fanVoteCandidates.value.length >= 3)
 const fanVoteCanSaveSetup = computed(() => fanVoteCanSetup.value && fanVoteSelection.value.length === 3 && !fanVoteSaving.value)
 const fanVoteResultVisible = computed(() => Boolean(fanVote.value?.show_results))
 
@@ -130,13 +167,7 @@ function accDriverName(driver) {
 }
 
 function formatDate(value) {
-  return new Date(value).toLocaleString(state.locale, {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  return formatDateTime(value)
 }
 
 function formatFanVoteDate(value) {
@@ -223,12 +254,12 @@ function syncFanVoteSelection() {
     fanVoteSelection.value = fanVote.value.options.map((option) => option.user_id).slice(0, 3)
     return
   }
-  const participantIds = new Set(participants.value.map((item) => item.user_id))
+  const participantIds = new Set(fanVoteCandidates.value.map((item) => item.user_id))
   fanVoteSelection.value = fanVoteSelection.value.filter((item) => participantIds.has(item)).slice(0, 3)
 }
 
 function participantById(userId) {
-  return participants.value.find((item) => item.user_id === userId)
+  return fanVoteCandidates.value.find((item) => item.user_id === userId)
 }
 
 function resultPilotName(row) {
@@ -240,25 +271,26 @@ function resultPilotName(row) {
 function resultPilotSubtitle(row) {
   const participant = participantById(row.user_id)
   if (participant) return participantSubtitle(participant)
-  if (row.race_number) return `#${row.race_number}`
+  const number = row.race_number ?? row.pilot_number
+  if (number !== null && number !== undefined) return `#${formatPilotNumber(number)}`
   return row.player_id || '-'
 }
 
 function resultPilotColor(row) {
-  return participantById(row.user_id)?.avatar_color || '#2563eb'
+  return participantById(row.user_id)?.avatar_color || row.avatar_color || '#2563eb'
 }
 
 function resultPilotAvatar(row) {
-  return participantById(row.user_id)?.avatar_url || ''
+  return participantById(row.user_id)?.avatar_url || row.avatar_url || ''
 }
 
 function resultPilotTeam(row) {
   const participant = participantById(row.user_id)
-  return teamShortName(participant?.team_name, participant?.team_abbreviation)
+  return teamShortName(participant?.team_name || row.team_name, participant?.team_abbreviation || row.team_abbreviation)
 }
 
 function resultPilotRating(row) {
-  return formatRating(row.rating_new ?? participantById(row.user_id)?.rating)
+  return formatRating(row.rating_new ?? participantById(row.user_id)?.rating ?? row.rating)
 }
 
 function resultPenalty(row) {
@@ -314,24 +346,54 @@ function closePenaltiesModal() {
   penaltyCreateOpen.value = false
 }
 
+function manualRowFromPilot(item, existing = {}) {
+  const userId = item.user_id ?? item.id
+  const pilot = { ...item, user_id: userId }
+  return {
+    user_id: userId,
+    label: participantName(pilot),
+    finish_time: existing.finish_ms ? formatDuration(existing.finish_ms) : '',
+    lap_count: existing.lap_count || 0,
+    best_lap_time: existing.best_lap_ms ? formatDuration(existing.best_lap_ms) : ''
+  }
+}
+
 function fillManualRows() {
   const existingRows = new Map(resultRows.value.filter((item) => item.user_id).map((item) => [item.user_id, item]))
-  manualRows.value = participants.value.map((item) => {
-    const existing = existingRows.get(item.user_id) || {}
-    return {
-      user_id: item.user_id,
-      label: participantName(item),
-      finish_time: existing.finish_ms ? formatDuration(existing.finish_ms) : '',
-      lap_count: existing.lap_count || 0,
-      best_lap_time: existing.best_lap_ms ? formatDuration(existing.best_lap_ms) : ''
-    }
-  })
+  const source = isLmuRace.value ? resultParticipants.value : participants.value
+  manualRows.value = source.map((item) => manualRowFromPilot(item, existingRows.get(item.user_id) || {}))
+}
+
+async function searchManualPilots() {
+  if (!manualPilotSearch.value.trim()) {
+    manualPilotResults.value = []
+    return
+  }
+  manualPilotLoading.value = true
+  try {
+    const params = new URLSearchParams({ search: manualPilotSearch.value, limit: '12' })
+    manualPilotResults.value = await api(`/users/pilots?${params.toString()}`)
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    manualPilotLoading.value = false
+  }
+}
+
+function addManualPilot(pilot) {
+  const userId = pilot.user_id ?? pilot.id
+  if (!userId || manualRows.value.some((row) => row.user_id === userId)) return
+  manualRows.value.push(manualRowFromPilot({ ...pilot, user_id: userId }))
+}
+
+function removeManualRow(userId) {
+  manualRows.value = manualRows.value.filter((row) => row.user_id !== userId)
 }
 
 async function load() {
   try {
     const loadedRace = await api(`/races/${route.params.id}`)
-    if (isExternalRace(loadedRace)) {
+    if (isExternalRace(loadedRace) && !['admin', 'moder'].includes(state.user?.role)) {
       window.location.href = loadedRace.server_link
       return
     }
@@ -556,6 +618,10 @@ onMounted(load)
 watch([participantSearch, participantSort], () => {
   participantPage.value = 1
 })
+watch(manualPilotSearch, () => {
+  if (manualPilotSearch.value.trim().length >= 1) searchManualPilots()
+  else manualPilotResults.value = []
+})
 watch(visibleParticipants, () => {
   if (participantPage.value > participantTotalPages.value) {
     participantPage.value = participantTotalPages.value
@@ -724,7 +790,7 @@ watch(visibleParticipants, () => {
 
                 <div class="fan-vote-candidates">
                   <button
-                    v-for="item in participants"
+                    v-for="item in fanVoteCandidates"
                     :key="`fan-vote-${item.user_id}`"
                     class="fan-vote-candidate"
                     type="button"
@@ -747,7 +813,7 @@ watch(visibleParticipants, () => {
         </aside>
       </div>
 
-      <section class="card race-participants-panel">
+      <section v-if="!isLmuRace" class="card race-participants-panel">
         <div class="section-header">
           <div>
             <h2>{{ t('raceDetails.participants') }}</h2>
@@ -809,12 +875,12 @@ watch(visibleParticipants, () => {
         <div class="section-header">
           <div>
             <h2>{{ t('raceDetails.results') }}</h2>
-            <p v-if="race.game !== 'ACC'" class="muted">{{ t('raceDetails.manualResultsHint') }}</p>
+            <p v-if="!usesSimulatorJsonResults" class="muted">{{ t('raceDetails.manualResultsHint') }}</p>
           </div>
           <span class="pill">{{ resultRows.length }}</span>
         </div>
 
-        <form v-if="canManageRace && race.status !== 'finished' && race.game === 'ACC'" class="form race-results-upload" @submit.prevent="uploadAccResults">
+        <form v-if="canManageRace && race.status !== 'finished' && usesSimulatorJsonResults" class="form race-results-upload" @submit.prevent="uploadAccResults">
           <div class="form-row">
             <label v-if="race.has_qualification" class="field">
               <span>{{ t('raceDetails.qualificationResultsJson') }}</span>
@@ -825,29 +891,51 @@ watch(visibleParticipants, () => {
               <input type="file" accept=".json,application/json" required @change="setAccFile('race', $event)" />
             </label>
           </div>
-          <button class="button primary" type="submit" :disabled="actionPending">{{ t('raceDetails.uploadAccResults') }}</button>
+          <button class="button primary" type="submit" :disabled="actionPending">{{ race.game === 'LMU' ? t('raceDetails.uploadSimulatorResults') : t('raceDetails.uploadAccResults') }}</button>
         </form>
 
-        <form v-else-if="canManageRace && race.status !== 'finished'" class="form race-results-upload" @submit.prevent="uploadManualResults">
+        <form v-else-if="canEditManualResults" class="form race-results-upload" @submit.prevent="uploadManualResults">
+          <div v-if="isLmuRace" class="pilot-inline-controls">
+            <input v-model="manualPilotSearch" type="search" :placeholder="t('championships.pilotSearchPlaceholder')" />
+            <span class="pill">{{ manualPilotLoading ? t('common.loading') : manualPilotResults.length }}</span>
+          </div>
+          <div v-if="isLmuRace && manualPilotResults.length" class="fan-vote-candidates manual-pilot-results">
+            <button
+              v-for="pilot in manualPilotResults"
+              :key="`manual-pilot-${pilot.id}`"
+              class="fan-vote-candidate"
+              type="button"
+              :disabled="manualRows.some((row) => row.user_id === pilot.id)"
+              @click="addManualPilot(pilot)"
+            >
+              <UserAvatar mini :src="pilot.avatar_url" :color="pilot.avatar_color" :label="participantName({ ...pilot, user_id: pilot.id })" />
+              <span>{{ participantName({ ...pilot, user_id: pilot.id }) }}</span>
+              <small>#{{ formatPilotNumber(pilot.pilot_number) }} - RER {{ formatRating(pilot.rating) }}</small>
+            </button>
+          </div>
           <div class="manual-results-table">
-            <div class="manual-results-head">
+            <div class="manual-results-head" :class="{ 'has-actions': isLmuRace }">
               <span>{{ t('roles.pilot') }}</span>
               <span>{{ t('raceDetails.resultTime') }}</span>
               <span>{{ t('raceDetails.laps') }}</span>
               <span>{{ t('raceDetails.bestLap') }}</span>
+              <span v-if="isLmuRace"></span>
             </div>
-            <div v-for="row in manualRows" :key="row.user_id" class="manual-results-row">
+            <div v-for="row in manualRows" :key="row.user_id" class="manual-results-row" :class="{ 'has-actions': isLmuRace }">
               <strong>{{ row.label }}</strong>
               <input v-model="row.finish_time" required placeholder="45:12.345" />
               <input v-model.number="row.lap_count" type="number" min="0" />
               <input v-model="row.best_lap_time" placeholder="1:48.250" />
+              <button v-if="isLmuRace" class="icon-button danger" type="button" :title="t('common.delete')" @click="removeManualRow(row.user_id)">
+                <Trash2 :size="16" />
+              </button>
             </div>
           </div>
           <button class="button primary" type="submit" :disabled="actionPending || !manualRows.length">{{ t('raceDetails.saveManualResults') }}</button>
         </form>
 
         <div v-if="resultRows.length || qualificationRows.length" class="race-results-shell">
-          <div class="race-results-tabs">
+          <div v-if="resultTabItems.length > 1 && !isLmuRace" class="race-results-tabs">
             <button v-for="tab in resultTabItems" :key="tab.id" class="tab-button" type="button" :class="{ active: resultsTab === tab.id }" @click="resultsTab = tab.id">
               <span>{{ tab.label }}</span>
               <strong>{{ tab.count }}</strong>
@@ -915,7 +1003,7 @@ watch(visibleParticipants, () => {
         :open="penaltiesOpen"
         :penalties="penalties"
         :appeals="appeals"
-        :participants="participants"
+        :participants="penaltyParticipants"
         :can-create="canIssuePenalty"
         v-model:create-open="penaltyCreateOpen"
         :busy="actionPending"

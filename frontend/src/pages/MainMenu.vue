@@ -1,11 +1,12 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ChevronLeft, ChevronRight, ClipboardCheck, Eye, Flag, Maximize2, PlayCircle, Plus, Radio, ShieldCheck, Users, X } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, ClipboardCheck, Eye, Flag, HeartHandshake, Maximize2, Minimize2, PlayCircle, Plus, Radio, ShieldCheck, Users, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
 import { gameLabel, gameOptions, isExternalRace, raceOpenHref, statusLabel } from '../i18nLabels'
 import { state } from '../store'
+import { formatDayPart, formatInTimeZone, formatMonthPart, formatTimeOnly } from '../timezone'
 
 const { t } = useI18n()
 const stats = ref({ pilots: 0, completed_races: 0, open_races: 0, staff: 0 })
@@ -14,6 +15,7 @@ const setups = ref([])
 const banners = ref([])
 const news = ref([])
 const registrationChampionships = ref([])
+const donationSettings = ref({ donation_url: '', top_donations: [] })
 const newsTrack = ref(null)
 const activeNewsIndex = ref(0)
 const isNewsViewerOpen = ref(false)
@@ -37,9 +39,11 @@ const defaultTwitchStatus = {
   thumbnail_url: '',
   viewer_count: null
 }
+const savedTwitchCollapsed = typeof localStorage === 'undefined' ? null : localStorage.getItem('twitchWidgetCollapsed')
 const twitchStatus = ref({ ...defaultTwitchStatus })
 const twitchError = ref('')
 const isTwitchViewerOpen = ref(false)
+const isTwitchCollapsed = ref(savedTwitchCollapsed === null ? true : savedTwitchCollapsed === 'true')
 const twitchWidgetPosition = ref({ x: 24, y: 120 })
 const twitchDragState = ref(null)
 const twitchWasDragged = ref(false)
@@ -48,6 +52,8 @@ const currentNews = computed(() => news.value[activeNewsIndex.value] || null)
 const featuredChampionship = computed(() => registrationChampionships.value[0] || null)
 const featuredChampionshipStageCount = computed(() => featuredChampionship.value?.stage_count ?? featuredChampionship.value?.stages?.length ?? 0)
 const featuredChampionshipStageText = computed(() => stageCount(featuredChampionshipStageCount.value))
+const featuredChampionshipRegistered = computed(() => featuredChampionship.value?.my_registration_status === 'approved')
+const topDonations = computed(() => donationSettings.value.top_donations?.slice(0, 3) || [])
 const raceGameOptions = computed(() => gameOptions(t, true))
 const canFilterMyGames = computed(() => Boolean(state.user?.games?.length))
 const racesHasNextPage = computed(() => races.value.length === racePageSize)
@@ -55,6 +61,7 @@ const canEmbedTwitch = computed(() => {
   if (twitchStatus.value.is_live && twitchStatus.value.embed_type === 'channel') return true
   return twitchStatus.value.status === 'vod' && twitchStatus.value.embed_type === 'video' && Boolean(twitchStatus.value.embed_value)
 })
+const canEmbedTwitchPreview = computed(() => twitchStatus.value.is_live && canEmbedTwitch.value)
 const twitchWidgetStyle = computed(() => ({
   transform: `translate3d(${twitchWidgetPosition.value.x}px, ${twitchWidgetPosition.value.y}px, 0)`
 }))
@@ -97,8 +104,14 @@ const twitchDisplayTitle = computed(() => {
 })
 
 function getTwitchWidgetSize() {
-  if (typeof window === 'undefined') return 312
-  return window.innerWidth <= 520 ? 276 : 312
+  if (typeof window === 'undefined') return 420
+  return window.innerWidth <= 520 ? Math.max(280, window.innerWidth - 32) : 420
+}
+
+function getTwitchWidgetDimensions() {
+  if (isTwitchCollapsed.value) return { width: 270, height: 58 }
+  const width = getTwitchWidgetSize()
+  return { width, height: Math.max(300, Math.round(width * 0.76)) }
 }
 
 function banner(position) {
@@ -106,7 +119,7 @@ function banner(position) {
 }
 
 function formatRaceDate(value) {
-  return new Date(value).toLocaleString(state.locale, {
+  return formatInTimeZone(value, {
     day: '2-digit',
     month: 'short',
     hour: '2-digit',
@@ -116,19 +129,15 @@ function formatRaceDate(value) {
 }
 
 function formatRaceDay(value) {
-  return new Date(value).toLocaleDateString(state.locale, { day: '2-digit' })
+  return formatDayPart(value)
 }
 
 function formatRaceMonth(value) {
-  return new Date(value).toLocaleDateString(state.locale, { month: 'short' })
+  return formatMonthPart(value)
 }
 
 function formatRaceTime(value) {
-  return new Date(value).toLocaleTimeString(state.locale, {
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23'
-  })
+  return formatTimeOnly(value)
 }
 
 function stagePluralSuffix(count) {
@@ -146,6 +155,10 @@ function stageCount(count) {
 
 function registeredCount(race) {
   return race.registered_pilots?.length || 0
+}
+
+function isRaceRegistered(race) {
+  return Boolean(state.user && race.registered_pilots?.some((item) => item.user_id === state.user.id))
 }
 
 function fillPercent(race) {
@@ -256,10 +269,10 @@ function closeTwitchViewer() {
 
 function clampTwitchWidgetPosition(position = twitchWidgetPosition.value) {
   if (typeof window === 'undefined') return position
-  const size = getTwitchWidgetSize()
+  const size = getTwitchWidgetDimensions()
   const margin = 16
-  const maxX = Math.max(margin, window.innerWidth - size - margin)
-  const maxY = Math.max(margin, window.innerHeight - size - margin)
+  const maxX = Math.max(margin, window.innerWidth - size.width - margin)
+  const maxY = Math.max(margin, window.innerHeight - size.height - margin)
   const nextPosition = {
     x: Math.min(Math.max(margin, position.x), maxX),
     y: Math.min(Math.max(margin, position.y), maxY)
@@ -270,11 +283,11 @@ function clampTwitchWidgetPosition(position = twitchWidgetPosition.value) {
 
 function placeTwitchWidget() {
   if (typeof window === 'undefined') return
-  const size = getTwitchWidgetSize()
+  const size = getTwitchWidgetDimensions()
   const margin = 16
   clampTwitchWidgetPosition({
-    x: window.innerWidth - size - margin,
-    y: window.innerHeight - size - margin
+    x: window.innerWidth - size.width - margin,
+    y: window.innerHeight - size.height - margin
   })
 }
 
@@ -324,24 +337,33 @@ function openTwitchFromWidget() {
   openTwitchViewer()
 }
 
+function toggleTwitchCollapsed(event) {
+  event?.stopPropagation()
+  isTwitchCollapsed.value = !isTwitchCollapsed.value
+  localStorage.setItem('twitchWidgetCollapsed', isTwitchCollapsed.value ? 'true' : 'false')
+  requestAnimationFrame(() => clampTwitchWidgetPosition())
+}
+
 onMounted(async () => {
   window.addEventListener('keydown', handleNewsKeydown)
   window.addEventListener('resize', handleTwitchResize)
   placeTwitchWidget()
   loadTwitchStatus()
   try {
-    const [statsData, setupsData, bannerData, newsData, championshipData] = await Promise.all([
+    const [statsData, setupsData, bannerData, newsData, championshipData, donationData] = await Promise.all([
       api('/dashboard/stats'),
       api('/setups?limit=6'),
       api('/banners'),
       api('/news'),
-      api('/championships?status_filter=registration_open&limit=3')
+      api('/championships?status_filter=registration_open&limit=3'),
+      api('/app-settings/donations')
     ])
     stats.value = statsData
     setups.value = setupsData
     banners.value = bannerData
     news.value = newsData
     registrationChampionships.value = championshipData
+    donationSettings.value = donationData
     activeNewsIndex.value = 0
     await loadRaces()
   } catch (err) {
@@ -462,6 +484,7 @@ onBeforeUnmount(() => {
           <span class="main-championship-meta">
             <span class="pill">{{ featuredChampionship.game }}</span>
             <span class="pill">{{ featuredChampionshipStageText }}</span>
+            <span v-if="featuredChampionshipRegistered" class="pill is-registered">{{ t('championships.requestApproved') }}</span>
           </span>
         </RouterLink>
 
@@ -530,6 +553,7 @@ onBeforeUnmount(() => {
               </div>
 
               <div class="main-race-action-panel">
+                <span v-if="isRaceRegistered(race)" class="status-badge main-registered-badge">{{ t('main.registeredForRace') }}</span>
                 <span class="status-badge race-status-badge" :class="`race-status-${race.status}`">{{ statusLabel(t, race.status) }}</span>
                 <span class="main-race-fill">{{ fillPercent(race) }}%</span>
                 <a v-if="isExternalRace(race)" class="button main-race-open" :href="raceOpenHref(race)">
@@ -564,14 +588,31 @@ onBeforeUnmount(() => {
     <a v-if="banner('bottom')" class="banner main-menu-bottom-banner" :href="banner('bottom').link_url"><img :src="banner('bottom').image_url" alt="" /></a>
 
     <section class="section main-menu-floor">
-      <strong>{{ t('main.contacts') }}</strong>
-      <p class="muted">Discord: BMRL - {{ t('fields.email') }}: race-control@example.com</p>
+      <div class="main-menu-floor-main">
+        <strong>{{ t('main.contacts') }}</strong>
+        <p class="muted">Discord: BMRL - {{ t('fields.email') }}: race-control@example.com</p>
+      </div>
+      <div class="main-menu-support">
+        <a v-if="donationSettings.donation_url" class="button primary main-support-button" :href="donationSettings.donation_url" target="_blank" rel="noreferrer">
+          <HeartHandshake :size="16" />
+          {{ t('main.supportProject') }}
+        </a>
+        <div class="main-donations-top">
+          <strong>{{ t('main.topDonations') }}</strong>
+          <span v-if="!topDonations.length" class="muted">{{ t('main.noTopDonations') }}</span>
+          <span v-for="donation in topDonations" :key="`${donation.name}-${donation.amount}`" class="main-donation-chip">
+            <b>{{ donation.name }}</b>
+            <em>{{ donation.amount }}</em>
+          </span>
+        </div>
+      </div>
     </section>
   </div>
 
   <Teleport to="body">
     <div
       class="twitch-floating-widget"
+      :class="{ 'is-collapsed': isTwitchCollapsed }"
       role="button"
       tabindex="0"
       :style="twitchWidgetStyle"
@@ -584,20 +625,31 @@ onBeforeUnmount(() => {
       <span class="twitch-floating-head">
         <Radio :size="14" />
         <span class="status-badge twitch-status" :class="{ 'is-live': twitchStatus.is_live, 'is-vod': twitchStatus.status === 'vod' }">{{ twitchStatusText }}</span>
+        <button
+          class="icon-button twitch-collapse-button"
+          type="button"
+          :title="isTwitchCollapsed ? t('twitch.expandWidget') : t('twitch.collapseWidget')"
+          :aria-label="isTwitchCollapsed ? t('twitch.expandWidget') : t('twitch.collapseWidget')"
+          @click.stop="toggleTwitchCollapsed"
+          @pointerdown.stop
+        >
+          <Maximize2 v-if="isTwitchCollapsed" :size="14" />
+          <Minimize2 v-else :size="14" />
+        </button>
       </span>
-      <span class="twitch-floating-preview">
-        <img v-if="twitchStatus.thumbnail_url" :src="twitchStatus.thumbnail_url" alt="" />
+      <span v-if="!isTwitchCollapsed" class="twitch-floating-preview">
         <iframe
-          v-else-if="canEmbedTwitch"
+          v-if="canEmbedTwitchPreview"
           class="twitch-preview-player"
           :src="twitchPreviewSrc"
           title="BMRL Twitch preview"
           allow="autoplay; fullscreen; picture-in-picture"
           scrolling="no"
         ></iframe>
+        <img v-else-if="twitchStatus.thumbnail_url" :src="twitchStatus.thumbnail_url" alt="" />
         <PlayCircle :size="34" />
       </span>
-      <strong>{{ twitchDisplayTitle }}</strong>
+      <strong v-if="!isTwitchCollapsed">{{ twitchDisplayTitle }}</strong>
     </div>
 
     <div v-if="isTwitchViewerOpen" class="twitch-viewer" role="dialog" aria-modal="true" @click="closeTwitchViewer">

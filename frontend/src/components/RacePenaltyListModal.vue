@@ -6,6 +6,7 @@ import UserAvatar from './UserAvatar.vue'
 import { statusLabel } from '../i18nLabels'
 import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
+import { formatDateTime } from '../timezone'
 
 const props = defineProps({
   open: {
@@ -49,13 +50,7 @@ const penaltyDraft = ref({
 })
 
 function formatDate(value) {
-  return new Date(value).toLocaleString(state.locale, {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  return formatDateTime(value)
 }
 
 function participantName(item) {

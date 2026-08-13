@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Ban, Edit3, Save, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
+import { Ban, Edit3, Plus, Save, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
 import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
 import CountryCombobox from '../components/CountryCombobox.vue'
@@ -36,6 +36,9 @@ const fanVoteSaved = ref(false)
 const twitchConfig = ref({ fallback_video_url: '', fallback_video_title: '' })
 const twitchConfigSaving = ref(false)
 const twitchConfigSaved = ref(false)
+const donationSettings = ref({ donation_url: '', top_donations: [] })
+const donationSaving = ref(false)
+const donationSaved = ref(false)
 const raceAssetGames = ['ACC', 'AC', 'iRacing']
 const raceAssetGame = ref('ACC')
 const raceAssetsByGame = ref(defaultRaceAssetsByGame())
@@ -134,8 +137,24 @@ function formatDateTime(value) {
   if (!value) return t('common.none')
   return new Intl.DateTimeFormat(state.locale === 'ru' ? 'ru-RU' : 'en-US', {
     dateStyle: 'short',
-    timeStyle: 'short'
+    timeStyle: 'short',
+    timeZone: state.timeZone
   }).format(new Date(value))
+}
+
+function emptyDonationEntry() {
+  return { name: '', amount: '', message: '' }
+}
+
+function normalizeDonationSettings(data = {}) {
+  return {
+    donation_url: data.donation_url || '',
+    top_donations: (data.top_donations?.length ? data.top_donations : [emptyDonationEntry()]).map((item) => ({
+      name: item.name || '',
+      amount: item.amount || '',
+      message: item.message || ''
+    }))
+  }
 }
 
 async function load() {
@@ -146,12 +165,13 @@ async function load() {
       sort: userSort.value
     })
     if (userSearch.value.trim()) params.set('search', userSearch.value.trim())
-    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedRaceAssets] = await Promise.all([
+    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedRaceAssets, loadedDonationSettings] = await Promise.all([
       api(`/users/admin?${params.toString()}`),
       api('/teams/config'),
       api('/races/fan-vote/config'),
       api('/twitch/config'),
-      api('/race-assets')
+      api('/race-assets'),
+      api('/app-settings/donations')
     ])
     users.value = loadedUsers
     teamLimit.value = teamConfig.member_limit
@@ -161,6 +181,7 @@ async function load() {
       fallback_video_title: loadedTwitchConfig.fallback_video_title || ''
     }
     raceAssetsByGame.value = normalizeRaceAssetsDraft(loadedRaceAssets)
+    donationSettings.value = normalizeDonationSettings(loadedDonationSettings)
   } catch (err) {
     error.value = err.message
   }
@@ -231,6 +252,43 @@ async function saveTwitchConfig() {
     error.value = err.message
   } finally {
     twitchConfigSaving.value = false
+  }
+}
+
+function addDonationEntry() {
+  if (donationSettings.value.top_donations.length >= 5) return
+  donationSettings.value.top_donations = [...donationSettings.value.top_donations, emptyDonationEntry()]
+}
+
+function removeDonationEntry(index) {
+  const nextItems = donationSettings.value.top_donations.filter((_, itemIndex) => itemIndex !== index)
+  donationSettings.value.top_donations = nextItems.length ? nextItems : [emptyDonationEntry()]
+}
+
+async function saveDonationSettings() {
+  donationSaving.value = true
+  donationSaved.value = false
+  error.value = ''
+  try {
+    const payload = {
+      donation_url: donationSettings.value.donation_url.trim(),
+      top_donations: donationSettings.value.top_donations
+        .map((item) => ({
+          name: item.name.trim(),
+          amount: item.amount.trim(),
+          message: item.message.trim()
+        }))
+        .filter((item) => item.name && item.amount)
+    }
+    donationSettings.value = normalizeDonationSettings(await api('/app-settings/donations', {
+      method: 'PATCH',
+      body: payload
+    }))
+    donationSaved.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    donationSaving.value = false
   }
 }
 
@@ -549,6 +607,48 @@ watch([userSearch, userSort], resetUserPageAndLoad)
         {{ t('common.save') }}
       </button>
       <span v-if="twitchConfigSaved" class="pill">{{ t('common.saved') }}</span>
+    </form>
+
+    <form class="admin-settings-card admin-donation-config-card card" @submit.prevent="saveDonationSettings">
+      <div>
+        <h2>{{ t('adminUsers.donationTitle') }}</h2>
+        <p class="muted">{{ t('adminUsers.donationHint') }}</p>
+      </div>
+      <label class="field admin-donation-url-field">
+        <span>{{ t('adminUsers.donationUrl') }}</span>
+        <input v-model="donationSettings.donation_url" type="url" placeholder="https://www.donationalerts.com/r/..." />
+      </label>
+      <div class="admin-donation-list">
+        <div class="section-header compact">
+          <h3>{{ t('main.topDonations') }}</h3>
+          <button class="button small" type="button" :disabled="donationSettings.top_donations.length >= 5" @click="addDonationEntry">
+            <Plus :size="14" />
+            {{ t('adminUsers.addDonation') }}
+          </button>
+        </div>
+        <article v-for="(donation, index) in donationSettings.top_donations" :key="index" class="admin-donation-row">
+          <label class="field">
+            <span>{{ t('adminUsers.donationName') }}</span>
+            <input v-model="donation.name" maxlength="80" />
+          </label>
+          <label class="field">
+            <span>{{ t('adminUsers.donationAmount') }}</span>
+            <input v-model="donation.amount" maxlength="40" placeholder="1000 RUB" />
+          </label>
+          <label class="field">
+            <span>{{ t('adminUsers.donationMessage') }}</span>
+            <input v-model="donation.message" maxlength="120" />
+          </label>
+          <button class="icon-button danger-icon" type="button" :title="t('common.delete')" @click="removeDonationEntry(index)">
+            <Trash2 :size="16" />
+          </button>
+        </article>
+      </div>
+      <button class="button primary" type="submit" :disabled="donationSaving">
+        <Save :size="16" />
+        {{ t('common.save') }}
+      </button>
+      <span v-if="donationSaved" class="pill">{{ t('common.saved') }}</span>
     </form>
 
     <form class="admin-settings-card admin-race-assets-card card" @submit.prevent="saveRaceAssets">

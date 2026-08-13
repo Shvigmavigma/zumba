@@ -7,7 +7,7 @@ import AvatarViewer from '../components/AvatarViewer.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
 import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
-import { state } from '../store'
+import { formatShortDate } from '../timezone'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -16,11 +16,7 @@ const error = ref('')
 const avatarViewerOpen = ref(false)
 
 function formatDate(value) {
-  return new Date(value).toLocaleDateString(state.locale, {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric'
-  })
+  return formatShortDate(value, { month: 'long' })
 }
 
 function gameList(user) {

@@ -3,6 +3,7 @@ import { X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { statusLabel } from '../i18nLabels'
 import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
+import { formatDateTime } from '../timezone'
 
 defineProps({
   penalty: {
@@ -25,13 +26,7 @@ const { t } = useI18n()
 
 function formatDate(value) {
   if (!value) return t('common.none')
-  return new Date(value).toLocaleString(undefined, {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  return formatDateTime(value)
 }
 
 function penaltyTypeLabel(penalty) {

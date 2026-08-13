@@ -8,6 +8,7 @@ import UserAvatar from '../components/UserAvatar.vue'
 import { gameOptions } from '../i18nLabels'
 import { formatPilotNumber, formatRating, pilotName, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
+import { formatDateTime as formatDateTimeInZone, formatShortDate } from '../timezone'
 
 const { t } = useI18n()
 const championships = ref([])
@@ -38,6 +39,7 @@ const defaultStage = () => ({
   datetime_start: '',
   track: '',
   server_link: '',
+  lmu_results_at: '',
   has_qualification: true,
   scoring_system: 'fia',
   pole_bonus_enabled: false
@@ -114,26 +116,19 @@ const myStatusText = computed(() => {
 })
 
 function dateLabel(value) {
-  return new Date(value).toLocaleString(state.locale, {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23'
-  })
+  return formatDateTimeInZone(value)
 }
 
 function dateShort(value) {
-  return new Date(value).toLocaleDateString(state.locale, {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  })
+  return formatShortDate(value)
 }
 
 function toIso(value) {
   return new Date(value).toISOString()
+}
+
+function optionalIso(value) {
+  return value ? toIso(value) : null
 }
 
 function toLocalInput(value) {
@@ -170,6 +165,8 @@ function handleChampionshipGameChange(target) {
   target.classes = []
   ;(target.stages || []).forEach((stage) => {
     stage.track = ''
+    if (target.game === 'LMU' && !stage.lmu_results_at) stage.lmu_results_at = stage.datetime_start
+    if (target.game !== 'LMU') stage.lmu_results_at = ''
   })
 }
 
@@ -218,6 +215,21 @@ function registrationPilotName(item) {
 
 function registrationPilotLine(item) {
   return pilotLine(item.user, item.pilot_number)
+}
+
+function registrationStatusText(status) {
+  if (status === 'pending') return t('championships.requestPending')
+  if (status === 'approved') return t('championships.requestApproved')
+  if (status === 'rejected') return t('championships.requestRejected')
+  return ''
+}
+
+function championshipUserStatus(championship) {
+  return registrationStatusText(championship?.my_registration_status)
+}
+
+function isStageRegistered(stage) {
+  return Boolean(state.user && stage.registered_pilots?.some((item) => item.user_id === state.user.id))
 }
 
 function championshipCar(userId) {
@@ -315,9 +327,11 @@ async function createChampionship() {
       .map((stage) => ({
         ...stage,
         datetime_start: toIso(stage.datetime_start),
+        lmu_results_at: form.value.game === 'LMU' ? optionalIso(stage.lmu_results_at) : null,
         name: stage.name || null,
         track: stage.track || null,
         server_link: stage.server_link || '',
+        has_qualification: form.value.game === 'LMU' ? false : stage.has_qualification,
       }))
     const created = await api('/championships', {
       method: 'POST',
@@ -500,6 +514,8 @@ async function addStageToSelected() {
         name: stageForm.value.name || null,
         track: stageForm.value.track || null,
         server_link: stageForm.value.server_link || '',
+        lmu_results_at: selected.value.game === 'LMU' ? optionalIso(stageForm.value.lmu_results_at) : null,
+        has_qualification: selected.value.game === 'LMU' ? false : stageForm.value.has_qualification,
         datetime_start: toIso(stageForm.value.datetime_start)
       }
     })
@@ -518,6 +534,7 @@ function startEditStage(stage) {
     datetime_start: toLocalInput(stage.datetime_start),
     track: stage.track || '',
     server_link: stage.server_link || '',
+    lmu_results_at: stage.lmu_results_at ? toLocalInput(stage.lmu_results_at) : '',
     has_qualification: Boolean(stage.has_qualification),
     scoring_system: stage.scoring_system || 'fia',
     pole_bonus_enabled: Boolean(stage.pole_bonus_enabled)
@@ -534,6 +551,8 @@ async function updateStage(stageId) {
         ...stageEditForm.value,
         track: stageEditForm.value.track || null,
         server_link: stageEditForm.value.server_link || '',
+        lmu_results_at: selected.value.game === 'LMU' ? optionalIso(stageEditForm.value.lmu_results_at) : null,
+        has_qualification: selected.value.game === 'LMU' ? false : stageEditForm.value.has_qualification,
         datetime_start: toIso(stageEditForm.value.datetime_start)
       }
     })
@@ -694,15 +713,16 @@ watch(standings, () => {
         <div v-for="(stage, index) in form.stages" :key="index" class="championship-stage-draft">
           <label class="field"><span>{{ t('fields.name') }}</span><input v-model="stage.name" :placeholder="t('championships.stageNumber', { number: index + 1 })" maxlength="100" /></label>
           <label class="field"><span>{{ t('fields.date') }} *</span><input v-model="stage.datetime_start" type="datetime-local" required /></label>
+          <label v-if="form.game === 'LMU'" class="field"><span>{{ t('fields.lmuResultsAt') }} *</span><input v-model="stage.lmu_results_at" type="datetime-local" required /></label>
           <label class="field"><span>{{ t('fields.linkUrl') }}</span><input v-model="stage.server_link" maxlength="255" /></label>
-          <label class="field">
+          <label v-if="form.game !== 'LMU'" class="field">
             <span>{{ t('fields.track') }}</span>
             <select v-model="stage.track">
               <option value="">TBA</option>
               <option v-for="track in formRaceAssets.tracks" :key="track" :value="track">{{ track }}</option>
             </select>
           </label>
-          <label class="toggle-field"><input v-model="stage.has_qualification" type="checkbox" /><span>{{ t('fields.qualification') }}</span></label>
+          <label v-if="form.game !== 'LMU'" class="toggle-field"><input v-model="stage.has_qualification" type="checkbox" /><span>{{ t('fields.qualification') }}</span></label>
           <label class="field">
             <span>{{ t('championships.stageScoring') }}</span>
             <select v-model="stage.scoring_system">
@@ -741,7 +761,10 @@ watch(standings, () => {
               <strong>{{ championship.name }}</strong>
               <small>{{ championship.game }} - {{ championship.classes.join(', ') }}</small>
             </span>
-            <span class="status-badge" :class="statusClass(championship.status)">{{ statusText(championship.status) }}</span>
+            <span class="championship-card-badges">
+              <span v-if="championshipUserStatus(championship)" class="status-badge championship-user-badge">{{ championshipUserStatus(championship) }}</span>
+              <span class="status-badge" :class="statusClass(championship.status)">{{ statusText(championship.status) }}</span>
+            </span>
           </button>
         </div>
 
@@ -875,15 +898,16 @@ watch(standings, () => {
           <form v-if="canManage && stageCreateOpen" class="championship-stage-draft championship-stage-add-form" @submit.prevent="addStageToSelected">
             <label class="field"><span>{{ t('fields.name') }}</span><input v-model="stageForm.name" maxlength="100" /></label>
             <label class="field"><span>{{ t('fields.date') }} *</span><input v-model="stageForm.datetime_start" type="datetime-local" required /></label>
+            <label v-if="selected.game === 'LMU'" class="field"><span>{{ t('fields.lmuResultsAt') }} *</span><input v-model="stageForm.lmu_results_at" type="datetime-local" required /></label>
             <label class="field"><span>{{ t('fields.linkUrl') }}</span><input v-model="stageForm.server_link" maxlength="255" /></label>
-            <label class="field">
+            <label v-if="selected.game !== 'LMU'" class="field">
               <span>{{ t('fields.track') }}</span>
               <select v-model="stageForm.track">
                 <option value="">TBA</option>
                 <option v-for="track in selectedRaceAssets.tracks" :key="track" :value="track">{{ track }}</option>
               </select>
             </label>
-            <label class="toggle-field"><input v-model="stageForm.has_qualification" type="checkbox" /><span>{{ t('fields.qualification') }}</span></label>
+            <label v-if="selected.game !== 'LMU'" class="toggle-field"><input v-model="stageForm.has_qualification" type="checkbox" /><span>{{ t('fields.qualification') }}</span></label>
             <label class="field">
               <span>{{ t('championships.stageScoring') }}</span>
               <select v-model="stageForm.scoring_system">
@@ -906,7 +930,10 @@ watch(standings, () => {
                     {{ scoringText(stage.scoring_system) }}<template v-if="stage.pole_bonus_enabled"> + {{ t('championships.poleShort') }}</template>
                   </small>
                 </span>
-                <span class="status-badge" :class="statusClass(stage.status)">{{ statusText(stage.status) }}</span>
+                <span class="championship-stage-statuses">
+                  <span v-if="isStageRegistered(stage)" class="status-badge championship-user-badge">{{ t('championships.stageRegistered') }}</span>
+                  <span class="status-badge" :class="statusClass(stage.status)">{{ statusText(stage.status) }}</span>
+                </span>
               </RouterLink>
               <div v-if="canManage" class="championship-stage-actions">
                 <button class="icon-button" type="button" :title="t('championships.editStage')" @click="startEditStage(stage)"><Pencil :size="16" /></button>
@@ -915,15 +942,16 @@ watch(standings, () => {
               <form v-if="editingStageId === stage.id" class="championship-stage-draft championship-stage-edit-form" @submit.prevent="updateStage(stage.id)">
                 <label class="field"><span>{{ t('fields.name') }}</span><input v-model="stageEditForm.name" maxlength="100" required /></label>
                 <label class="field"><span>{{ t('fields.date') }} *</span><input v-model="stageEditForm.datetime_start" type="datetime-local" required /></label>
+                <label v-if="selected.game === 'LMU'" class="field"><span>{{ t('fields.lmuResultsAt') }} *</span><input v-model="stageEditForm.lmu_results_at" type="datetime-local" required /></label>
                 <label class="field"><span>{{ t('fields.linkUrl') }}</span><input v-model="stageEditForm.server_link" maxlength="255" /></label>
-                <label class="field">
+                <label v-if="selected.game !== 'LMU'" class="field">
                   <span>{{ t('fields.track') }}</span>
                   <select v-model="stageEditForm.track">
                     <option value="">TBA</option>
                     <option v-for="track in selectedRaceAssets.tracks" :key="track" :value="track">{{ track }}</option>
                   </select>
                 </label>
-                <label class="toggle-field"><input v-model="stageEditForm.has_qualification" type="checkbox" /><span>{{ t('fields.qualification') }}</span></label>
+                <label v-if="selected.game !== 'LMU'" class="toggle-field"><input v-model="stageEditForm.has_qualification" type="checkbox" /><span>{{ t('fields.qualification') }}</span></label>
                 <label class="field">
                   <span>{{ t('championships.stageScoring') }}</span>
                   <select v-model="stageEditForm.scoring_system">
