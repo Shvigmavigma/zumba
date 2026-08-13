@@ -34,6 +34,7 @@ function formatDate(value) {
 }
 
 function fillPercent(race) {
+  if (race.game === 'LMU') return 0
   if (!race.max_pilots) return 0
   return Math.min(100, Math.round((race.registered_count / race.max_pilots) * 100))
 }
@@ -173,9 +174,7 @@ watch(page, load)
                 <a v-if="isExternalRace(race)" :href="raceOpenHref(race)">{{ race.name }}</a>
                 <RouterLink v-else :to="raceOpenHref(race)">{{ race.name }}</RouterLink>
                 <p class="muted">
-                  {{ race.game === 'LMU'
-                    ? gameLabel(t, race.game)
-                    : `${gameLabel(t, race.game)} - ${race.track} - ${race.car_class} - ${race.has_qualification ? t('raceDetails.withQualification') : t('raceDetails.withoutQualification')}` }}
+                  {{ [gameLabel(t, race.game), race.track, race.car_class, race.game !== 'LMU' ? (race.has_qualification ? t('raceDetails.withQualification') : t('raceDetails.withoutQualification')) : ''].filter(Boolean).join(' - ') }}
                 </p>
                 <p>{{ race.description }}</p>
               </div>
@@ -190,12 +189,13 @@ watch(page, load)
               </div>
             </td>
             <td>
-              <div class="race-registration-cell">
+              <div v-if="race.game !== 'LMU'" class="race-registration-cell">
                 <strong>{{ race.registered_count }} / {{ race.max_pilots }}</strong>
                 <span class="race-registration-meter">
                   <span :style="{ width: `${fillPercent(race)}%` }"></span>
                 </span>
               </div>
+              <span v-else class="muted">-</span>
             </td>
             <td>
               <div class="race-admin-actions">

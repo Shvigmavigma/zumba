@@ -6,7 +6,7 @@ import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel } from '../i18nLabels'
-import { formatPilotNumber, formatRating, pilotName, teamShortName } from '../pilotDisplay'
+import { formatPilotNumber, formatRating, pilotName, teamHref, teamShortName } from '../pilotDisplay'
 
 const { t } = useI18n()
 const pilots = ref([])
@@ -101,7 +101,10 @@ function pilotCountry(pilot) {
         </div>
 
         <span class="pilot-roster-team" role="cell" :data-label="t('fields.team')">
-          <span class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span>
+          <RouterLink v-if="pilot.team_id" class="team-mini-chip team-link-chip" :to="teamHref(pilot.team_id)" :title="pilot.team_name || t('common.none')">
+            {{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}
+          </RouterLink>
+          <span v-else class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span>
         </span>
         <span class="pilot-roster-country" role="cell" :data-label="t('fields.country')">{{ pilotCountry(pilot) }}</span>
         <span class="pilot-roster-metric" role="cell" data-label="RER"><strong>{{ formatRating(pilot.rating) }}</strong><small>RER</small></span>

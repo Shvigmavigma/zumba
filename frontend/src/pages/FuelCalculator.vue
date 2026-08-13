@@ -48,7 +48,7 @@ const formationLap = ref(false)
 
 const copy = computed(() => state.locale === 'en' ? {
   title: 'Fuel calculator',
-  subtitle: 'Works locally in the browser. No API requests.',
+
   sim: 'Simulator',
   car: 'Car',
   preset: 'Class / preset',
@@ -81,7 +81,6 @@ const copy = computed(() => state.locale === 'en' ? {
   stint: 'Stint'
 } : {
   title: 'Калькулятор топлива',
-  subtitle: 'Работает локально в браузере. API-запросов нет.',
   sim: 'Симулятор',
   car: 'Машина',
   preset: 'Класс / пресет',

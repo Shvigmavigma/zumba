@@ -486,6 +486,7 @@ class ChampionshipStageCreate(BaseModel):
     name: str | None = Field(default=None, max_length=100)
     datetime_start: datetime
     track: str | None = Field(default=None, max_length=100)
+    car_class: str | None = Field(default=None, max_length=50)
     server_link: str | None = Field(default="", max_length=255)
     lmu_results_at: datetime | None = None
     has_qualification: bool = True
@@ -557,6 +558,7 @@ class ChampionshipStageUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     datetime_start: datetime | None = None
     track: str | None = Field(default=None, max_length=100)
+    car_class: str | None = Field(default=None, max_length=50)
     server_link: str | None = Field(default=None, max_length=255)
     lmu_results_at: datetime | None = None
     has_qualification: bool | None = None

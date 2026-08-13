@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check, Crop, Image as ImageIcon, Link as LinkIcon, Save, Trash2, Upload, X } from 'lucide-vue-next'
 import { api } from '../api'
+import { isGifFile, isGifUrl, isVideoFile, isVideoUrl, mediaUploadAccept } from '../media'
 
 const { t } = useI18n()
 const banners = ref([])
@@ -85,7 +86,7 @@ async function uploadToPosition(banner, event) {
   event.target.value = ''
   if (!file) return
 
-  if (isGifFile(file)) {
+  if (isGifFile(file) || isVideoFile(file)) {
     await uploadOriginal(banner, file)
     return
   }
@@ -93,12 +94,8 @@ async function uploadToPosition(banner, event) {
   openCropper(banner, URL.createObjectURL(file), file)
 }
 
-function isGifFile(file) {
-  return file.type === 'image/gif' || /\.gif$/i.test(file.name || '')
-}
-
-function isGifBanner(banner) {
-  return /\.gif(?:$|\?)/i.test(banner.image_url || '')
+function isAnimatedBanner(banner) {
+  return isGifUrl(banner.image_url) || isVideoUrl(banner.image_url)
 }
 
 async function uploadOriginal(banner, file) {
@@ -347,7 +344,8 @@ onBeforeUnmount(() => {
           :disabled="!banner.image_url"
           @click="openBannerImage(banner)"
         >
-          <img v-if="banner.image_url" :src="banner.image_url" alt="" />
+          <video v-if="isVideoUrl(banner.image_url)" :src="banner.image_url" muted playsinline preload="metadata"></video>
+          <img v-else-if="banner.image_url" :src="banner.image_url" alt="" />
           <span v-else class="banner-preview-empty">
             <ImageIcon :size="24" />
             {{ t('banners.noImage') }}
@@ -363,12 +361,12 @@ onBeforeUnmount(() => {
 
         <div class="banner-actions">
           <span v-if="savedPosition === banner.position" class="pill">{{ t('common.saved') }}</span>
-          <input :id="`banner-upload-${banner.position}`" class="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="uploadToPosition(banner, $event)" />
+          <input :id="`banner-upload-${banner.position}`" class="visually-hidden" type="file" :accept="mediaUploadAccept" @change="uploadToPosition(banner, $event)" />
           <label class="button" :class="{ 'is-disabled': uploading[banner.position] }" :for="`banner-upload-${banner.position}`">
             <Upload :size="16" />
             {{ uploading[banner.position] ? t('common.uploading') : t('common.upload') }}
           </label>
-          <button class="button" type="button" :title="isGifBanner(banner) ? t('banners.cropGifDisabled') : t('banners.crop')" :disabled="!banner.image_url || uploading[banner.position] || isGifBanner(banner)" @click="openCropperForBanner(banner)">
+          <button class="button" type="button" :title="isAnimatedBanner(banner) ? t('banners.cropGifDisabled') : t('banners.crop')" :disabled="!banner.image_url || uploading[banner.position] || isAnimatedBanner(banner)" @click="openCropperForBanner(banner)">
             <Crop :size="16" />
             {{ t('banners.crop') }}
           </button>
@@ -396,7 +394,8 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div class="banner-image-view">
-          <img :src="openedBanner.image_url" :alt="bannerMeta(openedBanner.position).title" />
+          <video v-if="isVideoUrl(openedBanner.image_url)" :src="openedBanner.image_url" controls autoplay playsinline></video>
+          <img v-else :src="openedBanner.image_url" :alt="bannerMeta(openedBanner.position).title" />
         </div>
       </section>
     </div>

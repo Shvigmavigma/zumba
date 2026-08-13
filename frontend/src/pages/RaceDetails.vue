@@ -8,7 +8,7 @@ import PaginationControls from '../components/PaginationControls.vue'
 import RacePenaltyListModal from '../components/RacePenaltyListModal.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, isExternalRace, statusLabel } from '../i18nLabels'
-import { filterPilots, formatPilotNumber, formatRating, sortPilots, teamShortName } from '../pilotDisplay'
+import { filterPilots, formatPilotNumber, formatRating, sortPilots, teamHref, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
 import { formatDateTime } from '../timezone'
 
@@ -64,22 +64,26 @@ const resultParticipants = computed(() => {
   const seen = new Set()
   return resultRows.value
     .filter((row) => row.user_id && !seen.has(row.user_id) && seen.add(row.user_id))
-    .map((row) => ({
-      user_id: row.user_id,
-      login: row.login,
-      nickname: row.nickname,
-      first_name: row.first_name || '',
-      last_name: row.last_name || '',
-      pilot_number: row.pilot_number ?? row.race_number,
-      avatar_color: row.avatar_color || '#2563eb',
-      avatar_url: row.avatar_url || '',
-      rating: row.rating,
-      sr: row.sr,
-      car_model: row.car_model,
-      team_name: row.team_name,
-      team_abbreviation: row.team_abbreviation,
-      country: row.country
-    }))
+    .map((row) => {
+      const participant = participants.value.find((item) => item.user_id === row.user_id)
+      return {
+        user_id: row.user_id,
+        login: row.login || participant?.login,
+        nickname: row.nickname || participant?.nickname,
+        first_name: row.first_name || participant?.first_name || '',
+        last_name: row.last_name || participant?.last_name || '',
+        pilot_number: row.pilot_number ?? row.race_number ?? participant?.pilot_number,
+        avatar_color: row.avatar_color || participant?.avatar_color || '#2563eb',
+        avatar_url: row.avatar_url || participant?.avatar_url || '',
+        rating: row.rating ?? participant?.rating,
+        sr: row.sr ?? participant?.sr,
+        car_model: row.car_model || participant?.car_model,
+        team_id: row.team_id || participant?.team_id,
+        team_name: row.team_name || participant?.team_name,
+        team_abbreviation: row.team_abbreviation || participant?.team_abbreviation,
+        country: row.country || participant?.country
+      }
+    })
 })
 const penaltyParticipants = computed(() => resultParticipants.value.length ? resultParticipants.value : participants.value)
 const raceRowsByPlayer = computed(() => {
@@ -117,6 +121,7 @@ const qualificationRows = computed(() => {
       avatar_url: participant?.avatar_url || raceRow?.avatar_url || '',
       rating: participant?.rating ?? raceRow?.rating,
       sr: participant?.sr ?? raceRow?.sr,
+      team_id: participant?.team_id || raceRow?.team_id,
       team_name: participant?.team_name || raceRow?.team_name,
       team_abbreviation: participant?.team_abbreviation || raceRow?.team_abbreviation,
       driver_name: accDriverName(driver),
@@ -287,6 +292,10 @@ function resultPilotAvatar(row) {
 function resultPilotTeam(row) {
   const participant = participantById(row.user_id)
   return teamShortName(participant?.team_name || row.team_name, participant?.team_abbreviation || row.team_abbreviation)
+}
+
+function resultPilotTeamId(row) {
+  return participantById(row.user_id)?.team_id || row.team_id || null
 }
 
 function resultPilotRating(row) {
@@ -662,7 +671,7 @@ watch(visibleParticipants, () => {
           <span class="status-badge race-status-badge" :class="`race-status-${race.status}`">{{ statusLabel(t, race.status) }}</span>
           <span>{{ formatDate(race.datetime_start) }}</span>
           <span>{{ formatDate(race.datetime_end) }}</span>
-          <span>{{ participants.length }} / {{ race.max_pilots }}</span>
+          <span v-if="!isLmuRace">{{ participants.length }} / {{ race.max_pilots }}</span>
           <span>{{ race.has_qualification ? t('raceDetails.withQualification') : t('raceDetails.withoutQualification') }}</span>
         </div>
         <p>{{ t('fields.server') }}: <a :href="race.server_link">{{ race.server_link }}</a></p>
@@ -978,7 +987,14 @@ watch(visibleParticipants, () => {
                       <UserAvatar mini :src="resultPilotAvatar(row)" :color="resultPilotColor(row)" :label="resultPilotName(row)" />
                       <div>
                         <strong>{{ resultPilotName(row) }}</strong>
-                        <span>{{ resultPilotSubtitle(row) }} · RER {{ resultPilotRating(row) }} · {{ resultPilotTeam(row) }}</span>
+                        <span class="result-driver-meta">
+                          <span>{{ resultPilotSubtitle(row) }}</span>
+                          <span>RER {{ resultPilotRating(row) }}</span>
+                          <RouterLink v-if="resultPilotTeamId(row)" class="team-mini-chip team-link-chip" :to="teamHref(resultPilotTeamId(row))">
+                            {{ resultPilotTeam(row) }}
+                          </RouterLink>
+                          <span v-else class="team-mini-chip">{{ resultPilotTeam(row) }}</span>
+                        </span>
                       </div>
                     </div>
                   </td>

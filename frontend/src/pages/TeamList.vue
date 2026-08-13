@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Bell, Check, Crown, LogOut, Plus, Save, Search, Send, Trash2, Upload, UserCheck, UserMinus, Users, X, XCircle } from 'lucide-vue-next'
 import { api } from '../api'
@@ -11,6 +12,7 @@ import { filterPilots, formatPilotNumber, formatRating, sortPilots, teamShortNam
 import { state } from '../store'
 
 const { t } = useI18n()
+const route = useRoute()
 
 const teams = ref([])
 const selectedTeam = ref(null)
@@ -178,7 +180,8 @@ async function load() {
     config.value = loadedConfig
     createRequests.value = canModerateTeams.value ? await api('/teams/create-requests') : []
 
-    const selectedId = selectedTeam.value?.id
+    const queryTeamId = Number(route.query.team)
+    const selectedId = selectedTeam.value?.id || (Number.isInteger(queryTeamId) && queryTeamId > 0 ? queryTeamId : null)
     if (selectedId && loadedTeams.some((team) => team.id === selectedId)) {
       selectedTeam.value = await api(`/teams/${selectedId}`)
       fillEditForm(selectedTeam.value)
@@ -204,6 +207,12 @@ async function openTeam(team) {
   } finally {
     setBusy(team.id, false)
   }
+}
+
+async function openTeamFromQuery(value) {
+  const id = Number(value)
+  if (!Number.isInteger(id) || id <= 0 || selectedTeam.value?.id === id) return
+  await openTeam({ id })
 }
 
 async function createTeam() {
@@ -444,6 +453,7 @@ async function removeMember(member) {
 }
 
 onMounted(load)
+watch(() => route.query.team, openTeamFromQuery)
 watch(search, () => {
   teamPage.value = 1
 })

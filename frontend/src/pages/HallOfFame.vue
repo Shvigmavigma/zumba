@@ -6,7 +6,7 @@ import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
 import TeamAvatar from '../components/TeamAvatar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
-import { formatPilotNumber, formatRating, pilotName, teamShortName } from '../pilotDisplay'
+import { formatPilotNumber, formatRating, pilotName, teamHref, teamShortName } from '../pilotDisplay'
 
 const { t } = useI18n()
 
@@ -199,7 +199,12 @@ watch(visibleTeams, () => {
                 </RouterLink>
               </div>
             </td>
-            <td><span class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span></td>
+            <td>
+              <RouterLink v-if="pilot.team_id" class="team-mini-chip team-link-chip" :to="teamHref(pilot.team_id)" :title="pilot.team_name || t('common.none')">
+                {{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}
+              </RouterLink>
+              <span v-else class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span>
+            </td>
             <td><span class="hall-medal-value gold">{{ pilot.gold }}</span></td>
             <td><span class="hall-medal-value silver">{{ pilot.silver }}</span></td>
             <td><span class="hall-medal-value bronze">{{ pilot.bronze }}</span></td>
@@ -234,10 +239,10 @@ watch(visibleTeams, () => {
             <td>
               <div class="hall-person-cell">
                 <TeamAvatar mini :src="team.avatar_url" :color="team.avatar_color" :label="team.name" />
-                <span class="hall-title">
+                <RouterLink class="hall-title" :to="teamHref(team.id)">
                   <strong>{{ team.name }}</strong>
                   <span>{{ team.abbreviation }} · {{ team.description || t('common.none') }}</span>
-                </span>
+                </RouterLink>
               </div>
             </td>
             <td>{{ team.member_count }}</td>

@@ -20,6 +20,11 @@ export function teamShortName(name, abbreviation = '') {
   return raw.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase() || '-'
 }
 
+export function teamHref(teamId) {
+  const id = Number(teamId)
+  return Number.isInteger(id) && id > 0 ? `/teams?team=${id}` : '/teams'
+}
+
 export function pilotName(user, fallback = '') {
   const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim()
   return fullName || user?.nickname || user?.login || fallback
