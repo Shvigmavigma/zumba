@@ -279,6 +279,7 @@ class Race(Base):
     name: Mapped[str] = mapped_column(String(100), index=True)
     description: Mapped[str] = mapped_column(Text)
     server_link: Mapped[str] = mapped_column(String(255))
+    lmu_results_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     datetime_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     datetime_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     max_pilots: Mapped[int] = mapped_column(Integer)

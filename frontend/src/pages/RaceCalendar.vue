@@ -6,12 +6,13 @@ import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
 import { gameLabel, gameOptions, isExternalRace, raceCountLabel, raceOpenHref } from '../i18nLabels'
 import { state } from '../store'
+import { dateKeyInTimeZone, formatTimeOnly } from '../timezone'
 
 const { t } = useI18n()
 const races = ref([])
 const championships = ref([])
 const cursor = ref(new Date())
-const selected = ref(dateKey(new Date()))
+const selected = ref(dateKeyInTimeZone(new Date()))
 const gameFilter = ref('all')
 const statusFilter = ref('not_finished')
 const myGamesOnly = ref(false)
@@ -51,7 +52,7 @@ const days = computed(() => {
   })
 })
 
-const todayKey = dateKey(new Date())
+const todayKey = computed(() => dateKeyInTimeZone(new Date()))
 const raceGameOptions = computed(() => gameOptions(t, true))
 const canFilterMyGames = computed(() => Boolean(state.user?.games?.length))
 const monthLabel = computed(() => cursor.value.toLocaleDateString(state.locale, { month: 'long', year: 'numeric' }))
@@ -79,7 +80,7 @@ const weekdayLabels = computed(() => {
 const racesByDate = computed(() => {
   const map = new Map()
   races.value.forEach((race) => {
-    const key = race.datetime_start.slice(0, 10)
+    const key = dateKeyInTimeZone(race.datetime_start)
     const items = map.get(key) || []
     items.push(race)
     map.set(key, items)
@@ -108,11 +109,7 @@ function dayGameCounts(day) {
 }
 
 function formatRaceTime(value) {
-  return new Date(value).toLocaleTimeString(state.locale, {
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23'
-  })
+  return formatTimeOnly(value)
 }
 
 function shiftMonth(delta) {

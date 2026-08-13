@@ -11,7 +11,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.config import get_settings
 from app.db import SessionLocal, db_initialization_lock, init_db
 from app.rate_limit import limiter
-from app.routers import appeals, auth, banners, championships, dashboard, hall_of_fame, news, penalties, race_assets, races, setups, teams, twitch, users
+from app.routers import app_settings, appeals, auth, banners, championships, dashboard, hall_of_fame, news, penalties, race_assets, races, setups, teams, twitch, users
 from app.seed import seed_defaults
 
 
@@ -70,3 +70,4 @@ app.include_router(teams.router, prefix="/api/teams", tags=["teams"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(hall_of_fame.router, prefix="/api/hall-of-fame", tags=["hall-of-fame"])
 app.include_router(twitch.router, prefix="/api/twitch", tags=["twitch"])
+app.include_router(app_settings.router, prefix="/api/app-settings", tags=["app-settings"])

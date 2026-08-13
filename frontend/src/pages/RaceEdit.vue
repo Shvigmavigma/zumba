@@ -18,6 +18,7 @@ const form = ref({
   name: '',
   description: '',
   server_link: '',
+  lmu_results_at: '',
   datetime_start: '',
   datetime_end: '',
   max_pilots: 32,
@@ -65,6 +66,10 @@ function toIso(value) {
   return new Date(value).toISOString()
 }
 
+function optionalIso(value) {
+  return value ? toIso(value) : null
+}
+
 function applyAssetDefaults({ forceCars = false } = {}) {
   if (!isAssetRace.value) return
   if ((!form.value.track || !isKnownTrack(form.value.track)) && raceAssets.value.tracks.length) {
@@ -87,7 +92,11 @@ function handleGameChange() {
   form.value.track = ''
   form.value.car_class = ''
   form.value.allowed_cars = []
+  if (isLmuRace.value && !form.value.lmu_results_at) {
+    form.value.lmu_results_at = form.value.datetime_end
+  }
   if (isLmuRace.value) return
+  form.value.lmu_results_at = ''
   applyAssetDefaults({ forceCars: true })
 }
 
@@ -113,6 +122,7 @@ async function submit() {
       description: isLmuRace.value ? (form.value.description || '') : form.value.description,
       datetime_start: toIso(form.value.datetime_start),
       datetime_end: toIso(form.value.datetime_end),
+      lmu_results_at: isLmuRace.value ? optionalIso(form.value.lmu_results_at || form.value.datetime_end) : null,
       max_pilots: isLmuRace.value ? 1 : form.value.max_pilots,
       track: isLmuRace.value ? 'LMU' : form.value.track,
       car_class: isLmuRace.value ? 'LMU' : form.value.car_class,
@@ -143,7 +153,8 @@ onMounted(async () => {
   form.value = {
     ...race,
     datetime_start: race.datetime_start.slice(0, 16),
-    datetime_end: race.datetime_end.slice(0, 16)
+    datetime_end: race.datetime_end.slice(0, 16),
+    lmu_results_at: race.lmu_results_at ? race.lmu_results_at.slice(0, 16) : ''
   }
   modsText.value = race.mods_pack?.join('\n') || ''
   carsText.value = race.allowed_cars?.join('\n') || ''
@@ -180,6 +191,10 @@ onMounted(async () => {
         <label class="field"><span>{{ t('fields.registrationStart') }}</span><input v-model="form.datetime_start" type="datetime-local" required /></label>
         <label class="field"><span>{{ t('fields.registrationEnd') }}</span><input v-model="form.datetime_end" type="datetime-local" required /></label>
       </div>
+      <label v-if="isLmuRace" class="field">
+        <span>{{ t('fields.lmuResultsAt') }}</span>
+        <input v-model="form.lmu_results_at" type="datetime-local" required />
+      </label>
       <div class="form-row">
         <label v-if="!isLmuRace" class="field"><span>{{ t('fields.maxPilots') }}</span><input v-model.number="form.max_pilots" type="number" min="1" required /></label>
         <label class="field">

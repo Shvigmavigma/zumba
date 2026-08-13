@@ -2,12 +2,14 @@ import { reactive } from 'vue'
 
 const savedLocale = localStorage.getItem('locale')
 const initialLocale = savedLocale === 'en' ? 'en' : 'ru'
+const savedTimeZone = localStorage.getItem('timeZone')
 
 export const state = reactive({
   token: localStorage.getItem('token') || '',
   user: JSON.parse(localStorage.getItem('user') || 'null'),
   theme: localStorage.getItem('theme') || 'light',
-  locale: initialLocale
+  locale: initialLocale,
+  timeZone: savedTimeZone || 'UTC'
 })
 
 export function setSession(token, user) {

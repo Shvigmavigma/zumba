@@ -8,6 +8,7 @@ import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
 import { formatPilotNumber, formatRating, pilotName, teamShortName } from '../pilotDisplay'
 import { setSession, state } from '../store'
+import { formatDateTime as formatDateTimeInZone } from '../timezone'
 
 const { t } = useI18n()
 const error = ref('')
@@ -54,10 +55,7 @@ const profileFields = computed(() => {
 
 function formatDateTime(value) {
   if (!value) return t('common.none')
-  return new Intl.DateTimeFormat(state.locale === 'ru' ? 'ru-RU' : 'en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(new Date(value))
+  return formatDateTimeInZone(value, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 function formatProfileValue(value) {

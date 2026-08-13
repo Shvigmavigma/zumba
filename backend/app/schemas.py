@@ -261,6 +261,7 @@ class RaceBase(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str
     server_link: str = Field(max_length=255)
+    lmu_results_at: datetime | None = None
     datetime_start: datetime
     datetime_end: datetime
     max_pilots: int = Field(ge=1, le=500)
@@ -342,6 +343,7 @@ class RaceUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=100)
     description: str | None = None
     server_link: str | None = Field(default=None, max_length=255)
+    lmu_results_at: datetime | None = None
     datetime_start: datetime | None = None
     datetime_end: datetime | None = None
     max_pilots: int | None = Field(default=None, ge=1, le=500)
@@ -382,6 +384,7 @@ class RaceManageRead(BaseModel):
     name: str
     description: str
     server_link: str
+    lmu_results_at: datetime | None = None
     status: RaceStatus
     datetime_start: datetime
     datetime_end: datetime
@@ -484,6 +487,7 @@ class ChampionshipStageCreate(BaseModel):
     datetime_start: datetime
     track: str | None = Field(default=None, max_length=100)
     server_link: str | None = Field(default="", max_length=255)
+    lmu_results_at: datetime | None = None
     has_qualification: bool = True
     scoring_system: ChampionshipScoringSystem = ChampionshipScoringSystem.fia
     pole_bonus_enabled: bool = False
@@ -554,6 +558,7 @@ class ChampionshipStageUpdate(BaseModel):
     datetime_start: datetime | None = None
     track: str | None = Field(default=None, max_length=100)
     server_link: str | None = Field(default=None, max_length=255)
+    lmu_results_at: datetime | None = None
     has_qualification: bool | None = None
     scoring_system: ChampionshipScoringSystem | None = None
     pole_bonus_enabled: bool | None = None
@@ -808,6 +813,22 @@ class TwitchConfigRead(BaseModel):
 class TwitchConfigUpdate(BaseModel):
     fallback_video_url: str = Field(default="", max_length=300)
     fallback_video_title: str = Field(default="", max_length=120)
+
+
+class DonationEntry(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    amount: str = Field(min_length=1, max_length=40)
+    message: str = Field(default="", max_length=120)
+
+
+class DonationSettingsRead(BaseModel):
+    donation_url: str = ""
+    top_donations: list[DonationEntry] = Field(default_factory=list)
+
+
+class DonationSettingsUpdate(BaseModel):
+    donation_url: str = Field(default="", max_length=300)
+    top_donations: list[DonationEntry] = Field(default_factory=list, max_length=5)
 
 
 class HallOfFamePilotRead(BaseModel):

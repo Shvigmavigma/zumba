@@ -303,6 +303,7 @@ async def init_db() -> None:
         await conn.execute(text("ALTER TABLE penalties ALTER COLUMN sr_applied_value SET NOT NULL"))
         await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS has_qualification BOOLEAN DEFAULT TRUE"))
         await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS rating_applied BOOLEAN DEFAULT FALSE"))
+        await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS lmu_results_at TIMESTAMP WITH TIME ZONE"))
         await conn.execute(text("UPDATE races SET has_qualification = TRUE WHERE has_qualification IS NULL"))
         await conn.execute(text("UPDATE races SET rating_applied = FALSE WHERE rating_applied IS NULL"))
         await conn.execute(text("ALTER TABLE races ALTER COLUMN has_qualification SET DEFAULT TRUE"))

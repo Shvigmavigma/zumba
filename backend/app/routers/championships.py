@@ -304,11 +304,15 @@ def create_stage(championship: Championship, payload: ChampionshipStageAdd | Non
     name = (payload.name or f"{championship.name} R{round_number}").strip() if payload else f"{championship.name} R{round_number}"
     track = (payload.track or "TBA").strip() if payload else "TBA"
     server_link = (payload.server_link or "").strip() if payload else ""
+    lmu_results_at = payload.lmu_results_at if payload else None
+    if championship.game == "LMU" and lmu_results_at is None:
+        lmu_results_at = start + timedelta(hours=2)
     primary_class = championship.classes[0] if championship.classes else "Championship"
     return Race(
         name=name,
         description=championship.description,
         server_link=server_link,
+        lmu_results_at=lmu_results_at,
         datetime_start=start,
         datetime_end=start + timedelta(hours=2),
         max_pilots=500,
@@ -345,6 +349,10 @@ async def sync_championship_settings_to_stages(session: AsyncSession, championsh
         stage.game = championship.game
         stage.car_class = primary_class
         stage.allowed_cars = allowed_cars
+        if championship.game == "LMU":
+            stage.lmu_results_at = stage.lmu_results_at or stage.datetime_end
+        else:
+            stage.lmu_results_at = None
 
     registrations = (
         await session.scalars(
@@ -623,6 +631,8 @@ async def update_championship_stage(
         stage.track = data["track"] or "TBA"
     if "server_link" in data:
         stage.server_link = data["server_link"] or ""
+    if "lmu_results_at" in data:
+        stage.lmu_results_at = data["lmu_results_at"]
     if "has_qualification" in data:
         stage.has_qualification = data["has_qualification"]
     if "scoring_system" in data:

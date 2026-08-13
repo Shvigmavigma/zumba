@@ -1,5 +1,7 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap');
+
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "IBM Plex Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color-scheme: light;
   --bg: #f5f8fc;
   --panel: #ffffff;
@@ -1011,7 +1013,8 @@ textarea {
   border-radius: 999px;
   background: color-mix(in srgb, var(--muted) 36%, var(--panel-muted));
   cursor: pointer;
-  transition: width 0.16s ease, height 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  transform-origin: center;
+  transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .news-dot:hover {
@@ -1020,11 +1023,12 @@ textarea {
 }
 
 .news-dot.is-active {
-  width: 16px;
-  height: 16px;
+  width: 9px;
+  height: 9px;
   border-color: var(--primary);
   background: var(--primary);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 16%, transparent);
+  transform: scale(1.7);
 }
 
 .news-viewer {
@@ -4169,7 +4173,6 @@ textarea {
   gap: 10px;
   padding: 12px;
   border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
-  border-left: 3px solid var(--primary);
   border-radius: var(--control-radius);
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--primary) 7%, transparent), transparent 54%),
@@ -4335,6 +4338,16 @@ textarea {
   align-items: center;
   gap: 8px;
   min-width: 620px;
+}
+
+.manual-results-head.has-actions,
+.manual-results-row.has-actions {
+  grid-template-columns: minmax(180px, 1fr) 140px 84px 140px 44px;
+  min-width: 672px;
+}
+
+.manual-pilot-results {
+  max-height: 220px;
 }
 
 .manual-results-head {
@@ -7007,7 +7020,7 @@ select,
 }
 
 .main-stat-card {
-  border-left: 4px solid var(--primary);
+  border-left: 0;
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--primary) 8%, transparent), transparent 44%),
     var(--race-surface);
@@ -7505,12 +7518,8 @@ body {
 }
 
 .main-stat-card::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 3px;
-  background: linear-gradient(90deg, var(--stat-tone), color-mix(in srgb, var(--stat-tone) 20%, transparent));
-  opacity: 1;
+  content: none;
+  display: none;
 }
 
 .main-stat-card::after {
@@ -8087,7 +8096,8 @@ body {
 }
 
 .main-stat-card::before {
-  opacity: 0.38;
+  content: none;
+  display: none;
 }
 
 .main-stat-card::after {
@@ -8984,15 +8994,8 @@ textarea::placeholder {
 }
 
 .main-news-strip .news-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 2;
-  height: 4px;
-  background: linear-gradient(90deg, var(--primary), var(--accent) 32%, transparent 32%);
-  opacity: 0.95;
+  content: none;
+  display: none;
 }
 
 .main-news-strip .news-card::after {
@@ -9700,7 +9703,7 @@ textarea::placeholder {
 .championship-card-strip {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(270px, 1fr);
+  grid-auto-columns: minmax(420px, 1fr);
   gap: 10px;
   min-width: 0;
   overflow-x: auto;
@@ -9709,7 +9712,7 @@ textarea::placeholder {
 
 .championship-list-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(160px, 1fr) minmax(330px, max-content);
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -10181,7 +10184,7 @@ textarea::placeholder {
   }
 
   .championship-card-strip {
-    grid-auto-columns: minmax(250px, 82vw);
+    grid-auto-columns: minmax(420px, 92vw);
   }
 
   .main-menu-side-rail {
@@ -10850,4 +10853,1233 @@ body {
   height: 34px;
   padding-inline: 12px;
   text-align: center;
+}
+
+/* Final pit-wall polish: calmer surfaces, tighter rhythm, readable data */
+:root {
+  --font-body: "IBM Plex Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --bg: #f7faff;
+  --bg-top: #ffffff;
+  --bg-bottom: #dbeafe;
+  --panel-muted: #f4f7fd;
+  --border: #d7e2f5;
+  --muted: #34435d;
+  --shadow: 0 10px 24px rgba(13, 47, 143, 0.08);
+  --layout-gap: 24px;
+  --main-menu-side-width: clamp(188px, 13.5vw, 260px);
+  --main-menu-top-height: clamp(196px, 13.2vw, 242px);
+}
+
+:root[data-theme='dark'] {
+  --bg: #02050a;
+  --bg-top: #000000;
+  --bg-bottom: #061020;
+  --panel: #050914;
+  --panel-muted: #091121;
+  --panel-shine: #07101e;
+  --muted: #b6c2d5;
+  --border: #17305f;
+  --primary-strong: #8fb8ff;
+  --shadow: none;
+  --race-surface: #060b15;
+  --race-surface-strong: #081326;
+}
+
+html,
+body,
+button,
+input,
+textarea,
+select {
+  font-family: var(--font-body);
+}
+
+body,
+:root[data-theme='dark'] body {
+  background:
+    linear-gradient(116deg, transparent 0 18%, rgba(22, 82, 216, 0.12) 18% calc(18% + 1px), transparent calc(18% + 1px) 100%),
+    linear-gradient(116deg, transparent 0 84%, rgba(13, 47, 143, 0.12) 84% calc(84% + 1px), transparent calc(84% + 1px) 100%),
+    repeating-linear-gradient(90deg, transparent 0 150px, rgba(22, 82, 216, 0.055) 150px 151px),
+    linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+  background-attachment: fixed, fixed, fixed, fixed;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+:root[data-theme='dark'] body {
+  background:
+    linear-gradient(116deg, transparent 0 18%, rgba(22, 82, 216, 0.08) 18% calc(18% + 1px), transparent calc(18% + 1px) 100%),
+    linear-gradient(116deg, transparent 0 84%, rgba(22, 82, 216, 0.07) 84% calc(84% + 1px), transparent calc(84% + 1px) 100%),
+    repeating-linear-gradient(90deg, transparent 0 150px, rgba(22, 82, 216, 0.03) 150px 151px),
+    linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+}
+
+.topbar,
+:root[data-theme='dark'] .topbar {
+  min-height: 64px;
+  background: var(--glass);
+  border-bottom-color: color-mix(in srgb, var(--brand-blue) 28%, var(--border));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--brand-blue) 10%, transparent);
+}
+
+.nav-links {
+  gap: 6px;
+}
+
+.nav-links a,
+.nav-more-button {
+  min-height: 36px;
+  padding: 0 12px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--text) 86%, var(--muted));
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.nav-links a:hover:not(.router-link-active),
+.nav-more-button:hover:not(.is-open) {
+  background: color-mix(in srgb, var(--brand-blue) 7%, var(--panel));
+  border-color: color-mix(in srgb, var(--brand-blue) 18%, var(--border));
+  color: var(--text);
+}
+
+.nav-links a.router-link-active,
+.nav-more-button.is-open {
+  border-color: color-mix(in srgb, var(--brand-blue) 42%, var(--border));
+  background: color-mix(in srgb, var(--brand-blue) 12%, var(--panel));
+  color: var(--brand-blue-deep);
+  box-shadow: inset 0 -2px 0 var(--brand-blue);
+}
+
+:root[data-theme='dark'] .nav-links a.router-link-active,
+:root[data-theme='dark'] .nav-more-button.is-open {
+  background: color-mix(in srgb, var(--brand-blue) 18%, var(--panel));
+  color: #ffffff;
+  box-shadow: inset 0 -2px 0 var(--brand-blue);
+}
+
+.button.primary,
+.race-status-toggle button.active,
+.hall-tabs button.active,
+.tab-button.active,
+.role-segment-option.is-selected,
+.status-badge,
+.race-status-ongoing,
+.race-status-registration_open,
+.race-status-finished {
+  background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-deep));
+  box-shadow: none;
+}
+
+.card,
+.news-strip,
+.pilot-roster,
+.race-filter-bar,
+.hall-controls,
+.race-results-tabs,
+.hall-tabs,
+.role-segment,
+.avatar-edit-panel,
+.steam-connect,
+.race-results-upload,
+.championship-table-scroll,
+.fuel-note,
+.fuel-summary,
+.fuel-metric,
+.teams-toolbar,
+.teams-list {
+  border-color: color-mix(in srgb, var(--brand-blue) 18%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 96%, var(--panel-muted)), var(--panel));
+  box-shadow: var(--shadow);
+}
+
+.card::before {
+  inset: 0 auto auto 14px;
+  width: 42px;
+  height: 2px;
+  border-radius: 0 0 999px 999px;
+  background: var(--brand-blue);
+  opacity: 0.42;
+}
+
+:root[data-theme='dark'] .card,
+:root[data-theme='dark'] .news-strip,
+:root[data-theme='dark'] .pilot-roster,
+:root[data-theme='dark'] .race-filter-bar,
+:root[data-theme='dark'] .hall-controls,
+:root[data-theme='dark'] .race-results-tabs,
+:root[data-theme='dark'] .hall-tabs,
+:root[data-theme='dark'] .role-segment,
+:root[data-theme='dark'] .avatar-edit-panel,
+:root[data-theme='dark'] .steam-connect,
+:root[data-theme='dark'] .race-results-upload,
+:root[data-theme='dark'] .championship-table-scroll,
+:root[data-theme='dark'] .fuel-note,
+:root[data-theme='dark'] .fuel-summary,
+:root[data-theme='dark'] .fuel-metric,
+:root[data-theme='dark'] .teams-toolbar,
+:root[data-theme='dark'] .teams-list {
+  border-color: color-mix(in srgb, var(--brand-blue) 24%, var(--border));
+  background: var(--panel);
+  box-shadow: none;
+}
+
+.main-menu {
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.main-menu-layout {
+  gap: clamp(22px, 2vw, 30px);
+  align-items: start;
+}
+
+.main-menu-content {
+  gap: 12px;
+}
+
+.main-menu-top-banner {
+  max-height: var(--main-menu-top-height);
+}
+
+.main-menu-bottom-banner {
+  max-height: 132px;
+}
+
+.main-menu .banner.side {
+  max-height: 650px;
+}
+
+.main-overview-section {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.main-stat-grid {
+  gap: 12px;
+}
+
+.main-stat-card {
+  --stat-tone: var(--brand-blue);
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-height: 108px;
+  padding: 14px 16px 16px;
+  border-left: 0;
+  border-color: color-mix(in srgb, var(--stat-tone) 22%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, var(--panel-muted)), var(--panel));
+}
+
+.main-stat-card::before {
+  content: none;
+  display: none;
+}
+
+.main-stat-card::after {
+  right: 16px;
+  bottom: 11px;
+  left: 16px;
+  width: auto;
+  height: 3px;
+  border: 0;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, var(--stat-tone) 0 38%, color-mix(in srgb, var(--stat-tone) 18%, var(--panel-muted)) 38% 100%);
+  opacity: 0.8;
+}
+
+.main-stat-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--stat-tone) 8%, var(--panel));
+}
+
+.main-stat-card .muted {
+  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.main-stat-card strong,
+.main-race-date-tile strong,
+.main-race-fill,
+.pilot-roster-number,
+.pilot-roster-metric strong,
+.hall-medal-value,
+.hall-rank,
+.race-results-table td:first-child,
+.championship-results-table td:first-child {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.main-stat-card strong {
+  font-size: clamp(31px, 2.5vw, 40px);
+}
+
+.main-news-strip.news-strip,
+.main-news-strip .news-track,
+.main-news-strip .news-card {
+  min-height: clamp(292px, 22vw, 340px);
+}
+
+.main-news-strip .news-card::before {
+  content: none;
+  display: none;
+}
+
+.main-news-strip .news-dot {
+  width: 8px;
+  height: 8px;
+  transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.main-news-strip .news-dot.is-active {
+  width: 8px;
+  height: 8px;
+  transform: scaleX(2.7);
+}
+
+.main-races-section,
+.main-setups-section {
+  padding: 14px;
+}
+
+.main-race-filter-bar {
+  padding: 10px;
+}
+
+.main-race-grid {
+  --main-race-slot-gap: 10px;
+  --main-race-slot-height: 154px;
+  padding: 2px 4px 2px 0;
+}
+
+.main-race-card,
+.team-list-item,
+.pilot-roster-row,
+.team-member-row,
+.team-application-row,
+.race-item,
+.race-participant-row,
+.race-penalty-card,
+.appeal-card {
+  border-color: color-mix(in srgb, var(--brand-blue) 18%, var(--border));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--brand-blue) 5%, transparent), transparent 42%),
+    var(--race-surface);
+  box-shadow: none;
+}
+
+.main-race-card:hover,
+.team-list-item:hover,
+.pilot-roster-row:hover,
+.team-member-row:hover,
+.team-application-row:hover,
+.race-item:hover,
+.race-participant-row:hover,
+.race-penalty-card:hover,
+.appeal-card:hover {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--brand-blue) 8%, transparent), transparent 46%),
+    var(--race-surface-strong);
+  box-shadow: inset 3px 0 0 var(--brand-blue);
+  transform: none;
+}
+
+:root[data-theme='dark'] .main-race-card,
+:root[data-theme='dark'] .team-list-item,
+:root[data-theme='dark'] .pilot-roster-row,
+:root[data-theme='dark'] .team-member-row,
+:root[data-theme='dark'] .team-application-row,
+:root[data-theme='dark'] .race-item,
+:root[data-theme='dark'] .race-participant-row,
+:root[data-theme='dark'] .race-penalty-card,
+:root[data-theme='dark'] .appeal-card {
+  background: var(--race-surface);
+}
+
+:root[data-theme='dark'] .main-race-card:hover,
+:root[data-theme='dark'] .team-list-item:hover,
+:root[data-theme='dark'] .pilot-roster-row:hover,
+:root[data-theme='dark'] .team-member-row:hover,
+:root[data-theme='dark'] .team-application-row:hover,
+:root[data-theme='dark'] .race-item:hover,
+:root[data-theme='dark'] .race-participant-row:hover,
+:root[data-theme='dark'] .race-penalty-card:hover,
+:root[data-theme='dark'] .appeal-card:hover {
+  background: var(--race-surface-strong);
+}
+
+.main-race-date-tile {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--brand-blue) 9%, var(--panel)), var(--panel-muted));
+}
+
+.main-race-date-tile strong {
+  color: var(--brand-blue-deep);
+}
+
+:root[data-theme='dark'] .main-race-date-tile strong {
+  color: #ffffff;
+}
+
+.main-race-action-panel {
+  background: color-mix(in srgb, var(--brand-blue) 5%, var(--panel));
+  border-left: 1px solid color-mix(in srgb, var(--brand-blue) 18%, var(--border));
+}
+
+:root[data-theme='dark'] .main-race-action-panel {
+  background: color-mix(in srgb, var(--brand-blue) 9%, var(--panel));
+}
+
+.main-race-subtitle span,
+.race-details-meta span:not(.status-badge),
+.team-detail-meta span,
+.appeal-meta span,
+.main-race-meta span,
+.pilot-roster-metric,
+.team-mini-chip,
+.pill,
+.badge,
+.button-count,
+.result-position-badge {
+  border-color: color-mix(in srgb, var(--brand-blue) 24%, var(--border));
+  background: color-mix(in srgb, var(--brand-blue) 6%, var(--panel));
+}
+
+.pilot-roster-head,
+.table th,
+.admin-users-table th,
+.race-admin-table th,
+.hall-table th,
+.race-results-table th,
+.championship-results-table th {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+.pilot-roster {
+  overflow-x: auto;
+}
+
+.pilot-roster-head,
+.pilot-roster-row {
+  grid-template-columns: 80px minmax(280px, 1.7fr) 104px minmax(128px, 0.75fr) 90px 82px 136px;
+}
+
+.pilot-roster-head {
+  min-height: 46px;
+}
+
+.pilot-roster-row {
+  min-height: 74px;
+}
+
+.pilot-roster-metric {
+  min-height: 50px;
+}
+
+.team-list-open {
+  min-height: 76px;
+}
+
+.team-list-item.is-selected {
+  border-color: color-mix(in srgb, var(--brand-blue) 46%, var(--border));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--brand-blue) 10%, transparent), transparent 50%),
+    var(--panel);
+  box-shadow: inset 3px 0 0 var(--brand-blue);
+}
+
+.team-detail-hero,
+.team-owner-panel,
+.team-edit-panel,
+.team-applications-section,
+.team-members-section {
+  border-color: color-mix(in srgb, var(--brand-blue) 18%, var(--border));
+}
+
+.table,
+.admin-users-table,
+.race-admin-table,
+.hall-table,
+.race-results-table,
+.championship-results-table {
+  font-size: 15px;
+}
+
+.table td,
+.admin-users-table td,
+.race-admin-table td,
+.hall-table td,
+.race-results-table td,
+.championship-results-table td {
+  background: color-mix(in srgb, var(--panel) 97%, var(--panel-muted));
+}
+
+.table tr:hover td,
+.admin-users-table tbody tr:hover td,
+.race-admin-table tbody tr:hover td,
+.hall-table tbody tr:hover td,
+.race-results-table tbody tr:hover td,
+.championship-results-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--brand-blue) 6%, var(--panel));
+}
+
+:root[data-theme='dark'] .table td,
+:root[data-theme='dark'] .admin-users-table td,
+:root[data-theme='dark'] .race-admin-table td,
+:root[data-theme='dark'] .hall-table td,
+:root[data-theme='dark'] .race-results-table td,
+:root[data-theme='dark'] .championship-results-table td {
+  background: #060b15;
+}
+
+.twitch-floating-widget {
+  border-color: color-mix(in srgb, var(--brand-blue) 36%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--brand-blue) 7%, var(--panel)), var(--panel));
+  box-shadow: 0 16px 34px rgba(13, 47, 143, 0.16);
+}
+
+:root[data-theme='dark'] .twitch-floating-widget {
+  background: #050914;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.45);
+}
+
+@media (max-width: 1180px) {
+  .main-menu-layout {
+    gap: 14px;
+  }
+
+  .main-menu-top-banner,
+  .main-menu-bottom-banner,
+  .main-menu .banner.side {
+    max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .nav-links a,
+  .nav-more-button {
+    min-height: 34px;
+    padding-inline: 10px;
+    font-size: 12px;
+  }
+
+  .main-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .main-race-card {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .main-race-action-panel {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid color-mix(in srgb, var(--brand-blue) 18%, var(--border));
+  }
+}
+
+/* Keep the refreshed main menu inside the viewport on every desktop width */
+.page:has(.main-menu) {
+  overflow-x: visible;
+}
+
+.main-menu-top-banner,
+.main-menu-bottom-banner,
+.main-menu .main-menu-side-banner.left,
+.main-menu .main-menu-side-banner.right {
+  width: 100%;
+  margin-inline: 0;
+}
+
+.main-menu-floor.section {
+  width: 100vw;
+  max-width: 100vw;
+  min-height: 76px;
+  margin: 0 calc(50% - 50vw) calc(var(--page-bottom-pad, 0px) * -1);
+  padding: 18px clamp(24px, 5vw, 88px);
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.main-menu-floor p {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.main-news-strip.news-strip {
+  overflow: clip;
+  contain: paint;
+}
+
+.card::before,
+.main-stat-card::before {
+  content: none;
+  display: none;
+}
+
+/* Sticky side banners: follow the viewport only inside the main menu lane */
+@media (min-width: 1181px) {
+  .main-menu .banner.side {
+    position: sticky;
+    top: calc(var(--topbar-height) + 12px);
+    align-self: start;
+    max-height: calc(100vh - var(--topbar-height) - 24px);
+  }
+}
+
+@media (max-width: 1180px) {
+  .main-menu .banner.side {
+    position: static;
+    max-height: none;
+  }
+}
+
+/* Header polish requested after rounded mockup review */
+html {
+  min-height: 100%;
+  background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: 100vw 100vh;
+}
+
+body,
+:root[data-theme='dark'] body {
+  background-attachment: fixed, fixed, fixed, fixed;
+  background-size: 100vw 100vh, 100vw 100vh, 150px 100vh, 100vw 100vh;
+}
+
+.app-shell::before {
+  background-attachment: fixed;
+}
+
+.brand,
+:root[data-theme='light'] .brand,
+:root[data-theme='dark'] .brand {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.nav-links a,
+.nav-more-button {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.nav-links a:hover:not(.router-link-active),
+.nav-more-button:hover:not(.is-open) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--brand-blue-deep);
+}
+
+.nav-links a.router-link-active,
+.nav-more-button.is-open {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--brand-blue-deep);
+}
+
+:root[data-theme='dark'] .nav-links a:hover:not(.router-link-active),
+:root[data-theme='dark'] .nav-more-button:hover:not(.is-open),
+:root[data-theme='dark'] .nav-links a.router-link-active,
+:root[data-theme='dark'] .nav-more-button.is-open {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: #ffffff;
+}
+
+.nav-links a.router-link-active::after {
+  background: var(--brand-blue);
+}
+
+/* Requested rounded pass for header actions, race opens, and news only */
+.nav-more-button,
+.topbar > .toolbar > .icon-button:first-child,
+.topbar > .toolbar .button.small,
+.main-race-open {
+  border-radius: 999px;
+}
+
+.nav-more-button {
+  padding-inline: 14px;
+}
+
+.topbar > .toolbar > .icon-button:first-child {
+  width: var(--control-height-small);
+  height: var(--control-height-small);
+}
+
+.topbar > .toolbar .button.small {
+  min-height: var(--control-height-small);
+  padding-inline: 16px;
+}
+
+.main-race-open {
+  min-height: 42px;
+  padding-inline: 18px;
+}
+
+.main-news-strip.news-strip,
+.main-news-strip .news-track,
+.main-news-strip .news-card {
+  min-height: clamp(350px, 26.5vw, 408px);
+}
+
+.main-news-strip.news-strip {
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+.main-news-strip .news-track,
+.main-news-strip .news-card {
+  border-radius: inherit;
+}
+
+.main-news-strip .news-card-open,
+.main-news-strip .news-card-topline span,
+.main-news-strip .news-strip-nav,
+.main-news-strip .news-dots {
+  border-radius: 999px;
+}
+
+/* Rounded continuation: remaining header controls, championship callout, race filters, and news paging */
+.topbar > .toolbar > .icon-button {
+  border-radius: 999px;
+}
+
+.topbar > .toolbar > .icon-button:has(span) {
+  min-width: 66px;
+  width: auto;
+  padding-inline: 14px;
+}
+
+.main-championship-callout {
+  min-height: 72px;
+  padding: 12px 16px;
+  border-radius: 999px;
+}
+
+.main-championship-icon,
+.main-championship-meta .pill {
+  border-radius: 999px;
+}
+
+.main-race-filter-bar {
+  padding: 8px;
+  border-radius: 999px;
+}
+
+.main-race-filter-bar select,
+.main-race-filter-bar .toggle-field,
+.race-status-toggle,
+.race-status-toggle button {
+  border-radius: 999px;
+}
+
+.twitch-floating-head .twitch-status,
+.twitch-floating-widget > strong {
+  border-radius: 999px;
+}
+
+.twitch-floating-widget > strong {
+  justify-self: start;
+  max-width: 100%;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--brand-blue) 8%, transparent);
+}
+
+.main-news-strip .news-dots {
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.main-news-strip .news-dot,
+.main-news-strip .news-dot.is-active {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.main-news-strip .news-dot::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+  content: "";
+  transform: translate(-50%, -50%);
+  transition: transform 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.main-news-strip .news-dot:hover::after {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.main-news-strip .news-dot.is-active::after {
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.26), 0 6px 14px rgba(0, 0, 0, 0.22);
+  transform: translate(-50%, -50%) scaleX(3);
+}
+
+:root[data-theme='light'] .main-news-strip .news-dot.is-active::after {
+  background: var(--brand-blue);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand-blue) 20%, transparent), 0 6px 14px rgba(13, 47, 143, 0.18);
+}
+
+@media (max-width: 700px) {
+  .main-championship-callout,
+  .main-race-filter-bar {
+    border-radius: 24px;
+  }
+}
+
+/* Mini feature pass: timezone switcher, donations, registration marks, compact Twitch */
+.timezone-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--control-height-small);
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--brand-blue) 32%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  color: var(--text);
+}
+
+.timezone-picker svg {
+  flex: 0 0 auto;
+  color: var(--brand-blue);
+}
+
+.timezone-picker select {
+  width: 54px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  outline: 0;
+}
+
+.main-registered-badge,
+.championship-user-badge,
+.main-championship-meta .pill.is-registered {
+  border-color: color-mix(in srgb, #16a34a 54%, var(--border));
+  background: color-mix(in srgb, #16a34a 13%, var(--panel));
+  color: #16a34a;
+}
+
+.main-race-action-panel .main-registered-badge {
+  max-width: 150px;
+}
+
+.championship-card-badges,
+.championship-stage-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.championship-card-badges {
+  min-width: max-content;
+}
+
+.championship-card-badges .status-badge,
+.championship-stage-statuses .status-badge {
+  max-width: 180px;
+}
+
+.championship-card-badges .championship-user-badge {
+  flex: 0 0 auto;
+  min-width: 292px;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.championship-stage-statuses .status-badge {
+  max-width: none;
+}
+
+.championship-stage-statuses .championship-user-badge {
+  flex: 0 0 auto;
+  min-width: 260px;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.main-menu-floor-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.main-menu-support {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+
+.main-support-button {
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+
+.main-donations-top {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.main-donations-top > strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.main-donation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 180px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--brand-blue) 26%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-blue) 7%, var(--panel));
+}
+
+.main-donation-chip b,
+.main-donation-chip em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-donation-chip em {
+  color: var(--brand-blue);
+  font-style: normal;
+  font-weight: 950;
+}
+
+.twitch-collapse-button {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  border-radius: 999px;
+}
+
+.twitch-floating-widget.is-collapsed {
+  grid-template-rows: 1fr;
+  width: 190px;
+  height: 54px;
+  padding: 8px 10px;
+  border-radius: 999px;
+}
+
+.twitch-floating-widget.is-collapsed .twitch-floating-head {
+  height: 100%;
+}
+
+.twitch-floating-widget.is-collapsed .twitch-status {
+  max-width: 116px;
+  min-height: 28px;
+}
+
+.admin-donation-config-card {
+  align-items: start;
+}
+
+.admin-donation-url-field {
+  min-width: min(520px, 100%);
+}
+
+.admin-donation-list {
+  display: grid;
+  gap: 10px;
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.admin-donation-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(120px, 0.7fr) minmax(180px, 1.4fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--brand-blue) 18%, var(--border));
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel-muted) 74%, var(--panel));
+}
+
+@media (max-width: 920px) {
+  .main-menu-floor.section {
+    align-items: start;
+  }
+
+  .main-menu-support,
+  .main-donations-top {
+    justify-content: flex-start;
+  }
+
+  .admin-donation-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .timezone-picker {
+    max-width: 74px;
+    padding-inline: 10px;
+  }
+
+  .main-menu-support {
+    display: grid;
+    justify-items: start;
+  }
+
+  .championship-card-badges,
+  .championship-stage-statuses {
+    justify-content: flex-start;
+  }
+
+  .championship-list-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .championship-card-badges {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .championship-card-badges .championship-user-badge {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+/* Focused fixes: Twitch loading, race-card wrapping, timezone contrast */
+.timezone-picker {
+  min-width: 136px;
+  background: color-mix(in srgb, var(--panel) 96%, var(--brand-blue) 4%);
+}
+
+.timezone-picker select {
+  width: 104px;
+  min-height: 28px;
+  appearance: none;
+  -webkit-appearance: none;
+  color-scheme: light;
+  background:
+    linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 9px) 50% / 5px 5px no-repeat,
+    linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 5px) 50% / 5px 5px no-repeat;
+}
+
+.timezone-picker select option {
+  background: var(--panel);
+  color: var(--text);
+}
+
+:root[data-theme='dark'] .timezone-picker {
+  border-color: color-mix(in srgb, var(--brand-blue) 42%, var(--border));
+  background: #061226;
+  color: #ffffff;
+}
+
+:root[data-theme='dark'] .timezone-picker select {
+  color: #ffffff;
+  color-scheme: dark;
+  background:
+    linear-gradient(45deg, transparent 50%, #ffffff 50%) calc(100% - 9px) 50% / 5px 5px no-repeat,
+    linear-gradient(135deg, #ffffff 50%, transparent 50%) calc(100% - 5px) 50% / 5px 5px no-repeat,
+    #061226;
+}
+
+:root[data-theme='dark'] .timezone-picker select option {
+  background: #061226;
+  color: #ffffff;
+}
+
+.twitch-floating-widget {
+  width: min(420px, calc(100vw - 32px));
+  height: min(320px, calc(100vh - 32px));
+  border-radius: 28px;
+}
+
+.twitch-floating-preview {
+  min-height: 0;
+}
+
+.twitch-preview-player {
+  width: 100%;
+  min-width: 400px;
+  height: 300px;
+  transform: translate(-50%, -50%);
+}
+
+.twitch-floating-widget.is-collapsed {
+  width: 270px;
+  height: 58px;
+  padding: 8px 12px;
+}
+
+.twitch-floating-widget.is-collapsed .twitch-status {
+  flex: 1 1 auto;
+  max-width: none;
+  text-align: center;
+}
+
+.main-race-grid {
+  --main-race-slot-height: 178px;
+}
+
+.main-race-card {
+  grid-template-columns: 86px minmax(0, 1fr) minmax(184px, 220px);
+  height: auto;
+  min-height: var(--main-race-slot-height);
+}
+
+.main-race-card-main {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 9px;
+  overflow: hidden;
+}
+
+.main-race-title a {
+  display: -webkit-box;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.main-race-subtitle {
+  align-content: start;
+  max-height: 58px;
+  overflow: hidden;
+}
+
+.main-race-subtitle span {
+  max-width: min(100%, 560px);
+}
+
+.main-race-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.main-race-meta span {
+  min-width: 0;
+}
+
+.main-race-meta strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-race-action-panel {
+  align-content: stretch;
+  gap: 7px;
+}
+
+.main-race-action-panel .main-registered-badge {
+  justify-self: stretch;
+  max-width: none;
+  min-height: 32px;
+  padding-inline: 8px;
+  line-height: 1.12;
+  text-align: center;
+  white-space: normal;
+}
+
+.main-race-fill {
+  min-width: 0;
+  font-size: clamp(22px, 2vw, 28px);
+}
+
+@media (max-width: 1060px) {
+  .main-race-card {
+    grid-template-columns: 78px minmax(0, 1fr);
+  }
+
+  .main-race-action-panel {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: auto;
+    align-items: center;
+    border-top: 1px solid color-mix(in srgb, var(--brand-blue) 18%, var(--border));
+    border-left: 0;
+  }
+
+  .main-race-open {
+    align-self: center;
+  }
+}
+
+@media (max-width: 680px) {
+  .timezone-picker {
+    max-width: none;
+    min-width: 124px;
+  }
+
+  .timezone-picker select {
+    width: 92px;
+  }
+
+  .main-race-action-panel {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .main-race-open {
+    grid-column: 1 / -1;
+  }
+
+  .twitch-floating-widget.is-collapsed {
+    width: min(270px, calc(100vw - 32px));
+  }
 }
