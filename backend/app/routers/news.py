@@ -16,11 +16,15 @@ from app.schemas import NewsItemRead, NewsItemUpdate
 router = APIRouter()
 settings = get_settings()
 NEWS_UPLOAD_DIR = Path(settings.upload_dir) / "news"
-ALLOWED_IMAGE_TYPES = {
+ALLOWED_MEDIA_TYPES = {
     "image/gif": ".gif",
     "image/jpeg": ".jpg",
     "image/png": ".png",
     "image/webp": ".webp",
+    "video/mp4": ".mp4",
+    "video/quicktime": ".mov",
+    "video/webm": ".webm",
+    "video/x-matroska": ".mkv",
 }
 
 
@@ -46,13 +50,13 @@ def delete_news_file(image_url: str) -> None:
 
 
 def uploaded_extension(file: UploadFile) -> str:
-    extension = ALLOWED_IMAGE_TYPES.get(file.content_type or "")
+    extension = ALLOWED_MEDIA_TYPES.get(file.content_type or "")
     if extension:
         return extension
     suffix = Path(file.filename or "").suffix.lower()
-    if suffix in ALLOWED_IMAGE_TYPES.values():
+    if suffix in ALLOWED_MEDIA_TYPES.values():
         return suffix
-    raise HTTPException(status_code=415, detail="Only PNG, JPG, WEBP and GIF images are allowed")
+    raise HTTPException(status_code=415, detail="Only PNG, JPG, WEBP, GIF, MP4, MOV, WEBM and MKV files are allowed")
 
 
 @router.get("", response_model=list[NewsItemRead])

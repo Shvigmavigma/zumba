@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
 import { gameLabel, gameOptions, isExternalRace, raceOpenHref, statusLabel } from '../i18nLabels'
+import { isVideoUrl } from '../media'
 import { state } from '../store'
 import { formatDayPart, formatInTimeZone, formatMonthPart, formatTimeOnly } from '../timezone'
 
@@ -154,14 +155,17 @@ function stageCount(count) {
 }
 
 function registeredCount(race) {
+  if (race.game === 'LMU') return 0
   return race.registered_pilots?.length || 0
 }
 
 function isRaceRegistered(race) {
+  if (race.game === 'LMU') return false
   return Boolean(state.user && race.registered_pilots?.some((item) => item.user_id === state.user.id))
 }
 
 function fillPercent(race) {
+  if (race.game === 'LMU') return 0
   if (!race.max_pilots) return 0
   return Math.min(100, Math.round((registeredCount(race) / race.max_pilots) * 100))
 }
@@ -396,10 +400,16 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="main-menu">
-    <a v-if="banner('top')" class="banner main-menu-top-banner" :href="banner('top').link_url"><img :src="banner('top').image_url" alt="" /></a>
+    <a v-if="banner('top')" class="banner main-menu-top-banner" :href="banner('top').link_url">
+      <video v-if="isVideoUrl(banner('top').image_url)" :src="banner('top').image_url" autoplay muted loop playsinline preload="metadata"></video>
+      <img v-else :src="banner('top').image_url" alt="" />
+    </a>
 
     <div class="main-menu-layout">
-      <a v-if="banner('left')" class="banner side main-menu-side-banner left" :href="banner('left').link_url"><img :src="banner('left').image_url" alt="" /></a>
+      <a v-if="banner('left')" class="banner side main-menu-side-banner left" :href="banner('left').link_url">
+        <video v-if="isVideoUrl(banner('left').image_url)" :src="banner('left').image_url" autoplay muted loop playsinline preload="metadata"></video>
+        <img v-else :src="banner('left').image_url" alt="" />
+      </a>
 
       <div class="main-menu-content">
         <section v-if="news.length" class="section news-strip main-news-strip">
@@ -415,7 +425,8 @@ onBeforeUnmount(() => {
               @keydown.enter.prevent="openNews(index)"
               @keydown.space.prevent="openNews(index)"
             >
-              <img :src="item.image_url" alt="" />
+              <video v-if="isVideoUrl(item.image_url)" :src="item.image_url" autoplay muted loop playsinline preload="metadata"></video>
+              <img v-else :src="item.image_url" alt="" />
               <div class="news-card-topline">
                 <span>{{ t('news.title') }}</span>
                 <span>{{ index + 1 }} / {{ news.length }}</span>
@@ -528,10 +539,8 @@ onBeforeUnmount(() => {
                     <RouterLink v-else :to="raceOpenHref(race)">{{ race.name }}</RouterLink>
                     <p class="muted main-race-subtitle">
                       <span>{{ gameLabel(t, race.game) }}</span>
-                      <template v-if="race.game !== 'LMU'">
-                        <span>{{ race.track }}</span>
-                        <span>{{ race.car_class }}</span>
-                      </template>
+                      <span v-if="race.track">{{ race.track }}</span>
+                      <span v-if="race.car_class">{{ race.car_class }}</span>
                     </p>
                   </div>
                 </div>
@@ -541,13 +550,13 @@ onBeforeUnmount(() => {
                     <small>{{ t('fields.date') }}</small>
                     <strong>{{ formatRaceDate(race.datetime_start) }}</strong>
                   </span>
-                  <span>
+                  <span v-if="race.game !== 'LMU'">
                     <small>{{ t('fields.participants') }}</small>
                     <strong>{{ registeredCount(race) }} / {{ race.max_pilots }}</strong>
                   </span>
                 </div>
 
-                <span class="race-registration-meter">
+                <span v-if="race.game !== 'LMU'" class="race-registration-meter">
                   <span :style="{ width: `${fillPercent(race)}%` }"></span>
                 </span>
               </div>
@@ -555,7 +564,7 @@ onBeforeUnmount(() => {
               <div class="main-race-action-panel">
                 <span v-if="isRaceRegistered(race)" class="status-badge main-registered-badge">{{ t('main.registeredForRace') }}</span>
                 <span class="status-badge race-status-badge" :class="`race-status-${race.status}`">{{ statusLabel(t, race.status) }}</span>
-                <span class="main-race-fill">{{ fillPercent(race) }}%</span>
+                <span v-if="race.game !== 'LMU'" class="main-race-fill">{{ fillPercent(race) }}%</span>
                 <a v-if="isExternalRace(race)" class="button main-race-open" :href="raceOpenHref(race)">
                   <Eye :size="16" />
                   {{ t('common.open') }}
@@ -582,10 +591,16 @@ onBeforeUnmount(() => {
 
       </div>
 
-      <a v-if="banner('right')" class="banner side main-menu-side-banner right" :href="banner('right').link_url"><img :src="banner('right').image_url" alt="" /></a>
+      <a v-if="banner('right')" class="banner side main-menu-side-banner right" :href="banner('right').link_url">
+        <video v-if="isVideoUrl(banner('right').image_url)" :src="banner('right').image_url" autoplay muted loop playsinline preload="metadata"></video>
+        <img v-else :src="banner('right').image_url" alt="" />
+      </a>
     </div>
 
-    <a v-if="banner('bottom')" class="banner main-menu-bottom-banner" :href="banner('bottom').link_url"><img :src="banner('bottom').image_url" alt="" /></a>
+    <a v-if="banner('bottom')" class="banner main-menu-bottom-banner" :href="banner('bottom').link_url">
+      <video v-if="isVideoUrl(banner('bottom').image_url)" :src="banner('bottom').image_url" autoplay muted loop playsinline preload="metadata"></video>
+      <img v-else :src="banner('bottom').image_url" alt="" />
+    </a>
 
     <section class="section main-menu-floor">
       <div class="main-menu-floor-main">
@@ -681,8 +696,9 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-if="isNewsViewerOpen && currentNews" class="news-viewer" role="dialog" aria-modal="true" @click="closeNewsViewer">
-      <img class="news-viewer-image" :src="currentNews.image_url" alt="" />
+    <div v-if="isNewsViewerOpen && currentNews" class="news-viewer" :class="{ 'is-video': isVideoUrl(currentNews.image_url) }" role="dialog" aria-modal="true" @click="closeNewsViewer">
+      <video v-if="isVideoUrl(currentNews.image_url)" class="news-viewer-image" :src="currentNews.image_url" controls autoplay playsinline @click.stop></video>
+      <img v-else class="news-viewer-image" :src="currentNews.image_url" alt="" />
       <button class="icon-button news-viewer-close" type="button" :title="t('news.closeFullscreen')" @click.stop="closeNewsViewer">
         <X :size="20" />
       </button>

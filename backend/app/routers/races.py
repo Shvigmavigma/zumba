@@ -139,8 +139,14 @@ def normalize_external_race_data(data: dict, race: Race | None = None) -> dict:
     if lmu_results_at is None:
         lmu_results_at = data.get("datetime_end", race.datetime_end if race else None)
     data["lmu_results_at"] = lmu_results_at
-    data["track"] = "LMU"
-    data["car_class"] = "LMU"
+    track = str(data.get("track", race.track if race else "") or "").strip()
+    car_class = str(data.get("car_class", race.car_class if race else "") or "").strip()
+    if not track:
+        raise HTTPException(status_code=400, detail="LMU races require a track")
+    if not car_class:
+        raise HTTPException(status_code=400, detail="LMU races require a class")
+    data["track"] = track
+    data["car_class"] = car_class
     data["has_qualification"] = False
     data["mods_pack"] = []
     data["allowed_cars"] = []
@@ -601,6 +607,7 @@ async def build_lmu_results_payload(session: AsyncSession, race: Race, qualifica
                 "pilot_number": user.pilot_number if user else None,
                 "avatar_color": user.avatar_color if user else "#2563eb",
                 "avatar_url": user.avatar_url if user else None,
+                "team_id": user.team_id if user else None,
                 "team_name": team_name,
                 "team_abbreviation": team_abbreviation,
                 "rating": int(round(float(user.rating))) if user else None,
@@ -672,6 +679,7 @@ def build_acc_results_payload(race: Race, qualification_results: dict | None, ra
             "driver_name": acc_line_name(line),
             "player_id": acc_player_id(player_id),
             "race_number": race_number if race_number is not None else (registration.pilot_number if registration else None),
+            "team_id": user.team_id if user else None,
             "car_model": line.get("car", {}).get("carModel"),
             "finish_ms": int(finish_ms) if isinstance(finish_ms, (int, float)) else None,
             "driver_total_time_ms": int(driver_total_times[0]) if driver_total_times else None,
@@ -696,6 +704,7 @@ def build_acc_results_payload(race: Race, qualification_results: dict | None, ra
                     "driver_name": f"{user.first_name} {user.last_name}".strip() or user.nickname,
                     "player_id": acc_player_id(user.steam_id),
                     "race_number": registration.pilot_number,
+                    "team_id": user.team_id,
                     "finish_ms": None,
                     "lap_count": 0,
                     "best_lap_ms": None,
@@ -738,6 +747,7 @@ def manual_result_pilot_data(user: User, team_name: str | None = None, team_abbr
         "race_number": user.pilot_number,
         "avatar_color": user.avatar_color,
         "avatar_url": user.avatar_url,
+        "team_id": user.team_id,
         "team_name": team_name,
         "team_abbreviation": team_abbreviation,
         "rating": int(round(float(user.rating))),
@@ -784,6 +794,7 @@ def build_manual_results_payload(race: Race, payload: ManualResultsUpload, regis
                 "race_number": pilot.get("race_number") or pilot.get("pilot_number"),
                 "avatar_color": pilot.get("avatar_color") or "#2563eb",
                 "avatar_url": pilot.get("avatar_url"),
+                "team_id": pilot.get("team_id"),
                 "team_name": pilot.get("team_name"),
                 "team_abbreviation": pilot.get("team_abbreviation"),
                 "rating": pilot.get("rating"),
@@ -811,6 +822,7 @@ def build_manual_results_payload(race: Race, payload: ManualResultsUpload, regis
                     "race_number": pilot.get("pilot_number"),
                     "avatar_color": pilot.get("avatar_color") or "#2563eb",
                     "avatar_url": pilot.get("avatar_url"),
+                    "team_id": pilot.get("team_id"),
                     "team_name": pilot.get("team_name"),
                     "team_abbreviation": pilot.get("team_abbreviation"),
                     "rating": pilot.get("rating"),

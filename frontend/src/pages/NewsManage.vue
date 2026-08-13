@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { Eye, EyeOff, Plus, Save, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
+import { isVideoUrl, mediaUploadAccept } from '../media'
 import { formatDateTime } from '../timezone'
 
 const { t } = useI18n()
@@ -132,7 +133,7 @@ onMounted(load)
         </label>
         <label class="field">
           <span>{{ t('news.image') }}</span>
-          <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" required @change="chooseFile" />
+          <input ref="fileInput" type="file" :accept="mediaUploadAccept" required @change="chooseFile" />
         </label>
       </div>
       <label class="field">
@@ -153,7 +154,8 @@ onMounted(load)
 
     <div class="news-manage-list">
       <article v-for="item in sortedItems" :key="item.id" class="card news-manage-card">
-        <img :src="item.image_url" alt="" />
+        <video v-if="isVideoUrl(item.image_url)" :src="item.image_url" controls playsinline preload="metadata"></video>
+        <img v-else :src="item.image_url" alt="" />
         <div class="news-manage-body">
           <div class="section-header news-manage-card-head">
             <div>

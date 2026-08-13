@@ -124,8 +124,8 @@ async function submit() {
       datetime_end: toIso(form.value.datetime_end),
       lmu_results_at: isLmuRace.value ? optionalIso(form.value.lmu_results_at || form.value.datetime_end) : null,
       max_pilots: isLmuRace.value ? 1 : form.value.max_pilots,
-      track: isLmuRace.value ? 'LMU' : form.value.track,
-      car_class: isLmuRace.value ? 'LMU' : form.value.car_class,
+      track: form.value.track,
+      car_class: form.value.car_class,
       mods_pack: isLmuRace.value ? [] : modsText.value.split('\n').map((item) => item.trim()).filter(Boolean),
       allowed_cars: allowedCars,
       has_qualification: isLmuRace.value ? false : form.value.has_qualification
@@ -133,10 +133,6 @@ async function submit() {
     const race = isEdit
       ? await api(`/races/${route.params.id}`, { method: 'PATCH', body })
       : await api('/races', { method: 'POST', body })
-    if (race.game === 'LMU') {
-      router.push('/races/manage')
-      return
-    }
     router.push(`/races/${race.id}`)
   } catch (err) {
     error.value = err.message
@@ -168,7 +164,7 @@ onMounted(async () => {
     <form class="form" @submit.prevent="submit">
       <div class="form-row">
         <label class="field"><span>{{ t('fields.name') }}</span><input v-model="form.name" required /></label>
-        <label v-if="!isLmuRace" class="field">
+        <label class="field">
           <span>{{ t('fields.track') }}</span>
           <select v-if="isAssetRace" v-model="form.track" required>
             <option v-for="track in trackChoices" :key="track" :value="track">{{ track }}</option>
@@ -179,7 +175,7 @@ onMounted(async () => {
       <label v-if="!isLmuRace" class="field"><span>{{ t('fields.description') }}</span><textarea v-model="form.description" required /></label>
       <div class="form-row">
         <label class="field"><span>{{ isLmuRace ? t('fields.linkUrl') : t('fields.serverLink') }}</span><input v-model="form.server_link" required /></label>
-        <label v-if="!isLmuRace" class="field">
+        <label class="field">
           <span>{{ t('fields.class') }}</span>
           <select v-if="isAssetRace" v-model="form.car_class" required @change="handleClassChange">
             <option v-for="item in classChoices" :key="item.name" :value="item.name">{{ item.name }}</option>

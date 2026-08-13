@@ -308,6 +308,7 @@ def create_stage(championship: Championship, payload: ChampionshipStageAdd | Non
     if championship.game == "LMU" and lmu_results_at is None:
         lmu_results_at = start + timedelta(hours=2)
     primary_class = championship.classes[0] if championship.classes else "Championship"
+    stage_class = (payload.car_class or primary_class).strip() if payload else primary_class
     return Race(
         name=name,
         description=championship.description,
@@ -316,7 +317,7 @@ def create_stage(championship: Championship, payload: ChampionshipStageAdd | Non
         datetime_start=start,
         datetime_end=start + timedelta(hours=2),
         max_pilots=500,
-        car_class=primary_class,
+        car_class=stage_class or primary_class,
         track=track,
         mods_pack=[],
         allowed_cars=allowed_cars or [],
@@ -347,8 +348,12 @@ async def sync_championship_settings_to_stages(session: AsyncSession, championsh
     for stage in stages:
         stage.description = championship.description
         stage.game = championship.game
-        stage.car_class = primary_class
-        stage.allowed_cars = allowed_cars
+        if championship.game == "LMU":
+            stage.car_class = stage.car_class or primary_class
+            stage.allowed_cars = []
+        else:
+            stage.car_class = primary_class
+            stage.allowed_cars = allowed_cars
         if championship.game == "LMU":
             stage.lmu_results_at = stage.lmu_results_at or stage.datetime_end
         else:
@@ -629,6 +634,8 @@ async def update_championship_stage(
         stage.name = data["name"]
     if "track" in data:
         stage.track = data["track"] or "TBA"
+    if "car_class" in data:
+        stage.car_class = data["car_class"] or (championship.classes[0] if championship.classes else "Championship")
     if "server_link" in data:
         stage.server_link = data["server_link"] or ""
     if "lmu_results_at" in data:
