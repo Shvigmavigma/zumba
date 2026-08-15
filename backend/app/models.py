@@ -29,10 +29,15 @@ MIN_RATING = 10.0
 MAX_RATING = 10000.0
 RACE_GAMES = ("ACC", "AC", "iRacing", "LMU")
 DEFAULT_USER_GAMES = list(RACE_GAMES)
+DEFAULT_GAME_RATINGS_SQL = "jsonb_build_object('ACC', jsonb_build_object('rating', 1000, 'race_count', 0), 'AC', jsonb_build_object('rating', 1000, 'race_count', 0), 'iRacing', jsonb_build_object('rating', 1000, 'race_count', 0), 'LMU', jsonb_build_object('rating', 1000, 'race_count', 0))"
 
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def default_game_ratings() -> dict[str, dict[str, int]]:
+    return {game: {"rating": int(DEFAULT_RATING), "race_count": 0} for game in RACE_GAMES}
 
 
 def enum_column(enum_type: type[StrEnum], length: int = 30, **kwargs):
@@ -121,11 +126,12 @@ class User(Base):
     first_name: Mapped[str] = mapped_column(String(50))
     last_name: Mapped[str] = mapped_column(String(50))
     nickname: Mapped[str] = mapped_column(String(80), index=True)
-    pilot_number: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    pilot_number: Mapped[int] = mapped_column(Integer, index=True)
     country: Mapped[str | None] = mapped_column(String(50), index=True)
     sr: Mapped[float] = mapped_column(Numeric(3, 1), default=DEFAULT_SR, server_default=str(DEFAULT_SR))
     rating: Mapped[float] = mapped_column(Numeric(8, 2), default=DEFAULT_RATING, server_default=str(DEFAULT_RATING), index=True)
     rating_race_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    game_ratings: Mapped[dict] = mapped_column(JSONB, default=default_game_ratings, server_default=text(DEFAULT_GAME_RATINGS_SQL))
     discord: Mapped[str | None] = mapped_column(String(100))
     steam_id: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     role: Mapped[Role] = enum_column(Role)
@@ -285,6 +291,7 @@ class Race(Base):
     max_pilots: Mapped[int] = mapped_column(Integer)
     car_class: Mapped[str] = mapped_column("class", String(50), index=True)
     track: Mapped[str] = mapped_column(String(100), index=True)
+    track_id: Mapped[str | None] = mapped_column(String(80), index=True)
     mods_pack: Mapped[list[str]] = mapped_column(JSONB, default=list)
     allowed_cars: Mapped[list[str]] = mapped_column(JSONB, default=list)
     status: Mapped[RaceStatus] = enum_column(RaceStatus)

@@ -1,12 +1,12 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
-import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
+import { DEFAULT_LICENSE_TIERS, RATING_GAMES, formatPilotNumber, formatRating, licenseBadgeStyle, normalizeLicenseTiers, ratingForGame, ratingLicenseTier, ratingRaceCountForGame, teamShortName } from '../pilotDisplay'
 import { formatShortDate } from '../timezone'
 
 const { t } = useI18n()
@@ -14,6 +14,7 @@ const route = useRoute()
 const pilot = ref(null)
 const error = ref('')
 const avatarViewerOpen = ref(false)
+const licenseTiers = ref(DEFAULT_LICENSE_TIERS)
 
 function formatDate(value) {
   return formatShortDate(value, { month: 'long' })
@@ -23,9 +24,25 @@ function gameList(user) {
   return user.games?.length ? user.games.map((game) => gameLabel(t, game)) : [t('common.none')]
 }
 
+function pilotLicense() {
+  return ratingLicenseTier(ratingForGame(pilot.value, 'ACC'), licenseTiers.value)
+}
+
+const ratingRows = computed(() => RATING_GAMES.map((game) => ({
+  game,
+  rating: ratingForGame(pilot.value, game),
+  races: ratingRaceCountForGame(pilot.value, game),
+  license: ratingLicenseTier(ratingForGame(pilot.value, game), licenseTiers.value)
+})))
+
 onMounted(async () => {
   try {
-    pilot.value = await api(`/users/${route.params.id}`)
+    const [loadedPilot, loadedLicenses] = await Promise.all([
+      api(`/users/${route.params.id}`),
+      api('/app-settings/licenses').catch(() => null)
+    ])
+    pilot.value = loadedPilot
+    licenseTiers.value = normalizeLicenseTiers(loadedLicenses)
   } catch (err) {
     error.value = err.message
   }
@@ -47,7 +64,8 @@ onMounted(async () => {
             <p class="muted">{{ pilot.nickname }} - {{ pilot.login }}</p>
           </div>
           <div class="toolbar">
-            <span class="pill">RER {{ formatRating(pilot.rating) }}</span>
+            <span class="pill">ACC RER {{ formatRating(ratingForGame(pilot, 'ACC')) }}</span>
+            <span class="license-badge" :style="licenseBadgeStyle(pilotLicense())">{{ pilotLicense().name }}</span>
             <span class="pill">SR {{ pilot.sr }}</span>
           </div>
         </div>
@@ -79,17 +97,30 @@ onMounted(async () => {
           </div>
           <div>
             <dt>{{ t('fields.rating') }}</dt>
-            <dd>{{ formatRating(pilot.rating) }}</dd>
+            <dd>{{ formatRating(ratingForGame(pilot, 'ACC')) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t('fields.license') }}</dt>
+            <dd><span class="license-badge" :style="licenseBadgeStyle(pilotLicense())">{{ pilotLicense().name }}</span></dd>
           </div>
           <div>
             <dt>{{ t('fields.ratingRaces') }}</dt>
-            <dd>{{ pilot.rating_race_count ?? 0 }}</dd>
+            <dd>{{ ratingRaceCountForGame(pilot, 'ACC') }}</dd>
           </div>
           <div>
             <dt>{{ t('fields.joinedAt') }}</dt>
             <dd>{{ formatDate(pilot.created_at) }}</dd>
           </div>
         </dl>
+
+        <div class="pilot-games">
+          <span>RER</span>
+          <div>
+            <span v-for="row in ratingRows" :key="row.game" class="pill">
+              {{ row.game }} {{ formatRating(row.rating) }} · {{ row.license.name }} · {{ row.races }}
+            </span>
+          </div>
+        </div>
 
         <div class="pilot-games">
           <span>{{ t('fields.games') }}</span>

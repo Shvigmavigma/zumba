@@ -21,8 +21,14 @@ from app.models import (
 )
 
 GameCode = Literal["ACC", "AC", "iRacing", "LMU"]
-AssetGameCode = Literal["ACC", "AC", "iRacing"]
+AssetGameCode = Literal["ACC", "AC", "iRacing", "LMU"]
 TEAM_ABBREVIATION_RE = re.compile(r"^[A-Z]{3}$")
+TRACK_ID_RE = re.compile(r"[^a-z0-9_-]+")
+
+
+class GameRatingRead(BaseModel):
+    rating: int = Field(ge=int(MIN_RATING), le=int(MAX_RATING))
+    race_count: int = Field(ge=0)
 
 
 def normalize_team_abbreviation(value: str) -> str:
@@ -30,6 +36,20 @@ def normalize_team_abbreviation(value: str) -> str:
     if not TEAM_ABBREVIATION_RE.fullmatch(abbreviation):
         raise ValueError("Team abbreviation must be exactly 3 latin letters")
     return abbreviation
+
+
+def normalize_track_asset_id(value: str | None, fallback: str, used: set[str]) -> str:
+    candidate = TRACK_ID_RE.sub("-", str(value or "").strip().lower()).strip("-_")
+    if not candidate:
+        candidate = TRACK_ID_RE.sub("-", fallback.strip().lower()).strip("-_") or "track"
+    candidate = candidate[:64]
+    base = candidate
+    suffix = 2
+    while candidate in used:
+        candidate = f"{base[:58]}-{suffix}"
+        suffix += 1
+    used.add(candidate)
+    return candidate
 
 
 class TokenResponse(BaseModel):
@@ -77,6 +97,7 @@ class UserPublic(BaseModel):
     sr: float = Field(ge=MIN_SR, le=MAX_SR)
     rating: int = Field(ge=int(MIN_RATING), le=int(MAX_RATING))
     rating_race_count: int = Field(ge=0)
+    game_ratings: dict[str, GameRatingRead] = Field(default_factory=dict)
     discord: str | None
     steam_id: str
     role: Role
@@ -158,6 +179,7 @@ class TeamMemberRead(BaseModel):
     sr: float = Field(ge=MIN_SR, le=MAX_SR)
     rating: int = Field(ge=int(MIN_RATING), le=int(MAX_RATING))
     rating_race_count: int = Field(ge=0)
+    game_ratings: dict[str, GameRatingRead] = Field(default_factory=dict)
     team_id: int | None = None
     team_name: str | None = None
     team_abbreviation: str | None = None
@@ -267,6 +289,7 @@ class RaceBase(BaseModel):
     max_pilots: int = Field(ge=1, le=500)
     car_class: str = Field(min_length=1, max_length=50)
     track: str = Field(min_length=1, max_length=100)
+    track_id: str | None = Field(default=None, max_length=80)
     mods_pack: list[str] = Field(default_factory=list)
     allowed_cars: list[str] = Field(default_factory=list)
     game: GameCode = "ACC"
@@ -295,6 +318,8 @@ class RaceAssetClass(BaseModel):
 class RaceAssetGameConfig(BaseModel):
     tracks: list[str] = Field(default_factory=list)
     classes: list[RaceAssetClass] = Field(default_factory=list)
+    track_images: dict[str, str] = Field(default_factory=dict)
+    track_ids: dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def normalize_items(self):
@@ -304,6 +329,18 @@ class RaceAssetGameConfig(BaseModel):
             for track in (item.strip() for item in self.tracks)
             if track and not (track.lower() in seen_tracks or seen_tracks.add(track.lower()))
         ]
+        allowed_tracks = {track.lower(): track for track in self.tracks}
+        incoming_track_ids = {str(track).strip().lower(): str(track_id).strip() for track, track_id in self.track_ids.items() if str(track_id).strip()}
+        used_track_ids: set[str] = set()
+        self.track_ids = {
+            track: normalize_track_asset_id(incoming_track_ids.get(track.lower()), track, used_track_ids)
+            for track in self.tracks
+        }
+        self.track_images = {
+            allowed_tracks[track.strip().lower()]: str(image_url).strip()
+            for track, image_url in self.track_images.items()
+            if track.strip().lower() in allowed_tracks and str(image_url).strip()
+        }
         seen_classes: set[str] = set()
         self.classes = [item for item in self.classes if not (item.name.lower() in seen_classes or seen_classes.add(item.name.lower()))]
         return self
@@ -316,26 +353,34 @@ class RaceAssetsConfig(RaceAssetGameConfig):
     @classmethod
     def accept_legacy_shape(cls, value):
         if isinstance(value, dict) and "games" not in value:
-            legacy = {"tracks": value.get("tracks", []), "classes": value.get("classes", [])}
+            legacy = {
+                "tracks": value.get("tracks", []),
+                "classes": value.get("classes", []),
+                "track_images": value.get("track_images", {}),
+                "track_ids": value.get("track_ids", {}),
+            }
             return {
                 **legacy,
                 "games": {
                     "ACC": legacy,
                     "AC": {"tracks": [], "classes": []},
                     "iRacing": {"tracks": [], "classes": []},
+                    "LMU": {"tracks": [], "classes": []},
                 },
             }
         return value
 
     @model_validator(mode="after")
     def sync_legacy_acc_fields(self):
-        allowed_games = ("ACC", "AC", "iRacing")
+        allowed_games = ("ACC", "AC", "iRacing", "LMU")
         self.games = {game: self.games.get(game, RaceAssetGameConfig()) for game in allowed_games}
-        if not self.tracks and not self.classes:
+        if not self.tracks and not self.classes and not self.track_images:
             acc = self.games["ACC"]
             self.tracks = list(acc.tracks)
             self.classes = list(acc.classes)
-        self.games["ACC"] = RaceAssetGameConfig(tracks=self.tracks, classes=self.classes)
+            self.track_images = dict(acc.track_images)
+            self.track_ids = dict(acc.track_ids)
+        self.games["ACC"] = RaceAssetGameConfig(tracks=self.tracks, classes=self.classes, track_images=self.track_images, track_ids=self.track_ids)
         return self
 
 
@@ -349,6 +394,7 @@ class RaceUpdate(BaseModel):
     max_pilots: int | None = Field(default=None, ge=1, le=500)
     car_class: str | None = Field(default=None, max_length=50)
     track: str | None = Field(default=None, max_length=100)
+    track_id: str | None = Field(default=None, max_length=80)
     mods_pack: list[str] | None = None
     allowed_cars: list[str] | None = None
     status: RaceStatus | None = None
@@ -392,6 +438,7 @@ class RaceManageRead(BaseModel):
     registered_count: int
     car_class: str
     track: str
+    track_id: str | None = None
     game: str
     has_qualification: bool
     scoring_system: ChampionshipScoringSystem
@@ -425,6 +472,7 @@ class FanVoteOptionRead(BaseModel):
     avatar_color: str
     avatar_url: str | None = None
     rating: int
+    game_ratings: dict[str, GameRatingRead] = Field(default_factory=dict)
     sr: float
     votes: int = 0
     percentage: float = 0
@@ -621,6 +669,7 @@ class ChampionshipStandingRead(BaseModel):
     avatar_color: str
     avatar_url: str | None = None
     rating: int
+    game_ratings: dict[str, GameRatingRead] = Field(default_factory=dict)
     sr: float
     points: int
     pole_points: int = 0
@@ -833,6 +882,34 @@ class DonationSettingsUpdate(BaseModel):
     top_donations: list[DonationEntry] = Field(default_factory=list, max_length=5)
 
 
+class LicenseTierRead(BaseModel):
+    min_rating: int
+    max_rating: int
+    name: str
+    color: str
+
+
+class LicenseTierUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=30)
+    color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
+class LicenseSettingsRead(BaseModel):
+    tiers: list[LicenseTierRead]
+
+
+class LicenseSettingsUpdate(BaseModel):
+    tiers: list[LicenseTierUpdate] = Field(min_length=7, max_length=7)
+
+
+class HallOfFameStatsRead(BaseModel):
+    points: int = Field(ge=0)
+    gold: int = Field(ge=0)
+    silver: int = Field(ge=0)
+    bronze: int = Field(ge=0)
+    podiums: int = Field(ge=0)
+
+
 class HallOfFamePilotRead(BaseModel):
     id: int
     login: str
@@ -844,6 +921,7 @@ class HallOfFamePilotRead(BaseModel):
     sr: float = Field(ge=MIN_SR, le=MAX_SR)
     rating: int = Field(ge=int(MIN_RATING), le=int(MAX_RATING))
     rating_race_count: int = Field(ge=0)
+    game_ratings: dict[str, GameRatingRead] = Field(default_factory=dict)
     avatar_color: str
     avatar_url: str | None = None
     team_id: int | None = None
@@ -854,6 +932,7 @@ class HallOfFamePilotRead(BaseModel):
     silver: int = Field(ge=0)
     bronze: int = Field(ge=0)
     podiums: int = Field(ge=0)
+    stats_by_game: dict[str, HallOfFameStatsRead] = Field(default_factory=dict)
 
 
 class HallOfFameTeamRead(BaseModel):
@@ -872,6 +951,8 @@ class HallOfFameTeamRead(BaseModel):
     bronze: int = Field(ge=0)
     podiums: int = Field(ge=0)
     best_pilot: HallOfFamePilotRead | None = None
+    stats_by_game: dict[str, HallOfFameStatsRead] = Field(default_factory=dict)
+    best_pilots_by_game: dict[str, HallOfFamePilotRead] = Field(default_factory=dict)
 
 
 class HallOfFameRead(BaseModel):

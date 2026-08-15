@@ -2,13 +2,14 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, ChevronUp, Film, Heart, Scale, Trash2, Upload } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, Film, Heart, ImageUp, Scale, Trash2, Upload } from 'lucide-vue-next'
 import { api } from '../api'
+import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
 import RacePenaltyListModal from '../components/RacePenaltyListModal.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, isExternalRace, statusLabel } from '../i18nLabels'
-import { filterPilots, formatPilotNumber, formatRating, sortPilots, teamHref, teamShortName } from '../pilotDisplay'
+import { filterPilots, formatPilotNumber, formatRating, ratingForGame, sortPilots, teamHref, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
 import { formatDateTime } from '../timezone'
 
@@ -26,6 +27,9 @@ const accQualificationFile = ref(null)
 const accRaceFile = ref(null)
 const raceVideoFile = ref(null)
 const raceVideoInput = ref(null)
+const raceAssets = ref({ tracks: [], classes: [], games: {} })
+const trackImageFile = ref(null)
+const trackImageInput = ref(null)
 const manualRows = ref([])
 const participantsExpanded = ref(false)
 const penaltiesOpen = ref(false)
@@ -42,9 +46,17 @@ const fanVoteVoting = ref(false)
 const manualPilotSearch = ref('')
 const manualPilotResults = ref([])
 const manualPilotLoading = ref(false)
+const raceAssetConfig = computed(() => {
+  const game = race.value?.game
+  if (!game) return { track_images: {} }
+  if (game === 'ACC') return raceAssets.value.games?.ACC || raceAssets.value || { track_images: {} }
+  return raceAssets.value.games?.[game] || { track_images: {} }
+})
+const raceTrackImage = computed(() => trackImageFromConfig(raceAssetConfig.value, race.value?.track, race.value?.track_id))
 
+const raceRatingGame = computed(() => race.value?.game || 'ACC')
 const participants = computed(() => race.value?.registered_pilots || [])
-const visibleParticipants = computed(() => sortPilots(filterPilots(participants.value, participantSearch.value), participantSort.value))
+const visibleParticipants = computed(() => sortPilots(filterPilots(participants.value, participantSearch.value), participantSort.value, raceRatingGame.value))
 const participantTotalPages = computed(() => Math.max(1, Math.ceil(visibleParticipants.value.length / participantPageSize)))
 const pagedParticipants = computed(() => visibleParticipants.value.slice((participantPage.value - 1) * participantPageSize, participantPage.value * participantPageSize))
 const registered = computed(() => participants.value.some((item) => item.user_id === state.user?.id))
@@ -76,6 +88,7 @@ const resultParticipants = computed(() => {
         avatar_color: row.avatar_color || participant?.avatar_color || '#2563eb',
         avatar_url: row.avatar_url || participant?.avatar_url || '',
         rating: row.rating ?? participant?.rating,
+        game_ratings: row.game_ratings || participant?.game_ratings,
         sr: row.sr ?? participant?.sr,
         car_model: row.car_model || participant?.car_model,
         team_id: row.team_id || participant?.team_id,
@@ -222,12 +235,20 @@ function fanVotePilotName(item) {
 function fanVotePilotSubtitle(item) {
   const team = teamShortName(item.team_name, item.team_abbreviation)
   const number = item.pilot_number !== null && item.pilot_number !== undefined ? `#${formatPilotNumber(item.pilot_number)}` : `ID ${item.user_id}`
-  return [number, `RER ${formatRating(item.rating)}`, `SR ${item.sr ?? '-'}`, team].filter(Boolean).join(' - ')
+  return [number, `RER ${formatRating(ratingForGame(item, raceRatingGame.value))}`, `SR ${item.sr ?? '-'}`, team].filter(Boolean).join(' - ')
 }
 
 function pilotNumberDraft(value) {
   const number = Number(value)
   return Number.isInteger(number) && number >= 0 ? formatPilotNumber(number) : ''
+}
+
+function trackImageFromConfig(config, track, trackId = '') {
+  const trackName = String(track || '').trim()
+  const currentTrackName = (trackId && Object.entries(config?.track_ids || {}).find(([, id]) => id === trackId)?.[0]) || trackName
+  if (!currentTrackName) return ''
+  const images = config?.track_images || {}
+  return images[currentTrackName] || Object.entries(images).find(([key]) => key.toLowerCase() === currentTrackName.toLowerCase())?.[1] || ''
 }
 
 function parsePilotNumber(value) {
@@ -298,8 +319,13 @@ function resultPilotTeamId(row) {
   return participantById(row.user_id)?.team_id || row.team_id || null
 }
 
+function resultPilotRatingValue(row) {
+  const participant = participantById(row.user_id)
+  return row.rating_new ?? ratingForGame(participant, raceRatingGame.value) ?? ratingForGame(row, raceRatingGame.value)
+}
+
 function resultPilotRating(row) {
-  return formatRating(row.rating_new ?? participantById(row.user_id)?.rating ?? row.rating)
+  return formatRating(resultPilotRatingValue(row))
 }
 
 function resultPenalty(row) {
@@ -361,6 +387,8 @@ function manualRowFromPilot(item, existing = {}) {
   return {
     user_id: userId,
     label: participantName(pilot),
+    rating: pilot.rating,
+    game_ratings: pilot.game_ratings,
     finish_time: existing.finish_ms ? formatDuration(existing.finish_ms) : '',
     lap_count: existing.lap_count || 0,
     best_lap_time: existing.best_lap_ms ? formatDuration(existing.best_lap_ms) : ''
@@ -380,7 +408,7 @@ async function searchManualPilots() {
   }
   manualPilotLoading.value = true
   try {
-    const params = new URLSearchParams({ search: manualPilotSearch.value, limit: '12' })
+    const params = new URLSearchParams({ search: manualPilotSearch.value, limit: '12', rating_game: raceRatingGame.value })
     manualPilotResults.value = await api(`/users/pilots?${params.toString()}`)
   } catch (err) {
     error.value = err.message
@@ -406,9 +434,13 @@ async function load() {
       window.location.href = loadedRace.server_link
       return
     }
-    const loadedFanVote = await api(`/races/${route.params.id}/fan-vote`)
+    const [loadedFanVote, loadedRaceAssets] = await Promise.all([
+      api(`/races/${route.params.id}/fan-vote`),
+      api('/race-assets')
+    ])
     race.value = loadedRace
     fanVote.value = loadedFanVote
+    raceAssets.value = loadedRaceAssets
     syncFanVoteSelection()
     if (state.user) {
       penalties.value = await api(`/penalties?race_id=${route.params.id}`)
@@ -563,6 +595,29 @@ function setRaceVideo(event) {
   raceVideoFile.value = event.target.files?.[0] || null
 }
 
+function setTrackImage(event) {
+  trackImageFile.value = event.target.files?.[0] || null
+}
+
+async function uploadTrackImage() {
+  if (!race.value || !trackImageFile.value) return
+  error.value = ''
+  actionPending.value = true
+  try {
+    const body = new FormData()
+    body.append('game', race.value.game)
+    body.append('track', race.value.track)
+    body.append('file', trackImageFile.value)
+    raceAssets.value = await api('/race-assets/track-image', { method: 'POST', body })
+    trackImageFile.value = null
+    if (trackImageInput.value) trackImageInput.value.value = ''
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    actionPending.value = false
+  }
+}
+
 async function uploadRaceVideo() {
   if (!race.value || !raceVideoFile.value) return
   error.value = ''
@@ -676,6 +731,22 @@ watch(visibleParticipants, () => {
         </div>
         <p>{{ t('fields.server') }}: <a :href="race.server_link">{{ race.server_link }}</a></p>
         <p>{{ t('fields.mods') }}: {{ race.mods_pack?.join(', ') || t('common.none') }}</p>
+        <form v-if="canManageRace && race.track" class="race-track-image-control" @submit.prevent="uploadTrackImage">
+          <img v-if="raceTrackImage" class="race-track-image-preview" :src="raceTrackImage" alt="" />
+          <div v-else class="race-track-image-preview empty"><ImageUp :size="18" /></div>
+          <div class="race-track-image-copy">
+            <strong>{{ t('adminUsers.trackImages') }}</strong>
+            <span>{{ race.track }}</span>
+          </div>
+          <label class="button small race-track-image-picker">
+            <ImageUp :size="15" />
+            {{ t('common.upload') }}
+            <input ref="trackImageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="setTrackImage" />
+          </label>
+          <button class="button primary small" type="submit" :disabled="actionPending || !trackImageFile">
+            {{ t('common.save') }}
+          </button>
+        </form>
       </section>
 
       <section v-if="canShowRegistrationPanel" class="card race-registration-panel">
@@ -765,7 +836,10 @@ watch(visibleParticipants, () => {
                 <article v-for="option in fanVoteOptions" :key="option.user_id" class="fan-vote-option" :class="{ selected: fanVote?.my_vote_user_id === option.user_id }">
                   <UserAvatar mini :src="option.avatar_url" :color="option.avatar_color" :label="fanVotePilotName(option)" />
                   <div class="fan-vote-option-main">
-                    <strong>{{ fanVotePilotName(option) }}</strong>
+                    <span class="user-name-line">
+                      <strong>{{ fanVotePilotName(option) }}</strong>
+                      <LicenseBadge :user="option" :game="raceRatingGame" />
+                    </span>
                     <span>{{ fanVotePilotSubtitle(option) }}</span>
                   </div>
 
@@ -808,7 +882,10 @@ watch(visibleParticipants, () => {
                     @click="toggleFanVoteCandidate(item.user_id)"
                   >
                     <UserAvatar mini :src="item.avatar_url" :color="item.avatar_color" :label="participantName(item)" />
-                    <span>{{ participantName(item) }}</span>
+                    <span class="user-name-line">
+                      <span>{{ participantName(item) }}</span>
+                      <LicenseBadge :user="item" :game="raceRatingGame" />
+                    </span>
                     <small>{{ fanVotePilotSubtitle(item) }}</small>
                   </button>
                 </div>
@@ -853,8 +930,11 @@ watch(visibleParticipants, () => {
           <article v-for="item in pagedParticipants" :key="item.user_id" class="race-participant-row">
             <UserAvatar class="pilot-avatar-slot" :src="item.avatar_url" :color="item.avatar_color" :label="participantName(item)" />
             <div class="race-participant-main">
-              <strong>{{ participantName(item) }}</strong>
-              <span>{{ participantSubtitle(item) }} · RER {{ formatRating(item.rating) }} · {{ pilotTeamChip(item) }}</span>
+              <span class="user-name-line">
+                <strong>{{ participantName(item) }}</strong>
+                <LicenseBadge :user="item" :game="raceRatingGame" />
+              </span>
+              <span>{{ participantSubtitle(item) }} · RER {{ formatRating(ratingForGame(item, raceRatingGame)) }} · {{ pilotTeamChip(item) }}</span>
             </div>
             <div class="race-participant-stat">
               <span>SR</span>
@@ -862,7 +942,7 @@ watch(visibleParticipants, () => {
             </div>
             <div class="race-participant-stat">
               <span>RER</span>
-              <strong>{{ formatRating(item.rating) }}</strong>
+              <strong>{{ formatRating(ratingForGame(item, raceRatingGame)) }}</strong>
             </div>
             <div class="race-participant-country">
               <span>{{ t('fields.country') }}</span>
@@ -918,8 +998,11 @@ watch(visibleParticipants, () => {
               @click="addManualPilot(pilot)"
             >
               <UserAvatar mini :src="pilot.avatar_url" :color="pilot.avatar_color" :label="participantName({ ...pilot, user_id: pilot.id })" />
-              <span>{{ participantName({ ...pilot, user_id: pilot.id }) }}</span>
-              <small>#{{ formatPilotNumber(pilot.pilot_number) }} - RER {{ formatRating(pilot.rating) }}</small>
+              <span class="user-name-line">
+                <span>{{ participantName({ ...pilot, user_id: pilot.id }) }}</span>
+                <LicenseBadge :user="pilot" :game="raceRatingGame" />
+              </span>
+              <small>#{{ formatPilotNumber(pilot.pilot_number) }} - RER {{ formatRating(ratingForGame(pilot, raceRatingGame)) }}</small>
             </button>
           </div>
           <div class="manual-results-table">
@@ -931,7 +1014,10 @@ watch(visibleParticipants, () => {
               <span v-if="isLmuRace"></span>
             </div>
             <div v-for="row in manualRows" :key="row.user_id" class="manual-results-row" :class="{ 'has-actions': isLmuRace }">
-              <strong>{{ row.label }}</strong>
+              <span class="user-name-line">
+                <strong>{{ row.label }}</strong>
+                <LicenseBadge :user="row" :game="raceRatingGame" />
+              </span>
               <input v-model="row.finish_time" required placeholder="45:12.345" />
               <input v-model.number="row.lap_count" type="number" min="0" />
               <input v-model="row.best_lap_time" placeholder="1:48.250" />
@@ -955,7 +1041,10 @@ watch(visibleParticipants, () => {
             <article v-for="row in activeResultRows.slice(0, 3)" :key="`podium-${resultsTab}-${row.user_id || row.player_id || row.position}`" class="result-podium-card" :class="resultPodiumClass(row)">
               <span class="result-position-badge" :class="resultPodiumClass(row)">{{ row.position || '-' }}</span>
               <div>
-                <strong>{{ resultPilotName(row) }}</strong>
+                <span class="user-name-line">
+                  <strong>{{ resultPilotName(row) }}</strong>
+                  <LicenseBadge :rating="resultPilotRatingValue(row)" />
+                </span>
                 <span>{{ resultPilotSubtitle(row) }}</span>
               </div>
               <strong class="result-podium-time">{{ resultsTab === 'qualification' ? formatDuration(row.best_lap_ms) : formatDuration(row.adjusted_finish_ms ?? row.finish_ms) }}</strong>
@@ -986,7 +1075,10 @@ watch(visibleParticipants, () => {
                     <div class="result-driver-cell">
                       <UserAvatar mini :src="resultPilotAvatar(row)" :color="resultPilotColor(row)" :label="resultPilotName(row)" />
                       <div>
-                        <strong>{{ resultPilotName(row) }}</strong>
+                        <span class="user-name-line">
+                          <strong>{{ resultPilotName(row) }}</strong>
+                          <LicenseBadge :rating="resultPilotRatingValue(row)" />
+                        </span>
                         <span class="result-driver-meta">
                           <span>{{ resultPilotSubtitle(row) }}</span>
                           <span>RER {{ resultPilotRating(row) }}</span>
@@ -1020,6 +1112,7 @@ watch(visibleParticipants, () => {
         :penalties="penalties"
         :appeals="appeals"
         :participants="penaltyParticipants"
+        :game="raceRatingGame"
         :can-create="canIssuePenalty"
         v-model:create-open="penaltyCreateOpen"
         :busy="actionPending"

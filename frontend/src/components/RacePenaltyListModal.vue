@@ -2,9 +2,10 @@
 import { ref } from 'vue'
 import { X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
+import LicenseBadge from './LicenseBadge.vue'
 import UserAvatar from './UserAvatar.vue'
 import { statusLabel } from '../i18nLabels'
-import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
+import { formatPilotNumber, formatRating, ratingForGame, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
 import { formatDateTime } from '../timezone'
 
@@ -24,6 +25,10 @@ const props = defineProps({
   participants: {
     type: Array,
     default: () => []
+  },
+  game: {
+    type: String,
+    default: 'ACC'
   },
   canCreate: {
     type: Boolean,
@@ -74,7 +79,7 @@ function penaltyTargetName(penalty) {
 
 function penaltyTargetSubtitle(penalty) {
   const target = participantById(penalty.target_id)
-  return target ? `${participantSubtitle(target)} · RER ${formatRating(target.rating)} · ${teamShortName(target.team_name, target.team_abbreviation)}` : `ID ${penalty.target_id}`
+  return target ? `${participantSubtitle(target)} · RER ${formatRating(ratingForGame(target, props.game))} · ${teamShortName(target.team_name, target.team_abbreviation)}` : `ID ${penalty.target_id}`
 }
 
 function penaltyTargetColor(penalty) {
@@ -227,7 +232,10 @@ function submitPenalty() {
             <div class="user-list-cell">
               <UserAvatar mini :src="penaltyTargetAvatar(penalty)" :color="penaltyTargetColor(penalty)" :label="penaltyTargetName(penalty)" />
               <div class="user-list-main">
-                <strong>{{ penaltyTargetName(penalty) }}</strong>
+                <span class="user-name-line">
+                  <strong>{{ penaltyTargetName(penalty) }}</strong>
+                  <LicenseBadge :user="participantById(penalty.target_id)" :game="game" />
+                </span>
                 <span>{{ penaltyTargetSubtitle(penalty) }}</span>
               </div>
             </div>

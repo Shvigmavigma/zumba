@@ -64,13 +64,12 @@ async def register(payload: UserRegister, request: Request, session: AsyncSessio
             or_(
                 User.login == payload.login,
                 User.email == payload.email,
-                User.pilot_number == payload.pilot_number,
                 User.steam_id == steam_id,
             )
         )
     )
     if duplicate is not None:
-        raise HTTPException(status_code=409, detail="Login, email, pilot number or Steam ID already exists")
+        raise HTTPException(status_code=409, detail="Login, email or Steam ID already exists")
 
     user = User(
         login=payload.login,

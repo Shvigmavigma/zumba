@@ -3,33 +3,65 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Medal, RefreshCw, Search, Trophy, Users } from 'lucide-vue-next'
 import { api } from '../api'
+import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
 import TeamAvatar from '../components/TeamAvatar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
-import { formatPilotNumber, formatRating, pilotName, teamHref, teamShortName } from '../pilotDisplay'
+import { gameOptions } from '../i18nLabels'
+import { OVERALL_RATING_GAME, formatPilotNumber, formatRating, pilotName, ratingForGame, teamHref, teamShortName } from '../pilotDisplay'
 
 const { t } = useI18n()
 
 const data = ref({ pilots: [], teams: [] })
 const activeTab = ref('pilots')
 const search = ref('')
+const ratingGame = ref(OVERALL_RATING_GAME)
 const loading = ref(false)
 const error = ref('')
 const pilotPage = ref(1)
 const teamPage = ref(1)
 const pageSize = 20
+const ratingGameOptions = computed(() => gameOptions(t, true))
 
 const tabs = computed(() => [
-  { id: 'pilots', label: t('hallOfFame.pilotsTab'), count: data.value.pilots.length },
-  { id: 'teams', label: t('hallOfFame.teamsTab'), count: data.value.teams.length }
+  { id: 'pilots', label: t('hallOfFame.pilotsTab'), count: rankedPilots.value.length },
+  { id: 'teams', label: t('hallOfFame.teamsTab'), count: rankedTeams.value.length }
 ])
-const visiblePilots = computed(() => filterItems(data.value.pilots, pilotSearchText))
-const visibleTeams = computed(() => filterItems(data.value.teams, teamSearchText))
+const rankedPilots = computed(() => rankItems(data.value.pilots))
+const rankedTeams = computed(() => rankItems(data.value.teams))
+const visiblePilots = computed(() => filterItems(rankedPilots.value, pilotSearchText))
+const visibleTeams = computed(() => filterItems(rankedTeams.value, teamSearchText))
 const pagedPilots = computed(() => visiblePilots.value.slice((pilotPage.value - 1) * pageSize, pilotPage.value * pageSize))
 const pagedTeams = computed(() => visibleTeams.value.slice((teamPage.value - 1) * pageSize, teamPage.value * pageSize))
 const pilotTotalPages = computed(() => Math.max(1, Math.ceil(visiblePilots.value.length / pageSize)))
 const teamTotalPages = computed(() => Math.max(1, Math.ceil(visibleTeams.value.length / pageSize)))
-const totalMedals = computed(() => data.value.pilots.reduce((sum, pilot) => sum + Number(pilot.podiums || 0), 0))
+const totalMedals = computed(() => rankedPilots.value.reduce((sum, pilot) => sum + statValue(pilot, 'podiums'), 0))
+
+function statSource(item) {
+  if (ratingGame.value === OVERALL_RATING_GAME) return item || {}
+  return item?.stats_by_game?.[ratingGame.value] || {}
+}
+
+function statValue(item, field) {
+  return Number(statSource(item)?.[field] || 0)
+}
+
+function rankItems(items) {
+  return [...items]
+    .filter((item) => statValue(item, 'points') > 0)
+    .sort((left, right) => (
+      statValue(right, 'points') - statValue(left, 'points') ||
+      statValue(right, 'gold') - statValue(left, 'gold') ||
+      statValue(right, 'silver') - statValue(left, 'silver') ||
+      statValue(right, 'bronze') - statValue(left, 'bronze') ||
+      Number(ratingForGame(right, ratingGame.value) || 0) - Number(ratingForGame(left, ratingGame.value) || 0) ||
+      String(left.nickname || left.name || '').localeCompare(String(right.nickname || right.name || ''), undefined, { sensitivity: 'base' })
+    ))
+}
+
+function bestPilotFor(team) {
+  return ratingGame.value === OVERALL_RATING_GAME ? team.best_pilot : team.best_pilots_by_game?.[ratingGame.value]
+}
 
 function filterItems(items, textFactory) {
   const needle = search.value.trim().toLowerCase()
@@ -53,8 +85,11 @@ function pilotSearchText(pilot) {
     pilot.last_name,
     pilot.pilot_number,
     pilot.team_name,
-    pilot.points,
-    pilot.rating,
+    statValue(pilot, 'points'),
+    statValue(pilot, 'gold'),
+    statValue(pilot, 'silver'),
+    statValue(pilot, 'bronze'),
+    ratingForGame(pilot, ratingGame.value),
     pilot.sr
   ]
     .filter((value) => value !== undefined && value !== null)
@@ -66,12 +101,16 @@ function teamSearchText(team) {
   return [
     team.name,
     team.description,
-    team.points,
+    statValue(team, 'points'),
+    statValue(team, 'gold'),
+    statValue(team, 'silver'),
+    statValue(team, 'bronze'),
     team.average_rating,
-    team.best_pilot?.login,
-    team.best_pilot?.nickname,
-    team.best_pilot?.first_name,
-    team.best_pilot?.last_name
+    bestPilotFor(team)?.login,
+    bestPilotFor(team)?.nickname,
+    bestPilotFor(team)?.first_name,
+    bestPilotFor(team)?.last_name,
+    ratingForGame(bestPilotFor(team), ratingGame.value)
   ]
     .filter((value) => value !== undefined && value !== null)
     .join(' ')
@@ -103,6 +142,10 @@ watch(search, () => {
   teamPage.value = 1
 })
 watch(activeTab, () => {
+  pilotPage.value = 1
+  teamPage.value = 1
+})
+watch(ratingGame, () => {
   pilotPage.value = 1
   teamPage.value = 1
 })
@@ -166,6 +209,9 @@ watch(visibleTeams, () => {
         <Search :size="16" />
         <input v-model="search" type="search" :placeholder="t('hallOfFame.searchPlaceholder')" />
       </label>
+      <select v-model="ratingGame" class="pilot-list-sort" :aria-label="t('fields.game')">
+        <option v-for="option in ratingGameOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+      </select>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -194,7 +240,10 @@ watch(visibleTeams, () => {
               <div class="hall-person-cell">
                 <UserAvatar mini :src="pilot.avatar_url" :color="pilot.avatar_color" :label="pilotTitle(pilot)" />
                 <RouterLink class="hall-title" :to="`/pilots/${pilot.id}`">
-                  <strong>{{ pilotTitle(pilot) }}</strong>
+                  <span class="user-name-line">
+                    <strong>{{ pilotTitle(pilot) }}</strong>
+                    <LicenseBadge :user="pilot" :game="ratingGame" />
+                  </span>
                   <span>{{ pilotLine(pilot) }}</span>
                 </RouterLink>
               </div>
@@ -205,11 +254,11 @@ watch(visibleTeams, () => {
               </RouterLink>
               <span v-else class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span>
             </td>
-            <td><span class="hall-medal-value gold">{{ pilot.gold }}</span></td>
-            <td><span class="hall-medal-value silver">{{ pilot.silver }}</span></td>
-            <td><span class="hall-medal-value bronze">{{ pilot.bronze }}</span></td>
-            <td>{{ pilot.podiums }}</td>
-            <td>{{ formatRating(pilot.rating) }}</td>
+            <td><span class="hall-medal-value gold">{{ statValue(pilot, 'gold') }}</span></td>
+            <td><span class="hall-medal-value silver">{{ statValue(pilot, 'silver') }}</span></td>
+            <td><span class="hall-medal-value bronze">{{ statValue(pilot, 'bronze') }}</span></td>
+            <td>{{ statValue(pilot, 'podiums') }}</td>
+            <td>{{ formatRating(ratingForGame(pilot, ratingGame)) }}</td>
             <td>{{ Number(pilot.sr).toFixed(1) }}</td>
           </tr>
         </tbody>
@@ -246,17 +295,20 @@ watch(visibleTeams, () => {
               </div>
             </td>
             <td>{{ team.member_count }}</td>
-            <td><span class="hall-medal-value gold">{{ team.gold }}</span></td>
-            <td><span class="hall-medal-value silver">{{ team.silver }}</span></td>
-            <td><span class="hall-medal-value bronze">{{ team.bronze }}</span></td>
-            <td>{{ team.podiums }}</td>
+            <td><span class="hall-medal-value gold">{{ statValue(team, 'gold') }}</span></td>
+            <td><span class="hall-medal-value silver">{{ statValue(team, 'silver') }}</span></td>
+            <td><span class="hall-medal-value bronze">{{ statValue(team, 'bronze') }}</span></td>
+            <td>{{ statValue(team, 'podiums') }}</td>
             <td>{{ formatRating(team.average_rating) }}</td>
             <td>
-              <RouterLink v-if="team.best_pilot" class="hall-best-link" :to="`/pilots/${team.best_pilot.id}`">
-                <UserAvatar mini :src="team.best_pilot.avatar_url" :color="team.best_pilot.avatar_color" :label="pilotTitle(team.best_pilot)" />
+              <RouterLink v-if="bestPilotFor(team)" class="hall-best-link" :to="`/pilots/${bestPilotFor(team).id}`">
+                <UserAvatar mini :src="bestPilotFor(team).avatar_url" :color="bestPilotFor(team).avatar_color" :label="pilotTitle(bestPilotFor(team))" />
                 <span>
-                  <strong>{{ pilotTitle(team.best_pilot) }}</strong>
-                  <small>#{{ formatPilotNumber(team.best_pilot.pilot_number) }} - {{ teamShortName(team.best_pilot.team_name, team.best_pilot.team_abbreviation) }}</small>
+                  <span class="user-name-line">
+                    <strong>{{ pilotTitle(bestPilotFor(team)) }}</strong>
+                    <LicenseBadge :user="bestPilotFor(team)" :game="ratingGame" />
+                  </span>
+                  <small>#{{ formatPilotNumber(bestPilotFor(team).pilot_number) }} - {{ teamShortName(bestPilotFor(team).team_name, bestPilotFor(team).team_abbreviation) }}</small>
                 </span>
               </RouterLink>
               <span v-else>{{ t('common.none') }}</span>

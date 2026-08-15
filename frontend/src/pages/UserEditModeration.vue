@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
+import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
@@ -52,7 +53,10 @@ watch(users, () => {
         <div class="user-list-cell">
           <UserAvatar :src="user.avatar_url" :color="user.avatar_color" :label="user.nickname || user.login" />
           <div class="user-moderation-main">
-            <strong>{{ user.first_name }} {{ user.last_name }}</strong>
+            <span class="user-name-line">
+              <strong>{{ user.first_name }} {{ user.last_name }}</strong>
+              <LicenseBadge :user="user" />
+            </span>
             <span>{{ user.nickname }}</span>
           </div>
         </div>
