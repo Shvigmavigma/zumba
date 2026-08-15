@@ -6,7 +6,7 @@ from app.schemas import RaceAssetGameConfig, RaceAssetsConfig
 
 
 RACE_ASSETS_KEY = "race_assets"
-RACE_ASSET_GAMES = {"ACC", "AC", "iRacing"}
+RACE_ASSET_GAMES = {"ACC", "AC", "iRacing", "LMU"}
 
 DEFAULT_RACE_ASSETS = {
     "tracks": [
@@ -122,7 +122,24 @@ DEFAULT_RACE_ASSETS["games"] = {
     "ACC": {"tracks": DEFAULT_RACE_ASSETS["tracks"], "classes": DEFAULT_RACE_ASSETS["classes"]},
     "AC": {"tracks": [], "classes": []},
     "iRacing": {"tracks": [], "classes": []},
+    "LMU": {"tracks": [], "classes": []},
 }
+
+
+def preserve_track_metadata(previous: RaceAssetGameConfig, incoming: RaceAssetGameConfig) -> RaceAssetGameConfig:
+    previous_by_name = {track.lower(): track for track in previous.tracks}
+    track_ids: dict[str, str] = {}
+    track_images = dict(incoming.track_images)
+    for index, track in enumerate(incoming.tracks):
+        old_track = previous_by_name.get(track.lower())
+        if old_track is None and index < len(previous.tracks):
+            old_track = previous.tracks[index]
+        track_ids[track] = (previous.track_ids.get(old_track) if old_track else "") or incoming.track_ids.get(track) or ""
+        if track not in track_images and old_track:
+            image_url = previous.track_images.get(old_track)
+            if image_url:
+                track_images[track] = image_url
+    return RaceAssetGameConfig(tracks=incoming.tracks, classes=incoming.classes, track_images=track_images, track_ids=track_ids)
 
 
 def normalize_race_assets(value: dict | None) -> RaceAssetsConfig:
@@ -137,8 +154,17 @@ async def get_race_assets(session: AsyncSession) -> RaceAssetsConfig:
 
 
 async def save_race_assets(session: AsyncSession, payload: RaceAssetsConfig) -> RaceAssetsConfig:
-    normalized = normalize_race_assets(payload.model_dump())
     setting = await session.get(AppSetting, RACE_ASSETS_KEY)
+    previous = normalize_race_assets(setting.value if setting is not None else None)
+    normalized = normalize_race_assets(payload.model_dump())
+    for game in ("ACC", "AC", "iRacing", "LMU"):
+        normalized.games[game] = preserve_track_metadata(previous.games.get(game, RaceAssetGameConfig()), normalized.games[game])
+    acc = normalized.games["ACC"]
+    normalized.tracks = list(acc.tracks)
+    normalized.classes = list(acc.classes)
+    normalized.track_images = dict(acc.track_images)
+    normalized.track_ids = dict(acc.track_ids)
+    normalized = normalize_race_assets(normalized.model_dump())
     if setting is None:
         setting = AppSetting(key=RACE_ASSETS_KEY, value=normalized.model_dump())
         session.add(setting)
@@ -150,8 +176,16 @@ async def save_race_assets(session: AsyncSession, payload: RaceAssetsConfig) -> 
 
 def assets_for_game(config: RaceAssetsConfig, game: str) -> RaceAssetGameConfig:
     if game == "ACC":
-        return RaceAssetGameConfig(tracks=config.tracks, classes=config.classes)
+        return RaceAssetGameConfig(tracks=config.tracks, classes=config.classes, track_images=config.track_images, track_ids=config.track_ids)
     return config.games.get(game, RaceAssetGameConfig())
+
+
+def asset_track_id(config: RaceAssetGameConfig, track: str) -> str | None:
+    track_name = track.strip().lower()
+    for configured_track, track_id in config.track_ids.items():
+        if configured_track.lower() == track_name:
+            return track_id
+    return None
 
 
 def find_asset_class(config: RaceAssetGameConfig, class_name: str):
@@ -181,7 +215,9 @@ async def normalize_race_create_assets(session: AsyncSession, data: dict) -> dic
     if game not in RACE_ASSET_GAMES:
         return data
     config = await get_race_assets(session)
+    game_config = assets_for_game(config, game)
     data["allowed_cars"] = validate_asset_selection(config, game, data.get("track", ""), data.get("car_class", ""), data.get("allowed_cars"))
+    data["track_id"] = asset_track_id(game_config, data.get("track", ""))
     return data
 
 
@@ -193,6 +229,7 @@ async def normalize_race_update_assets(session: AsyncSession, race: Race, data: 
     if game not in RACE_ASSET_GAMES:
         return data
     config = await get_race_assets(session)
+    game_config = assets_for_game(config, game)
     data["allowed_cars"] = validate_asset_selection(
         config,
         game,
@@ -200,4 +237,5 @@ async def normalize_race_update_assets(session: AsyncSession, race: Race, data: 
         data.get("car_class", race.car_class),
         data.get("allowed_cars", race.allowed_cars),
     )
+    data["track_id"] = asset_track_id(game_config, data.get("track", race.track))
     return data

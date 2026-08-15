@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ChevronLeft, ChevronRight, ClipboardCheck, Eye, Flag, HeartHandshake, Maximize2, Minimize2, PlayCircle, Plus, Radio, ShieldCheck, Users, X } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, ClipboardCheck, Eye, Flag, HeartHandshake, Mail, Maximize2, MessageCircle, Minimize2, Music2, PlayCircle, Plus, Radio, Send, ShieldCheck, Users, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
@@ -20,6 +20,7 @@ const donationSettings = ref({ donation_url: '', top_donations: [] })
 const newsTrack = ref(null)
 const activeNewsIndex = ref(0)
 const isNewsViewerOpen = ref(false)
+const isNewsTextHidden = ref(false)
 const error = ref('')
 const raceGameFilter = ref('all')
 const raceStatusFilter = ref('not_finished')
@@ -54,7 +55,28 @@ const featuredChampionship = computed(() => registrationChampionships.value[0] |
 const featuredChampionshipStageCount = computed(() => featuredChampionship.value?.stage_count ?? featuredChampionship.value?.stages?.length ?? 0)
 const featuredChampionshipStageText = computed(() => stageCount(featuredChampionshipStageCount.value))
 const featuredChampionshipRegistered = computed(() => featuredChampionship.value?.my_registration_status === 'approved')
-const topDonations = computed(() => donationSettings.value.top_donations?.slice(0, 3) || [])
+const topDonations = computed(() => (donationSettings.value.top_donations || [])
+  .filter((donation) => donation?.name || donation?.amount)
+  .slice(0, 3))
+const contactEmailLinks = [
+  { text: 'dronzoll320@gmail.com', href: 'mailto:dronzoll320@gmail.com' },
+  { text: '37foneziazaz0909@gmail.com', href: 'mailto:37foneziazaz0909@gmail.com' }
+]
+const directContactItems = computed(() => [
+  {
+    key: 'email',
+    icon: Mail,
+    label: t('main.contactMail'),
+    links: contactEmailLinks
+  },
+  { key: 'discord-direct', icon: MessageCircle, label: t('main.contactDiscord'), value: 'pianino22' }
+])
+const socialItems = computed(() => [
+  { key: 'discord-server', icon: Users, label: t('main.discordServer'), href: 'https://discord.gg/bmrlac', text: 'discord.gg/bmrlac' },
+  { key: 'telegram', icon: Send, label: t('main.telegramChannel'), href: 'https://t.me/bmrlleague', text: '@bmrlleague' },
+  { key: 'tiktok', icon: Music2, label: t('main.tiktok'), href: 'https://www.tiktok.com/@beamngrl', text: '@beamngrl' },
+  { key: 'twitch', icon: Radio, label: 'Twitch', href: 'https://www.twitch.tv/bmrlracing', text: 'bmrlracing' }
+])
 const raceGameOptions = computed(() => gameOptions(t, true))
 const canFilterMyGames = computed(() => Boolean(state.user?.games?.length))
 const racesHasNextPage = computed(() => races.value.length === racePageSize)
@@ -198,11 +220,13 @@ function syncNewsIndex() {
 
 function openNews(index) {
   goToNews(index, 'auto')
+  isNewsTextHidden.value = false
   isNewsViewerOpen.value = true
 }
 
 function closeNewsViewer() {
   isNewsViewerOpen.value = false
+  isNewsTextHidden.value = false
 }
 
 function moveNewsFromViewer(direction) {
@@ -603,23 +627,56 @@ onBeforeUnmount(() => {
     </a>
 
     <section class="section main-menu-floor">
-      <div class="main-menu-floor-main">
-        <strong>{{ t('main.contacts') }}</strong>
-        <p class="muted">Discord: BMRL - {{ t('fields.email') }}: race-control@example.com</p>
-      </div>
-      <div class="main-menu-support">
-        <a v-if="donationSettings.donation_url" class="button primary main-support-button" :href="donationSettings.donation_url" target="_blank" rel="noreferrer">
-          <HeartHandshake :size="16" />
-          {{ t('main.supportProject') }}
-        </a>
-        <div class="main-donations-top">
-          <strong>{{ t('main.topDonations') }}</strong>
-          <span v-if="!topDonations.length" class="muted">{{ t('main.noTopDonations') }}</span>
-          <span v-for="donation in topDonations" :key="`${donation.name}-${donation.amount}`" class="main-donation-chip">
-            <b>{{ donation.name }}</b>
-            <em>{{ donation.amount }}</em>
-          </span>
+      <div class="main-menu-floor-inner">
+        <div class="main-menu-floor-main">
+          <div class="main-footer-column main-footer-column-primary">
+            <strong class="main-footer-title">{{ t('main.contacts') }}</strong>
+            <p>{{ t('main.contactSubtitle') }}</p>
+            <div class="main-footer-list">
+              <div v-for="item in directContactItems" :key="item.key" class="main-footer-contact-group">
+                <span class="main-footer-label"><component :is="item.icon" :size="15" />{{ item.label }}</span>
+                <span v-if="item.links" class="main-footer-link-stack">
+                  <a v-for="link in item.links" :key="link.href" :href="link.href">{{ link.text }}</a>
+                </span>
+                <span v-else class="main-footer-value">{{ item.value }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="main-footer-column">
+            <strong class="main-footer-column-title">{{ t('main.community') }}</strong>
+            <div class="main-social-list">
+              <a v-for="item in socialItems" :key="item.key" class="main-social-link" :href="item.href" target="_blank" rel="noreferrer">
+                <span><component :is="item.icon" :size="16" /></span>
+                <span>
+                  <b>{{ item.label }}</b>
+                  <em>{{ item.text }}</em>
+                </span>
+              </a>
+            </div>
+          </div>
         </div>
+
+        <aside class="main-menu-support" :aria-label="t('main.supportProject')">
+          <div class="main-support-copy">
+            <strong>{{ t('main.supportProject') }}</strong>
+            <span>{{ t('main.supportHint') }}</span>
+          </div>
+          <a v-if="donationSettings.donation_url" class="button primary main-support-button" :href="donationSettings.donation_url" target="_blank" rel="noreferrer">
+            <HeartHandshake :size="16" />
+            {{ t('main.supportProject') }}
+          </a>
+          <div class="main-donations-card">
+            <span class="main-donations-title">{{ t('main.topDonations') }}</span>
+            <div class="main-donations-top">
+              <span v-if="!topDonations.length" class="muted">{{ t('main.noTopDonations') }}</span>
+              <span v-for="donation in topDonations" :key="`${donation.name}-${donation.amount}`" class="main-donation-chip">
+                <b>{{ donation.name }}</b>
+                <em>{{ donation.amount }}</em>
+              </span>
+            </div>
+          </div>
+        </aside>
       </div>
     </section>
   </div>
@@ -708,7 +765,10 @@ onBeforeUnmount(() => {
       <button v-if="news.length > 1" class="icon-button news-viewer-nav next" type="button" :title="t('news.scrollRight')" @click.stop="moveNewsFromViewer(1)">
         <ChevronRight :size="24" />
       </button>
-      <div class="news-viewer-content" @click.stop>
+      <button class="button small news-viewer-text-toggle" type="button" @click.stop="isNewsTextHidden = !isNewsTextHidden">
+        {{ isNewsTextHidden ? t('news.showText') : t('news.hideText') }}
+      </button>
+      <div v-if="!isNewsTextHidden" class="news-viewer-content" @click.stop>
         <span class="pill news-viewer-count">{{ activeNewsIndex + 1 }} / {{ news.length }}</span>
         <h2>{{ currentNews.title }}</h2>
         <p>{{ currentNews.body }}</p>

@@ -6,7 +6,7 @@ import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
-import { formatPilotNumber, formatRating, pilotName, teamShortName } from '../pilotDisplay'
+import { DEFAULT_LICENSE_TIERS, RATING_GAMES, formatPilotNumber, formatRating, licenseBadgeStyle, normalizeLicenseTiers, pilotName, ratingForGame, ratingLicenseTier, ratingRaceCountForGame, teamShortName } from '../pilotDisplay'
 import { setSession, state } from '../store'
 import { formatDateTime as formatDateTimeInZone } from '../timezone'
 
@@ -15,8 +15,15 @@ const error = ref('')
 const loading = ref(false)
 const avatarViewerOpen = ref(false)
 const user = computed(() => state.user)
+const licenseTiers = ref(DEFAULT_LICENSE_TIERS)
 const displayName = computed(() => pilotName(user.value, user.value?.login))
 const gameList = computed(() => user.value?.games?.length ? user.value.games.map((game) => gameLabel(t, game)).join(' / ') : t('common.none'))
+const ratingRows = computed(() => RATING_GAMES.map((game) => ({
+  game,
+  rating: ratingForGame(user.value, game),
+  races: ratingRaceCountForGame(user.value, game),
+  license: ratingLicenseTier(ratingForGame(user.value, game), licenseTiers.value)
+})))
 const pendingChanges = computed(() => {
   const changes = user.value?.pending_profile_changes
   if (!changes || typeof changes !== 'object') return []
@@ -42,9 +49,10 @@ const profileFields = computed(() => {
     { label: t('fields.games'), value: gameList.value },
     { label: t('common.role'), value: roleLabel(t, user.value.role) },
     { label: t('common.status'), value: statusLabel(t, user.value.status) },
-    { label: 'RER', value: formatRating(user.value.rating) },
+    { label: 'ACC RER', value: formatRating(ratingForGame(user.value, 'ACC')) },
+    { label: t('fields.license'), value: profileLicense.value?.name },
     { label: 'SR', value: Number.isFinite(Number(user.value.sr)) ? Number(user.value.sr).toFixed(1) : null },
-    { label: t('fields.ratingRaces'), value: user.value.rating_race_count ?? 0 },
+    { label: t('fields.ratingRaces'), value: ratingRaceCountForGame(user.value, 'ACC') },
     { label: t('fields.joinedAt'), value: formatDateTime(user.value.created_at) },
     { label: t('profile.updatedAt'), value: formatDateTime(user.value.updated_at) },
     { label: t('profile.banEnd'), value: formatDateTime(user.value.ban_end) },
@@ -52,6 +60,7 @@ const profileFields = computed(() => {
     { label: t('profile.timeoutEnd'), value: formatDateTime(user.value.timeout_end) }
   ]
 })
+const profileLicense = computed(() => ratingLicenseTier(ratingForGame(user.value, 'ACC'), licenseTiers.value))
 
 function formatDateTime(value) {
   if (!value) return t('common.none')
@@ -92,7 +101,18 @@ async function refreshProfile() {
   }
 }
 
-onMounted(refreshProfile)
+async function loadLicenseSettings() {
+  try {
+    licenseTiers.value = normalizeLicenseTiers(await api('/app-settings/licenses'))
+  } catch {
+    licenseTiers.value = DEFAULT_LICENSE_TIERS
+  }
+}
+
+onMounted(() => {
+  refreshProfile()
+  loadLicenseSettings()
+})
 </script>
 
 <template>
@@ -126,7 +146,8 @@ onMounted(refreshProfile)
         </div>
 
         <div class="pilot-profile-badges">
-          <span class="pill">RER {{ formatRating(user.rating) }}</span>
+          <span class="pill">ACC RER {{ formatRating(ratingForGame(user, 'ACC')) }}</span>
+          <span class="license-badge" :style="licenseBadgeStyle(profileLicense)">{{ profileLicense.name }}</span>
           <span class="pill">SR {{ Number(user.sr).toFixed(1) }}</span>
           <span class="pill">#{{ formatPilotNumber(user.pilot_number) }}</span>
           <span class="team-mini-chip" :title="user.team_name || t('common.none')">{{ teamShortName(user.team_name, user.team_abbreviation) }}</span>
@@ -137,6 +158,15 @@ onMounted(refreshProfile)
         <div class="profile-alerts">
           <p v-if="user.status === 'unapproved'" class="pill">{{ t('profile.waitingApproval') }}</p>
           <p v-if="pendingChanges.length" class="pill">{{ t('profile.pendingChanges') }}</p>
+        </div>
+
+        <div class="pilot-games profile-rating-games">
+          <span>RER</span>
+          <div>
+            <span v-for="row in ratingRows" :key="row.game" class="pill">
+              {{ row.game }} {{ formatRating(row.rating) }} · {{ row.license.name }} · {{ row.races }}
+            </span>
+          </div>
         </div>
 
         <dl class="pilot-public-grid profile-info-grid">

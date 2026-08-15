@@ -244,12 +244,50 @@ async def init_db() -> None:
         await conn.execute(text("ALTER TABLE users ADD CONSTRAINT ck_users_sr_range CHECK (sr >= 0.0 AND sr <= 30.0)"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS rating NUMERIC(8, 2) DEFAULT 1000"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_race_count INTEGER DEFAULT 0"))
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS game_ratings JSONB DEFAULT
+                jsonb_build_object('ACC', jsonb_build_object('rating', 1000, 'race_count', 0), 'AC', jsonb_build_object('rating', 1000, 'race_count', 0), 'iRacing', jsonb_build_object('rating', 1000, 'race_count', 0), 'LMU', jsonb_build_object('rating', 1000, 'race_count', 0))
+                """
+            )
+        )
         await conn.execute(text("UPDATE users SET rating = 1000 WHERE rating IS NULL"))
         await conn.execute(text("UPDATE users SET rating_race_count = 0 WHERE rating_race_count IS NULL"))
+        await conn.execute(
+            text(
+                """
+                UPDATE users
+                SET game_ratings = jsonb_build_object(
+                    'ACC', COALESCE(game_ratings->'ACC', jsonb_build_object('rating', ROUND(rating)::int, 'race_count', rating_race_count)),
+                    'AC', COALESCE(game_ratings->'AC', jsonb_build_object('rating', ROUND(rating)::int, 'race_count', rating_race_count)),
+                    'iRacing', COALESCE(game_ratings->'iRacing', jsonb_build_object('rating', ROUND(rating)::int, 'race_count', rating_race_count)),
+                    'LMU', COALESCE(game_ratings->'LMU', jsonb_build_object('rating', ROUND(rating)::int, 'race_count', rating_race_count))
+                )
+                WHERE game_ratings IS NULL
+                    OR NOT (game_ratings ? 'ACC')
+                    OR NOT (game_ratings ? 'AC')
+                    OR NOT (game_ratings ? 'iRacing')
+                    OR NOT (game_ratings ? 'LMU')
+                """
+            )
+        )
         await conn.execute(text("ALTER TABLE users ALTER COLUMN rating SET DEFAULT 1000"))
         await conn.execute(text("ALTER TABLE users ALTER COLUMN rating_race_count SET DEFAULT 0"))
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE users ALTER COLUMN game_ratings SET DEFAULT
+                jsonb_build_object('ACC', jsonb_build_object('rating', 1000, 'race_count', 0), 'AC', jsonb_build_object('rating', 1000, 'race_count', 0), 'iRacing', jsonb_build_object('rating', 1000, 'race_count', 0), 'LMU', jsonb_build_object('rating', 1000, 'race_count', 0))
+                """
+            )
+        )
         await conn.execute(text("ALTER TABLE users ALTER COLUMN rating SET NOT NULL"))
         await conn.execute(text("ALTER TABLE users ALTER COLUMN rating_race_count SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE users ALTER COLUMN game_ratings SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_pilot_number_key"))
+        await conn.execute(text("DROP INDEX IF EXISTS ix_users_pilot_number"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_pilot_number ON users (pilot_number)"))
         await conn.execute(text("UPDATE users SET rating = ROUND(rating) WHERE rating != ROUND(rating)"))
         await conn.execute(text("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_rating_range"))
         await conn.execute(text("UPDATE users SET rating = LEAST(10000.0, GREATEST(10.0, rating)) WHERE rating < 10.0 OR rating > 10000.0"))
@@ -304,6 +342,32 @@ async def init_db() -> None:
         await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS has_qualification BOOLEAN DEFAULT TRUE"))
         await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS rating_applied BOOLEAN DEFAULT FALSE"))
         await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS lmu_results_at TIMESTAMP WITH TIME ZONE"))
+        await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS track_id VARCHAR(80)"))
+        await conn.execute(
+            text(
+                """
+                WITH asset_track_ids AS (
+                    SELECT game.key AS game, lower(track_id.key) AS track_name, track_id.value AS track_id
+                    FROM app_settings setting
+                    CROSS JOIN LATERAL jsonb_each(COALESCE(setting.value->'games', '{}'::jsonb)) AS game(key, value)
+                    CROSS JOIN LATERAL jsonb_each_text(COALESCE(game.value->'track_ids', '{}'::jsonb)) AS track_id(key, value)
+                    WHERE setting.key = 'race_assets'
+                    UNION ALL
+                    SELECT 'ACC' AS game, lower(track_id.key) AS track_name, track_id.value AS track_id
+                    FROM app_settings setting
+                    CROSS JOIN LATERAL jsonb_each_text(COALESCE(setting.value->'track_ids', '{}'::jsonb)) AS track_id(key, value)
+                    WHERE setting.key = 'race_assets'
+                )
+                UPDATE races
+                SET track_id = asset_track_ids.track_id
+                FROM asset_track_ids
+                WHERE races.track_id IS NULL
+                  AND races.game = asset_track_ids.game
+                  AND lower(races.track) = asset_track_ids.track_name
+                """
+            )
+        )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_races_track_id ON races (track_id)"))
         await conn.execute(text("UPDATE races SET has_qualification = TRUE WHERE has_qualification IS NULL"))
         await conn.execute(text("UPDATE races SET rating_applied = FALSE WHERE rating_applied IS NULL"))
         await conn.execute(text("ALTER TABLE races ALTER COLUMN has_qualification SET DEFAULT TRUE"))

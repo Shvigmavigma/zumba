@@ -57,6 +57,28 @@ docker compose exec postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > bmrl_b
 docker compose exec -T postgres psql -U "$POSTGRES_USER" "$POSTGRES_DB" < bmrl_backup.sql
 ```
 
+## Автоматические бэкапы
+
+Скрипт `scripts/weekly-backup.ps1` сохраняет PostgreSQL и загруженные файлы из `/api/uploads`, а затем оставляет только 3 последних успешных бэкапа.
+
+Разовый запуск:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\weekly-backup.ps1
+```
+
+Поставить еженедельный запуск, по умолчанию воскресенье 03:00:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\weekly-backup.ps1 -InstallWeeklyTask
+```
+
+Поменять день, время или количество хранимых копий:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\weekly-backup.ps1 -InstallWeeklyTask -WeeklyDay Monday -At 04:00 -Keep 3
+```
+
 ## HTTPS
 
 Текущий compose готовит сервис под HTTP-домен. Для HTTPS проще всего поставить Caddy или Nginx Proxy Manager перед этим compose и проксировать домен на порт `80` контейнера `web`.

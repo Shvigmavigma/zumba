@@ -9,7 +9,9 @@ export const state = reactive({
   user: JSON.parse(localStorage.getItem('user') || 'null'),
   theme: localStorage.getItem('theme') || 'light',
   locale: initialLocale,
-  timeZone: savedTimeZone || 'UTC'
+  timeZone: savedTimeZone || 'UTC',
+  licenseTiers: null,
+  licenseTiersLoaded: false
 })
 
 export function setSession(token, user) {

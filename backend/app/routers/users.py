@@ -1,7 +1,7 @@
 ﻿from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
-from sqlalchemy import String, cast, delete, func, or_, select, update
+from sqlalchemy import Numeric, String, cast, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +9,7 @@ from app.avatar_uploads import ensure_avatar_upload_allowed, mark_avatar_uploade
 from app.config import get_settings
 from app.db import get_session
 from app.deps import as_utc, clear_expired_timeout, require_admin, require_moder_plus, require_pilot_plus
-from app.models import Appeal, Banner, Penalty, Race, RaceRegistration, Role, Setup, Team, TeamApplication, TeamCreationRequest, User, UserStatus
+from app.models import RACE_GAMES, Appeal, Banner, Penalty, Race, RaceRegistration, Role, Setup, Team, TeamApplication, TeamCreationRequest, User, UserStatus
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
 from app.schemas import AdminDangerDeleteRequest, RoleUpdate, TimeoutRequest, UserAdminUpdate, UserPrivate, UserPublic, UserUpdate
@@ -61,7 +61,7 @@ def ensure_danger_request(payload: AdminDangerDeleteRequest, admin: User, expect
 
 
 PROFILE_REQUIRED_FIELDS = {"email", "first_name", "last_name", "nickname", "avatar_color", "games"}
-ADMIN_UNIQUE_FIELDS = {"email", "login", "pilot_number"}
+ADMIN_UNIQUE_FIELDS = {"email", "login"}
 
 
 async def ensure_unique_user_fields(session: AsyncSession, data: dict, user_id: int) -> None:
@@ -72,18 +72,24 @@ async def ensure_unique_user_fields(session: AsyncSession, data: dict, user_id: 
             raise HTTPException(status_code=409, detail=f"{field.replace('_', ' ').title()} already exists")
 
 
-def user_sort_columns(sort: str) -> tuple:
+def rating_sort_expr(rating_game: str):
+    game = rating_game if rating_game in RACE_GAMES else RACE_GAMES[0]
+    return func.coalesce(cast(User.game_ratings[game]["rating"].astext, Numeric(8, 2)), User.rating)
+
+
+def user_sort_columns(sort: str, rating_game: str = RACE_GAMES[0]) -> tuple:
+    rating_expr = rating_sort_expr(rating_game)
     if sort == "alpha_desc":
         return (func.lower(User.nickname).desc(), func.lower(User.login).desc(), User.id.desc())
     if sort == "alpha_asc":
         return (func.lower(User.nickname).asc(), func.lower(User.login).asc(), User.id.asc())
     if sort == "rating_asc":
-        return (User.rating.asc(), User.sr.desc(), func.lower(User.nickname).asc(), User.id.asc())
+        return (rating_expr.asc(), User.sr.desc(), func.lower(User.nickname).asc(), User.id.asc())
     if sort == "sr_desc":
-        return (User.sr.desc(), User.rating.desc(), func.lower(User.nickname).asc(), User.id.asc())
+        return (User.sr.desc(), rating_expr.desc(), func.lower(User.nickname).asc(), User.id.asc())
     if sort == "sr_asc":
-        return (User.sr.asc(), User.rating.desc(), func.lower(User.nickname).asc(), User.id.asc())
-    return (User.rating.desc(), User.sr.desc(), func.lower(User.nickname).asc(), User.id.asc())
+        return (User.sr.asc(), rating_expr.desc(), func.lower(User.nickname).asc(), User.id.asc())
+    return (rating_expr.desc(), User.sr.desc(), func.lower(User.nickname).asc(), User.id.asc())
 
 
 @router.get("/pilots", response_model=list[UserPublic])
@@ -93,6 +99,7 @@ async def list_pilots(
     search: str | None = None,
     country: str | None = None,
     sort: str = "rating_desc",
+    rating_game: str = RACE_GAMES[0],
     offset: int = 0,
     limit: int = 50,
     session: AsyncSession = Depends(get_session),
@@ -114,7 +121,7 @@ async def list_pilots(
                 Team.abbreviation.ilike(like),
             )
         )
-    rows = (await session.execute(stmt.order_by(*user_sort_columns(sort)).offset(offset).limit(limit))).all()
+    rows = (await session.execute(stmt.order_by(*user_sort_columns(sort, rating_game)).offset(offset).limit(limit))).all()
     return [user_response(user, team_name, team_abbreviation) for user, team_name, team_abbreviation in rows]
 
 
@@ -139,6 +146,7 @@ async def admin_user_list(
     _: User = Depends(require_admin),
     search: str | None = None,
     sort: str = "rating_desc",
+    rating_game: str = RACE_GAMES[0],
     offset: int = 0,
     limit: int = 100,
     session: AsyncSession = Depends(get_session),
@@ -161,7 +169,7 @@ async def admin_user_list(
     rows = (
         await session.execute(
             stmt
-            .order_by(*user_sort_columns(sort))
+            .order_by(*user_sort_columns(sort, rating_game))
             .offset(offset)
             .limit(min(limit, 200))
         )

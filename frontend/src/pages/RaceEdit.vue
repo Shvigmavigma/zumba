@@ -13,7 +13,7 @@ const pageTitle = computed(() => t(isEdit ? 'raceEdit.editTitle' : 'raceEdit.cre
 const gameChoices = computed(() => gameOptions(t))
 const error = ref('')
 const raceAssets = ref({ tracks: [], classes: [], games: {} })
-const assetGames = ['ACC', 'AC', 'iRacing']
+const assetGames = ['ACC', 'AC', 'iRacing', 'LMU']
 const form = ref({
   name: '',
   description: '',
@@ -72,11 +72,11 @@ function optionalIso(value) {
 
 function applyAssetDefaults({ forceCars = false } = {}) {
   if (!isAssetRace.value) return
-  if ((!form.value.track || !isKnownTrack(form.value.track)) && raceAssets.value.tracks.length) {
-    form.value.track = raceAssets.value.tracks[0]
+  if ((!form.value.track || !isKnownTrack(form.value.track)) && currentRaceAssets.value.tracks.length) {
+    form.value.track = currentRaceAssets.value.tracks[0]
   }
-  if ((!form.value.car_class || !isKnownClass(form.value.car_class)) && raceAssets.value.classes.length) {
-    form.value.car_class = raceAssets.value.classes[0].name
+  if ((!form.value.car_class || !isKnownClass(form.value.car_class)) && currentRaceAssets.value.classes.length) {
+    form.value.car_class = currentRaceAssets.value.classes[0].name
   }
   if (forceCars || !form.value.allowed_cars.length) {
     form.value.allowed_cars = [...selectedClassCars.value]
@@ -95,8 +95,7 @@ function handleGameChange() {
   if (isLmuRace.value && !form.value.lmu_results_at) {
     form.value.lmu_results_at = form.value.datetime_end
   }
-  if (isLmuRace.value) return
-  form.value.lmu_results_at = ''
+  if (!isLmuRace.value) form.value.lmu_results_at = ''
   applyAssetDefaults({ forceCars: true })
 }
 
@@ -204,7 +203,7 @@ onMounted(async () => {
         <label class="field"><span>{{ t('fields.modsUrls') }}</span><textarea v-model="modsText" /></label>
         <label v-if="!isAssetRace" class="field"><span>{{ t('fields.allowedCars') }}</span><textarea v-model="carsText" /></label>
       </div>
-      <div v-if="isAssetRace" class="field race-car-picker is-required">
+      <div v-if="isAssetRace && !isLmuRace" class="field race-car-picker is-required">
         <span>{{ t('fields.allowedCars') }}</span>
         <div class="race-car-picker-head">
           <button class="button small" type="button" :disabled="!selectedClassCars.length" @click="toggleAllClassCars">

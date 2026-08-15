@@ -23,7 +23,8 @@ from app.models import (
     UserStatus,
 )
 from app.rate_limit import limiter
-from app.race_assets import RACE_ASSET_GAMES, assets_for_game, get_race_assets
+from app.race_assets import RACE_ASSET_GAMES, asset_track_id, assets_for_game, get_race_assets
+from app.race_videos import remove_race_video_file
 from app.schemas import (
     ChampionshipApplyRequest,
     ChampionshipCarUpdate,
@@ -102,6 +103,7 @@ def user_payload(user: User, team_name: str | None = None, team_abbreviation: st
         "sr": float(user.sr),
         "rating": int(round(float(user.rating))),
         "rating_race_count": int(user.rating_race_count or 0),
+        "game_ratings": user.game_ratings or {},
         "team_id": user.team_id,
         "team_name": team_name,
         "team_abbreviation": team_abbreviation,
@@ -188,6 +190,7 @@ def build_standings(championship: Championship, stages: list[Race], registration
             "avatar_color": user.avatar_color,
             "avatar_url": user.avatar_url,
             "rating": int(round(float(user.rating))),
+            "game_ratings": user.game_ratings or {},
             "sr": float(user.sr),
             "points": 0,
             "pole_points": 0,
@@ -299,7 +302,14 @@ async def remove_participant_from_stages(session: AsyncSession, championship_id:
         await session.delete(registration)
 
 
-def create_stage(championship: Championship, payload: ChampionshipStageAdd | None, round_number: int, creator_id: int, allowed_cars: list[str] | None = None) -> Race:
+def create_stage(
+    championship: Championship,
+    payload: ChampionshipStageAdd | None,
+    round_number: int,
+    creator_id: int,
+    race_assets,
+    allowed_cars: list[str] | None = None,
+) -> Race:
     start = payload.datetime_start if payload else championship.championship_start
     name = (payload.name or f"{championship.name} R{round_number}").strip() if payload else f"{championship.name} R{round_number}"
     track = (payload.track or "TBA").strip() if payload else "TBA"
@@ -309,6 +319,7 @@ def create_stage(championship: Championship, payload: ChampionshipStageAdd | Non
         lmu_results_at = start + timedelta(hours=2)
     primary_class = championship.classes[0] if championship.classes else "Championship"
     stage_class = (payload.car_class or primary_class).strip() if payload else primary_class
+    track_id = asset_track_id(assets_for_game(race_assets, championship.game), track)
     return Race(
         name=name,
         description=championship.description,
@@ -319,6 +330,7 @@ def create_stage(championship: Championship, payload: ChampionshipStageAdd | Non
         max_pilots=500,
         car_class=stage_class or primary_class,
         track=track,
+        track_id=track_id,
         mods_pack=[],
         allowed_cars=allowed_cars or [],
         status=RaceStatus.not_started,
@@ -348,6 +360,7 @@ async def sync_championship_settings_to_stages(session: AsyncSession, championsh
     for stage in stages:
         stage.description = championship.description
         stage.game = championship.game
+        stage.track_id = asset_track_id(assets_for_game(race_assets, championship.game), stage.track)
         if championship.game == "LMU":
             stage.car_class = stage.car_class or primary_class
             stage.allowed_cars = []
@@ -531,7 +544,7 @@ async def create_championship(
     race_assets = await get_race_assets(session)
     allowed_cars = cars_for_championship(championship, race_assets)
     for index, stage_payload in enumerate(payload.stages, start=1):
-        session.add(create_stage(championship, stage_payload, index, user.id, allowed_cars))
+        session.add(create_stage(championship, stage_payload, index, user.id, race_assets, allowed_cars))
     await session.commit()
     await session.refresh(championship)
     return await serialize_championship(session, championship, user)
@@ -575,6 +588,25 @@ async def get_championship(
     return await serialize_championship(session, championship, user)
 
 
+@router.delete("/{championship_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/minute")
+async def delete_championship(
+    championship_id: int,
+    request: Request,
+    user: User = Depends(require_moder_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    championship = await ensure_championship(session, championship_id)
+    stages = (await session.scalars(select(Race).where(Race.championship_id == championship.id))).all()
+    video_urls = [stage.video_url for stage in stages if stage.video_url]
+    for stage in stages:
+        await session.delete(stage)
+    await session.delete(championship)
+    await session.commit()
+    for video_url in video_urls:
+        remove_race_video_file(video_url)
+
+
 @router.post("/{championship_id}/stages", response_model=ChampionshipRead, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
 async def add_championship_stage(
@@ -588,7 +620,7 @@ async def add_championship_stage(
     round_number = (await session.scalar(select(func.max(Race.championship_round)).where(Race.championship_id == championship.id)) or 0) + 1
     race_assets = await get_race_assets(session)
     allowed_cars = cars_for_championship(championship, race_assets)
-    stage = create_stage(championship, payload, int(round_number), user.id, allowed_cars)
+    stage = create_stage(championship, payload, int(round_number), user.id, race_assets, allowed_cars)
     session.add(stage)
     await session.flush()
     approved = (
@@ -634,6 +666,8 @@ async def update_championship_stage(
         stage.name = data["name"]
     if "track" in data:
         stage.track = data["track"] or "TBA"
+        race_assets = await get_race_assets(session)
+        stage.track_id = asset_track_id(assets_for_game(race_assets, championship.game), stage.track)
     if "car_class" in data:
         stage.car_class = data["car_class"] or (championship.classes[0] if championship.classes else "Championship")
     if "server_link" in data:

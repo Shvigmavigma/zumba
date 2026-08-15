@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import DEFAULT_RATING, MAX_RATING, MAX_SR, MIN_RATING, MIN_SR, Penalty, PenaltyStatus, PenaltyType, Race, RaceStatus, User
+from app.models import DEFAULT_RATING, MAX_RATING, MAX_SR, MIN_RATING, MIN_SR, RACE_GAMES, Penalty, PenaltyStatus, PenaltyType, Race, RaceStatus, User, default_game_ratings
 
 
 APPLIED_PENALTY_STATUSES = {PenaltyStatus.active, PenaltyStatus.appealed}
@@ -30,6 +30,35 @@ def penalty_sr_value(penalty: Penalty) -> float:
 
 def clamp_rating(value: float) -> int:
     return int(round(min(MAX_RATING, max(MIN_RATING, value))))
+
+
+def rating_game(game: str | None) -> str:
+    return game if game in RACE_GAMES else RACE_GAMES[0]
+
+
+def user_game_rating_state(user: User, game: str) -> tuple[int, int]:
+    ratings = user.game_ratings if isinstance(user.game_ratings, dict) else {}
+    item = ratings.get(game) if isinstance(ratings.get(game), dict) else {}
+    rating = item.get("rating", user.rating if user.rating is not None else DEFAULT_RATING)
+    race_count = item.get("race_count", user.rating_race_count if user.rating_race_count is not None else 0)
+    return clamp_rating(float(rating or DEFAULT_RATING)), max(0, int(race_count or 0))
+
+
+def set_user_game_rating(user: User, game: str, rating: float, race_count: int) -> None:
+    ratings = default_game_ratings()
+    existing = user.game_ratings if isinstance(user.game_ratings, dict) else {}
+    for item_game in RACE_GAMES:
+        existing_item = existing.get(item_game)
+        if isinstance(existing_item, dict):
+            current_rating, current_count = user_game_rating_state(user, item_game)
+            ratings[item_game] = {"rating": current_rating, "race_count": current_count}
+    normalized_rating = clamp_rating(float(rating))
+    normalized_count = max(0, int(race_count))
+    ratings[game] = {"rating": normalized_rating, "race_count": normalized_count}
+    user.game_ratings = ratings
+    if game == RACE_GAMES[0]:
+        user.rating = normalized_rating
+        user.rating_race_count = normalized_count
 
 
 def clamp_sr(value: float) -> float:
@@ -197,26 +226,25 @@ def rating_positions(rows: list[dict]) -> dict[int, float]:
     return positions
 
 
-def build_rating_changes(race_rows: list[dict], users: dict[int, User]) -> tuple[list[dict], float]:
+def build_rating_changes(race_rows: list[dict], users: dict[int, User], game: str) -> tuple[list[dict], float]:
     eligible_rows = [row for row in race_rows if int(row.get("user_id") or 0) in users and rating_time_ms(row) is not None]
     participant_count = len(eligible_rows)
     if participant_count < 2:
         return [], 0
 
     positions = rating_positions(eligible_rows)
-    sof = sum(float(users[int(row["user_id"])].rating or DEFAULT_RATING) for row in eligible_rows) / participant_count
+    sof = sum(user_game_rating_state(users[int(row["user_id"])], game)[0] for row in eligible_rows) / participant_count
     changes: list[dict] = []
     for row in eligible_rows:
         user_id = int(row["user_id"])
         user = users[user_id]
-        old_rating = clamp_rating(float(user.rating or DEFAULT_RATING))
-        race_count_before = int(user.rating_race_count or 0)
+        old_rating, race_count_before = user_game_rating_state(user, game)
         expected = 0.0
         for opponent_row in eligible_rows:
             opponent_id = int(opponent_row["user_id"])
             if opponent_id == user_id:
                 continue
-            opponent_rating = float(users[opponent_id].rating or DEFAULT_RATING)
+            opponent_rating = user_game_rating_state(users[opponent_id], game)[0]
             expected += 1 / (1 + 10 ** ((opponent_rating - old_rating) / 400))
         score = participant_count - positions[user_id]
         k_factor = rating_k_factor(race_count_before)
@@ -240,7 +268,7 @@ def build_rating_changes(race_rows: list[dict], users: dict[int, User]) -> tuple
     return changes, sof
 
 
-def annotate_rating_rows(results: dict | list | None, changes: list[dict], sof: float) -> dict | list | None:
+def annotate_rating_rows(results: dict | list | None, changes: list[dict], sof: float, game: str) -> dict | list | None:
     rows = result_rows(results)
     if not rows:
         return results
@@ -265,6 +293,7 @@ def annotate_rating_rows(results: dict | list | None, changes: list[dict], sof: 
     if isinstance(updated_results, dict):
         updated_results["rating"] = {
             "system": "RER",
+            "game": game,
             "sof": int(round(sof)),
             "participants": len(changes),
             "changes": changes,
@@ -294,7 +323,9 @@ def clear_rating_annotations(results: dict | list | None) -> dict | list | None:
 async def restore_race_rating(session: AsyncSession, race: Race) -> None:
     if not race.rating_applied or not isinstance(race.results, dict):
         return
-    changes = race.results.get("rating", {}).get("changes", [])
+    rating_meta = race.results.get("rating", {})
+    game = rating_game(rating_meta.get("game") if isinstance(rating_meta, dict) else race.game)
+    changes = rating_meta.get("changes", []) if isinstance(rating_meta, dict) else []
     if not isinstance(changes, list) or not changes:
         race.rating_applied = False
         return
@@ -304,29 +335,30 @@ async def restore_race_rating(session: AsyncSession, race: Race) -> None:
         user = users.get(int(change.get("user_id") or 0))
         if user is None:
             continue
-        user.rating = clamp_rating(float(change.get("old_rating", DEFAULT_RATING)))
-        user.rating_race_count = max(0, int(change.get("race_count_before", 0)))
+        set_user_game_rating(user, game, float(change.get("old_rating", DEFAULT_RATING)), int(change.get("race_count_before", 0)))
     race.results = clear_rating_annotations(race.results)
     race.rating_applied = False
 
 
 async def apply_race_rating(session: AsyncSession, race: Race) -> None:
     await restore_race_rating(session, race)
+    if not race.is_official:
+        return
+    game = rating_game(race.game)
     rows = rating_source_rows(race.results)
     user_ids = [int(row["user_id"]) for row in rows if row.get("user_id") is not None]
     if len(user_ids) < 2:
         return
     users = {user.id: user for user in (await session.scalars(select(User).where(User.id.in_(user_ids)))).all()}
-    changes, sof = build_rating_changes(rows, users)
+    changes, sof = build_rating_changes(rows, users, game)
     if not changes:
         return
     for change in changes:
         user = users.get(int(change["user_id"]))
         if user is None:
             continue
-        user.rating = change["new_rating"]
-        user.rating_race_count = int(change["race_count_after"])
-    race.results = annotate_rating_rows(race.results, changes, sof)
+        set_user_game_rating(user, game, change["new_rating"], int(change["race_count_after"]))
+    race.results = annotate_rating_rows(race.results, changes, sof, game)
     race.rating_applied = True
 
 
@@ -335,6 +367,7 @@ async def recalculate_all_ratings(session: AsyncSession) -> None:
     for user in users:
         user.rating = DEFAULT_RATING
         user.rating_race_count = 0
+        user.game_ratings = default_game_ratings()
 
     races = list(
         (

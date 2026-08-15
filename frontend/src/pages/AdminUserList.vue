@@ -6,11 +6,14 @@ import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
 import CountryCombobox from '../components/CountryCombobox.vue'
 import GameCheckboxGroup from '../components/GameCheckboxGroup.vue'
+import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
+import RaceAssetsEditor from '../components/RaceAssetsEditor.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryOptionsWithCurrent } from '../countries'
-import { roleLabel, statusLabel } from '../i18nLabels'
-import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
+import { gameOptions, roleLabel, statusLabel } from '../i18nLabels'
+import { setLicenseTiers } from '../licenseSettings'
+import { DEFAULT_LICENSE_TIERS, formatPilotNumber, formatRating, licenseBadgeStyle, normalizeLicenseTiers, ratingForGame, teamShortName } from '../pilotDisplay'
 import { setSession, state } from '../store'
 
 const { t } = useI18n()
@@ -39,17 +42,16 @@ const twitchConfigSaved = ref(false)
 const donationSettings = ref({ donation_url: '', top_donations: [] })
 const donationSaving = ref(false)
 const donationSaved = ref(false)
-const raceAssetGames = ['ACC', 'AC', 'iRacing']
-const raceAssetGame = ref('ACC')
-const raceAssetsByGame = ref(defaultRaceAssetsByGame())
-const raceAssetsSaving = ref(false)
-const raceAssetsSaved = ref(false)
+const licenseTiers = ref(DEFAULT_LICENSE_TIERS)
+const licenseSaving = ref(false)
+const licenseSaved = ref(false)
 const dangerDialog = ref(null)
 const dangerForm = ref({ confirmation: '', confirmation_repeat: '', password: '' })
 const dangerSaving = ref(false)
 const dangerResult = ref('')
 const userSearch = ref('')
 const userSort = ref('rating_desc')
+const userRatingGame = ref('ACC')
 const page = ref(1)
 const pageSize = 25
 const visibleUsers = computed(() => users.value)
@@ -70,7 +72,6 @@ const dangerActions = {
   }
 }
 const activeDangerAction = computed(() => (dangerDialog.value ? dangerActions[dangerDialog.value] : null))
-const activeRaceAssetsDraft = computed(() => raceAssetsByGame.value[raceAssetGame.value])
 const dangerFormValid = computed(() => {
   const action = activeDangerAction.value
   if (!action) return false
@@ -80,45 +81,6 @@ const dangerFormValid = computed(() => {
     dangerForm.value.password.length > 0
   )
 })
-
-function emptyRaceAssetDraft() {
-  return { tracksText: '', classes: [] }
-}
-
-function defaultRaceAssetsByGame() {
-  return Object.fromEntries(raceAssetGames.map((game) => [game, emptyRaceAssetDraft()]))
-}
-
-function draftFromConfig(config = {}) {
-  return {
-    tracksText: (config.tracks || []).join('\n'),
-    classes: (config.classes || []).map((item) => ({
-      name: item.name,
-      carsText: (item.cars || []).join('\n')
-    }))
-  }
-}
-
-function normalizeRaceAssetsDraft(config = {}) {
-  const games = config.games || {}
-  return {
-    ACC: draftFromConfig(games.ACC || config),
-    AC: draftFromConfig(games.AC),
-    iRacing: draftFromConfig(games.iRacing)
-  }
-}
-
-function configFromDraft(draft = emptyRaceAssetDraft()) {
-  return {
-    tracks: draft.tracksText.split('\n').map((item) => item.trim()).filter(Boolean),
-    classes: draft.classes
-      .map((item) => ({
-        name: item.name.trim(),
-        cars: item.carsText.split('\n').map((car) => car.trim()).filter(Boolean)
-      }))
-      .filter((item) => item.name)
-  }
-}
 
 function datetimeLocalValue(date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
@@ -157,21 +119,26 @@ function normalizeDonationSettings(data = {}) {
   }
 }
 
+function licenseRange(tier) {
+  return `${String(tier.min_rating).padStart(4, '0')}-${String(tier.max_rating).padStart(4, '0')}`
+}
+
 async function load() {
   try {
     const params = new URLSearchParams({
       limit: String(pageSize),
       offset: String((page.value - 1) * pageSize),
-      sort: userSort.value
+      sort: userSort.value,
+      rating_game: userRatingGame.value
     })
     if (userSearch.value.trim()) params.set('search', userSearch.value.trim())
-    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedRaceAssets, loadedDonationSettings] = await Promise.all([
+    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedDonationSettings, loadedLicenseSettings] = await Promise.all([
       api(`/users/admin?${params.toString()}`),
       api('/teams/config'),
       api('/races/fan-vote/config'),
       api('/twitch/config'),
-      api('/race-assets'),
-      api('/app-settings/donations')
+      api('/app-settings/donations'),
+      api('/app-settings/licenses')
     ])
     users.value = loadedUsers
     teamLimit.value = teamConfig.member_limit
@@ -180,8 +147,8 @@ async function load() {
       fallback_video_url: loadedTwitchConfig.fallback_video_url || '',
       fallback_video_title: loadedTwitchConfig.fallback_video_title || ''
     }
-    raceAssetsByGame.value = normalizeRaceAssetsDraft(loadedRaceAssets)
     donationSettings.value = normalizeDonationSettings(loadedDonationSettings)
+    licenseTiers.value = normalizeLicenseTiers(loadedLicenseSettings)
   } catch (err) {
     error.value = err.message
   }
@@ -292,33 +259,25 @@ async function saveDonationSettings() {
   }
 }
 
-function addRaceAssetClass() {
-  activeRaceAssetsDraft.value.classes = [...activeRaceAssetsDraft.value.classes, { name: '', carsText: '' }]
-}
-
-function removeRaceAssetClass(index) {
-  activeRaceAssetsDraft.value.classes = activeRaceAssetsDraft.value.classes.filter((_, itemIndex) => itemIndex !== index)
-}
-
-async function saveRaceAssets() {
-  raceAssetsSaving.value = true
-  raceAssetsSaved.value = false
+async function saveLicenseSettings() {
+  licenseSaving.value = true
+  licenseSaved.value = false
   error.value = ''
   try {
-    const games = Object.fromEntries(raceAssetGames.map((game) => [game, configFromDraft(raceAssetsByGame.value[game])]))
-    const config = await api('/race-assets', {
+    licenseTiers.value = setLicenseTiers(await api('/app-settings/licenses', {
       method: 'PATCH',
       body: {
-        ...games.ACC,
-        games
+        tiers: licenseTiers.value.map((tier) => ({
+          name: String(tier.name || '').trim(),
+          color: tier.color
+        }))
       }
-    })
-    raceAssetsByGame.value = normalizeRaceAssetsDraft(config)
-    raceAssetsSaved.value = true
+    }))
+    licenseSaved.value = true
   } catch (err) {
     error.value = err.message
   } finally {
-    raceAssetsSaving.value = false
+    licenseSaving.value = false
   }
 }
 
@@ -547,7 +506,7 @@ async function deleteAccount(user) {
 
 onMounted(load)
 watch(page, load)
-watch([userSearch, userSort], resetUserPageAndLoad)
+watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
 </script>
 
 <template>
@@ -609,6 +568,32 @@ watch([userSearch, userSort], resetUserPageAndLoad)
       <span v-if="twitchConfigSaved" class="pill">{{ t('common.saved') }}</span>
     </form>
 
+    <form class="admin-settings-card admin-license-config-card card" @submit.prevent="saveLicenseSettings">
+      <div>
+        <h2>{{ t('adminUsers.licenseTitle') }}</h2>
+        <p class="muted">{{ t('adminUsers.licenseHint') }}</p>
+      </div>
+      <div class="admin-license-list">
+        <article v-for="tier in licenseTiers" :key="tier.min_rating" class="admin-license-row">
+          <span class="admin-license-range">{{ licenseRange(tier) }}</span>
+          <label class="field">
+            <span>{{ t('fields.name') }}</span>
+            <input v-model="tier.name" maxlength="30" required />
+          </label>
+          <label class="field admin-license-color-field">
+            <span>{{ t('adminUsers.licenseColor') }}</span>
+            <input v-model="tier.color" type="color" />
+          </label>
+          <span class="license-badge" :style="licenseBadgeStyle(tier)">{{ tier.name }}</span>
+        </article>
+      </div>
+      <button class="button primary" type="submit" :disabled="licenseSaving">
+        <Save :size="16" />
+        {{ t('common.save') }}
+      </button>
+      <span v-if="licenseSaved" class="pill">{{ t('common.saved') }}</span>
+    </form>
+
     <form class="admin-settings-card admin-donation-config-card card" @submit.prevent="saveDonationSettings">
       <div>
         <h2>{{ t('adminUsers.donationTitle') }}</h2>
@@ -651,54 +636,7 @@ watch([userSearch, userSort], resetUserPageAndLoad)
       <span v-if="donationSaved" class="pill">{{ t('common.saved') }}</span>
     </form>
 
-    <form class="admin-settings-card admin-race-assets-card card" @submit.prevent="saveRaceAssets">
-      <div class="admin-race-assets-head">
-        <h2>{{ t('adminUsers.raceAssetsTitle') }}</h2>
-        <p class="muted">{{ t('adminUsers.raceAssetsHint') }}</p>
-      </div>
-      <div class="admin-race-assets-tabs">
-        <button
-          v-for="game in raceAssetGames"
-          :key="game"
-          class="button small"
-          :class="{ primary: raceAssetGame === game }"
-          type="button"
-          @click="raceAssetGame = game"
-        >
-          {{ game }}
-        </button>
-      </div>
-      <label class="field admin-race-assets-tracks">
-        <span>{{ t('adminUsers.raceAssetsTracks') }}</span>
-        <textarea v-model="activeRaceAssetsDraft.tracksText" required></textarea>
-      </label>
-      <div class="admin-race-assets-classes">
-        <div class="section-header">
-          <h3>{{ t('adminUsers.raceAssetsClasses') }}</h3>
-          <button class="button small" type="button" @click="addRaceAssetClass">{{ t('adminUsers.addRaceClass') }}</button>
-        </div>
-        <article v-for="(item, index) in activeRaceAssetsDraft.classes" :key="index" class="admin-race-class-row">
-          <label class="field">
-            <span>{{ t('fields.class') }}</span>
-            <input v-model="item.name" required />
-          </label>
-          <label class="field">
-            <span>{{ t('fields.allowedCars') }}</span>
-            <textarea v-model="item.carsText" required></textarea>
-          </label>
-          <button class="icon-button danger-icon" type="button" :title="t('common.delete')" :aria-label="t('common.delete')" @click="removeRaceAssetClass(index)">
-            <Trash2 :size="16" />
-          </button>
-        </article>
-      </div>
-      <div class="admin-race-assets-actions">
-        <button class="button primary" type="submit" :disabled="raceAssetsSaving">
-          <Save :size="16" />
-          {{ t('common.save') }}
-        </button>
-        <span v-if="raceAssetsSaved" class="pill">{{ t('common.saved') }}</span>
-      </div>
-    </form>
+    <RaceAssetsEditor @error="error = $event" />
 
     <section class="admin-danger-card card">
       <div>
@@ -729,6 +667,9 @@ watch([userSearch, userSort], resetUserPageAndLoad)
           <option value="alpha_asc">{{ t('sort.alphaAsc') }}</option>
           <option value="alpha_desc">{{ t('sort.alphaDesc') }}</option>
         </select>
+        <select v-model="userRatingGame" :aria-label="t('fields.game')">
+          <option v-for="option in gameOptions(t)" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
       </div>
       <table class="admin-users-table">
         <thead>
@@ -745,8 +686,11 @@ watch([userSearch, userSort], resetUserPageAndLoad)
               <div class="admin-user-cell">
                 <UserAvatar mini :src="user.avatar_url" :color="user.avatar_color" :label="user.login" />
                 <div class="admin-user-info">
-                  <strong>{{ user.login }}</strong>
-                  <span>#{{ formatPilotNumber(user.pilot_number) }} · RER {{ formatRating(user.rating) }} · {{ teamShortName(user.team_name, user.team_abbreviation) }}</span>
+                  <span class="user-name-line">
+                    <strong>{{ user.login }}</strong>
+                    <LicenseBadge :user="user" :game="userRatingGame" />
+                  </span>
+                  <span>#{{ formatPilotNumber(user.pilot_number) }} · RER {{ formatRating(ratingForGame(user, userRatingGame)) }} · {{ teamShortName(user.team_name, user.team_abbreviation) }}</span>
                 </div>
               </div>
             </td>

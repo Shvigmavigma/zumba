@@ -5,10 +5,12 @@ import { useI18n } from 'vue-i18n'
 import { Bell, Check, Crown, LogOut, Plus, Save, Search, Send, Trash2, Upload, UserCheck, UserMinus, Users, X, XCircle } from 'lucide-vue-next'
 import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
+import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
 import TeamAvatar from '../components/TeamAvatar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
-import { filterPilots, formatPilotNumber, formatRating, sortPilots, teamShortName } from '../pilotDisplay'
+import { gameOptions } from '../i18nLabels'
+import { filterPilots, formatPilotNumber, formatRating, ratingForGame, sortPilots, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
 
 const { t } = useI18n()
@@ -36,6 +38,7 @@ const busyMembers = ref({})
 const busyCreateRequests = ref({})
 const memberSearch = ref('')
 const memberSort = ref('rating_desc')
+const memberRatingGame = ref('ACC')
 const teamPage = ref(1)
 const teamPageSize = 12
 const memberPage = ref(1)
@@ -61,7 +64,7 @@ const transferOwnerId = ref('')
 const transferCandidates = computed(() => selectedTeam.value?.members?.filter((member) => member.id !== selectedTeam.value.owner_id) || [])
 const teamTotalPages = computed(() => Math.max(1, Math.ceil(teams.value.length / teamPageSize)))
 const pagedTeams = computed(() => teams.value.slice((teamPage.value - 1) * teamPageSize, teamPage.value * teamPageSize))
-const visibleTeamMembers = computed(() => sortPilots(filterPilots(selectedTeam.value?.members || [], memberSearch.value), memberSort.value))
+const visibleTeamMembers = computed(() => sortPilots(filterPilots(selectedTeam.value?.members || [], memberSearch.value), memberSort.value, memberRatingGame.value))
 const memberTotalPages = computed(() => Math.max(1, Math.ceil(visibleTeamMembers.value.length / memberPageSize)))
 const pagedTeamMembers = computed(() => visibleTeamMembers.value.slice((memberPage.value - 1) * memberPageSize, memberPage.value * memberPageSize))
 
@@ -94,6 +97,10 @@ function resetCreateForm() {
     description: '',
     avatar_color: '#dc2626'
   }
+}
+
+function memberRating(member) {
+  return ratingForGame(member, memberRatingGame.value)
 }
 
 function fillEditForm(team) {
@@ -547,11 +554,14 @@ watch(visibleTeamMembers, () => {
           <TeamAvatar mini :src="requestItem.avatar_url" :color="requestItem.avatar_color" :label="requestItem.name" />
           <span class="team-application-main">
             <strong>{{ requestItem.name }}</strong>
-            <span>{{ requestItem.abbreviation }} · {{ t('teams.requestedBy', { name: memberTitle(requestItem.requester) }) }}</span>
+            <span class="user-name-line">
+              <span>{{ requestItem.abbreviation }} · {{ t('teams.requestedBy', { name: memberTitle(requestItem.requester) }) }}</span>
+              <LicenseBadge :user="requestItem.requester" :game="memberRatingGame" />
+            </span>
           </span>
           <span class="team-member-stat">
             <strong>#{{ formatPilotNumber(requestItem.requester.pilot_number) }}</strong>
-            <span>RER {{ formatRating(requestItem.requester.rating) }}</span>
+            <span>RER {{ formatRating(memberRating(requestItem.requester)) }}</span>
           </span>
           <div class="team-application-actions">
             <button class="icon-button" type="button" :title="t('teams.approveCreateRequest')" :disabled="busyCreateRequests[requestItem.id]" @click="approveCreateRequest(requestItem)">
@@ -679,7 +689,7 @@ watch(visibleTeamMembers, () => {
               <select v-model="transferOwnerId" :disabled="!transferCandidates.length" required>
                 <option value="">{{ t('teams.chooseMember') }}</option>
                 <option v-for="member in transferCandidates" :key="member.id" :value="member.id">
-                  {{ memberTitle(member) }} · #{{ formatPilotNumber(member.pilot_number) }} · RER {{ formatRating(member.rating) }}
+                  {{ memberTitle(member) }} · #{{ formatPilotNumber(member.pilot_number) }} · RER {{ formatRating(memberRating(member)) }}
                 </option>
               </select>
             </label>
@@ -704,8 +714,11 @@ watch(visibleTeamMembers, () => {
             <div v-for="application in selectedTeam.applications" :key="application.id" class="team-application-row">
               <UserAvatar mini :src="application.user.avatar_url" :color="application.user.avatar_color" :label="application.user.login" />
               <span class="team-application-main">
-                <strong>{{ memberTitle(application.user) }}</strong>
-                <span>{{ application.user.login }} · #{{ formatPilotNumber(application.user.pilot_number) }} · RER {{ formatRating(application.user.rating) }} · {{ teamShortName(application.user.team_name, application.user.team_abbreviation) }}</span>
+                <span class="user-name-line">
+                  <strong>{{ memberTitle(application.user) }}</strong>
+                  <LicenseBadge :user="application.user" :game="memberRatingGame" />
+                </span>
+                <span>{{ application.user.login }} · #{{ formatPilotNumber(application.user.pilot_number) }} · RER {{ formatRating(memberRating(application.user)) }} · {{ teamShortName(application.user.team_name, application.user.team_abbreviation) }}</span>
               </span>
               <span class="team-member-stat">
                 <strong>{{ application.user.sr.toFixed(1) }}</strong>
@@ -739,17 +752,23 @@ watch(visibleTeamMembers, () => {
               <option value="alpha_asc">{{ t('sort.alphaAsc') }}</option>
               <option value="alpha_desc">{{ t('sort.alphaDesc') }}</option>
             </select>
+            <select v-model="memberRatingGame" :aria-label="t('fields.game')">
+              <option v-for="option in gameOptions(t)" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
           </div>
           <div class="team-members-list">
             <div v-for="member in pagedTeamMembers" :key="member.id" class="team-member-row">
               <UserAvatar mini :src="member.avatar_url" :color="member.avatar_color" :label="member.login" />
               <RouterLink class="team-member-main" :to="`/pilots/${member.id}`">
-                <strong>{{ memberTitle(member) }}</strong>
+                <span class="user-name-line">
+                  <strong>{{ memberTitle(member) }}</strong>
+                  <LicenseBadge :user="member" :game="memberRatingGame" />
+                </span>
                 <span>{{ member.login }} · #{{ formatPilotNumber(member.pilot_number) }} · {{ teamShortName(memberTeamName(member), memberTeamAbbreviation(member)) }}</span>
               </RouterLink>
               <span class="team-member-stat">
-                <strong>{{ formatRating(member.rating) }}</strong>
-                <span>RER</span>
+                <strong>{{ formatRating(memberRating(member)) }}</strong>
+                <span>RER {{ memberRatingGame }}</span>
               </span>
               <span class="team-member-stat">
                 <strong>{{ member.sr.toFixed(1) }}</strong>
