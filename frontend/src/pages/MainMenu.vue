@@ -671,7 +671,10 @@ onBeforeUnmount(() => {
             <div class="main-donations-top">
               <span v-if="!topDonations.length" class="muted">{{ t('main.noTopDonations') }}</span>
               <span v-for="donation in topDonations" :key="`${donation.name}-${donation.amount}`" class="main-donation-chip">
-                <b>{{ donation.name }}</b>
+                <span class="main-donation-copy">
+                  <b>{{ donation.name }}</b>
+                  <small>{{ donation.message || t('main.donationCommentSpace') }}</small>
+                </span>
                 <em>{{ donation.amount }}</em>
               </span>
             </div>
