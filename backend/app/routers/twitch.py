@@ -330,8 +330,18 @@ async def twitch_status(request: Request, session: AsyncSession = Depends(get_se
                 _status_cache = (now + min(settings.twitch_status_cache_seconds, 15), status)
                 return status
 
-            streams = await helix_get(client, token, "streams", {"user_login": status.channel_login})
-            live_stream = next(iter(streams.get("data") or []), None)
+            try:
+                streams = await helix_get(client, token, "streams", {"user_login": status.channel_login})
+                live_stream = next(iter(streams.get("data") or []), None)
+            except httpx.HTTPError:
+                try:
+                    live_status = await load_twitch_live_status_from_web(client, status)
+                except httpx.HTTPError:
+                    live_status = None
+                if live_status is not None:
+                    _status_cache = (now + settings.twitch_status_cache_seconds, live_status)
+                    return live_status
+                live_stream = None
             if live_stream:
                 status = live_status_from_stream(status, live_stream, is_configured=True)
                 _status_cache = (now + settings.twitch_status_cache_seconds, status)
@@ -339,8 +349,11 @@ async def twitch_status(request: Request, session: AsyncSession = Depends(get_se
 
             if configured_video is not None:
                 if not configured_video.thumbnail_url and twitch_config.fallback_video_id:
-                    videos = await helix_get(client, token, "videos", {"id": twitch_config.fallback_video_id})
-                    metadata = video_metadata_from_payload(next(iter(videos.get("data") or []), None))
+                    try:
+                        videos = await helix_get(client, token, "videos", {"id": twitch_config.fallback_video_id})
+                        metadata = video_metadata_from_payload(next(iter(videos.get("data") or []), None))
+                    except httpx.HTTPError:
+                        metadata = {}
                     configured_video.thumbnail_url = metadata.get("thumbnail_url") or None
                     if not configured_video.title:
                         configured_video.title = metadata.get("title") or None
@@ -373,7 +386,7 @@ async def twitch_status(request: Request, session: AsyncSession = Depends(get_se
                         published_at=parse_twitch_datetime(video.get("published_at") or video.get("created_at")),
                     )
     except httpx.HTTPError:
-        status = fallback_status()
+        status = configured_video or fallback_status()
 
     _status_cache = (now + settings.twitch_status_cache_seconds, status)
     return status

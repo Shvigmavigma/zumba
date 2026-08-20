@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>graphify - 2D Graph</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f0f1a; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; display: flex; height: 100vh; overflow: hidden; }
+  #graph-container { flex: 1; position: relative; background: #0f0f1a; }
+  #graph { width: 100%; height: 100%; display: block; cursor: default; }
+  #sidebar { width: 280px; background: #1a1a2e; border-left: 1px solid #2a2a4e; display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+  #search-wrap { padding: 12px; border-bottom: 1px solid #2a2a4e; }
+  #search { width: 100%; background: #0f0f1a; border: 1px solid #3a3a5e; color: #e0e0e0; padding: 7px 10px; border-radius: 6px; font-size: 13px; outline: none; }
+  #search:focus { border-color: #4E79A7; }
+  #search-results { max-height: 140px; overflow-y: auto; padding: 4px 12px; border-bottom: 1px solid #2a2a4e; display: none; }
+  .search-item { padding: 4px 6px; cursor: pointer; border-radius: 4px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .search-item:hover { background: #2a2a4e; }
+  #info-panel { padding: 14px; border-bottom: 1px solid #2a2a4e; min-height: 140px; flex-shrink: 0; }
+  #info-panel h3 { font-size: 13px; color: #aaa; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+  #info-content { font-size: 13px; color: #ccc; line-height: 1.6; }
+  #info-content .field { margin-bottom: 5px; }
+  #info-content .field b { color: #e0e0e0; }
+  #info-content .empty { color: #555; font-style: italic; }
+  .neighbor-link { display: block; padding: 2px 6px; margin: 2px 0; border-radius: 3px; cursor: pointer; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid #333; }
+  .neighbor-link:hover { background: #2a2a4e; }
+  #neighbors-list { max-height: 160px; overflow-y: auto; margin-top: 4px; }
+  #legend-wrap { flex: 1; overflow-y: auto; padding: 12px; min-height: 0; }
+  #legend-wrap h3 { font-size: 13px; color: #aaa; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; border-radius: 4px; font-size: 12px; }
+  .legend-item:hover { background: #2a2a4e; padding-left: 4px; }
+  .legend-item.dimmed { opacity: 0.35; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .legend-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend-count { color: #666; font-size: 11px; }
+  #stats { padding: 10px 14px; border-top: 1px solid #2a2a4e; font-size: 11px; color: #555; flex-shrink: 0; }
+  #legend-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 4px 0; }
+  #legend-controls label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: #aaa; user-select: none; }
+  #legend-controls label:hover { color: #e0e0e0; }
+  .legend-cb, #select-all-cb { appearance: none; -webkit-appearance: none; width: 14px; height: 14px; border: 1.5px solid #3a3a5e; border-radius: 3px; background: #0f0f1a; cursor: pointer; position: relative; flex-shrink: 0; }
+  .legend-cb:checked, #select-all-cb:checked { background: #4E79A7; border-color: #4E79A7; }
+  .legend-cb:checked::after, #select-all-cb:checked::after { content: ''; position: absolute; left: 3.5px; top: 1px; width: 4px; height: 7px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  #select-all-cb:indeterminate { background: #4E79A7; border-color: #4E79A7; }
+  #select-all-cb:indeterminate::after { content: ''; position: absolute; left: 2px; top: 5px; width: 8px; height: 2px; background: #fff; border: none; transform: none; }
+</style>
+</head>
+<body>
+<div id="graph-container">
+  <canvas id="graph"></canvas>
+</div>
+<div id="sidebar">
+  <div id="search-wrap">
+    <input id="search" type="text" placeholder="Search nodes..." autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <div id="info-panel">
+    <h3>Node Info</h3>
+    <div id="info-content"><span class="empty">Click a node to inspect it</span></div>
+  </div>
+  <div id="legend-wrap">
+    <h3>Communities</h3>
+    <div id="legend-controls">
+      <label><input type="checkbox" id="select-all-cb" checked>Select All</label>
+    </div>
+    <div id="legend"></div>
+  </div>
+  <div id="stats">36 nodes &middot; 45 edges &middot; 20 communities</div>
+</div>
+
+<script>
+// ============ DATA ============
+const RAW_NODES = [
+  {"id": "n1", "label": "App Init", "color": "#BAB0AC", "community": 59, "community_name": "Backend Init", "source_file": "backend/app/__init__.py", "file_type": "code", "degree": 1},
+  {"id": "n2", "label": "Avatar Upload", "color": "#F28E2B", "community": 11, "community_name": "Avatar Upload", "source_file": "backend/app/avatar_uploads.py", "file_type": "code", "degree": 15},
+  {"id": "n3", "label": "Config", "color": "#59A14F", "community": 24, "community_name": "Backend Config", "source_file": "backend/app/config.py", "file_type": "code", "degree": 19},
+  {"id": "n4", "label": "DB", "color": "#9C755F", "community": 18, "community_name": "Backend Dependencies", "source_file": "backend/app/db.py", "file_type": "code", "degree": 29},
+  {"id": "n5", "label": "Deps", "color": "#9C755F", "community": 18, "community_name": "Backend Dependencies", "source_file": "backend/app/deps.py", "file_type": "code", "degree": 32},
+  {"id": "n6", "label": "Main", "color": "#76B7B2", "community": 33, "community_name": "App Startup", "source_file": "backend/app/main.py", "file_type": "code", "degree": 35},
+  {"id": "n7", "label": "Models", "color": "#9C755F", "community": 18, "community_name": "Backend Dependencies", "source_file": "backend/app/models.py", "file_type": "code", "degree": 54},
+  {"id": "n8", "label": "Race Assets", "color": "#76B7B2", "community": 3, "community_name": "Championship", "source_file": "backend/app/race_assets.py", "file_type": "code", "degree": 19},
+  {"id": "n9", "label": "Race Videos", "color": "#76B7B2", "community": 43, "community_name": "Race Video", "source_file": "backend/app/race_videos.py", "file_type": "code", "degree": 11},
+  {"id": "n10", "label": "Rate Limit", "color": "#9C755F", "community": 18, "community_name": "Backend Dependencies", "source_file": "backend/app/rate_limit.py", "file_type": "code", "degree": 28},
+  {"id": "n11", "label": "Appeals Router", "color": "#9C755F", "community": 18, "community_name": "Backend Dependencies", "source_file": "backend/app/routers/appeals.py", "file_type": "code", "degree": 29},
+  {"id": "n12", "label": "Auth Router", "color": "#FF9DA7", "community": 27, "community_name": "Auth", "source_file": "backend/app/routers/auth.py", "file_type": "code", "degree": 43},
+  {"id": "n13", "label": "Banners Router", "color": "#9C755F", "community": 18, "community_name": "Backend Dependencies", "source_file": "backend/app/routers/banners.py", "file_type": "code", "degree": 32},
+  {"id": "n14", "label": "Championships Router", "color": "#76B7B2", "community": 3, "community_name": "Championship", "source_file": "backend/app/routers/championships.py", "file_type": "code", "degree": 75},
+  {"id": "n15", "label": "Dashboard Router", "color": "#9C755F", "community": 18, "community_name": "Backend Dependencies", "source_file": "backend/app/routers/dashboard.py", "file_type": "code", "degree": 17},
+  {"id": "n16", "label": "Hall of Fame", "color": "#B07AA1", "community": 36, "community_name": "Hall of Fame", "source_file": "backend/app/routers/hall_of_fame.py", "file_type": "code", "degree": 25},
+  {"id": "n17", "label": "News Router", "color": "#B07AA1", "community": 26, "community_name": "News", "source_file": "backend/app/routers/news.py", "file_type": "code", "degree": 28},
+  {"id": "n18", "label": "Penalties Router", "color": "#9C755F", "community": 18, "community_name": "Backend Dependencies", "source_file": "backend/app/routers/penalties.py", "file_type": "code", "degree": 29},
+  {"id": "n19", "label": "Races Router", "color": "#4E79A7", "community": 0, "community_name": "Race Backend", "source_file": "backend/app/routers/races.py", "file_type": "code", "degree": 107},
+  {"id": "n20", "label": "Teams Router", "color": "#E15759", "community": 2, "community_name": "Teams", "source_file": "backend/app/routers/teams.py", "file_type": "code", "degree": 74},
+  {"id": "n21", "label": "Twitch Router", "color": "#BAB0AC", "community": 19, "community_name": "Twitch", "source_file": "backend/app/routers/twitch.py", "file_type": "code", "degree": 40},
+  {"id": "n22", "label": "Users Router", "color": "#F28E2B", "community": 11, "community_name": "Avatar Upload", "source_file": "backend/app/routers/users.py", "file_type": "code", "degree": 68},
+  {"id": "n23", "label": "Schemas", "color": "#F28E2B", "community": 1, "community_name": "Database Models", "source_file": "backend/app/schemas.py", "file_type": "code", "degree": 101},
+  {"id": "n24", "label": "Security", "color": "#59A14F", "community": 24, "community_name": "Backend Config", "source_file": "backend/app/security.py", "file_type": "code", "degree": 22},
+  {"id": "n25", "label": "Seed", "color": "#E15759", "community": 32, "community_name": "Seed Demo", "source_file": "backend/app/seed.py", "file_type": "code", "degree": 32},
+  {"id": "n26", "label": "Services", "color": "#4E79A7", "community": 0, "community_name": "Race Backend", "source_file": "backend/app/services.py", "file_type": "code", "degree": 44},
+  {"id": "n27", "label": "Simulate Data", "color": "#E15759", "community": 2, "community_name": "Teams", "source_file": "backend/app/simulate_mass_data.py", "file_type": "code", "degree": 52},
+  {"id": "n28", "label": "Frontend App", "color": "#F28E2B", "community": 21, "community_name": "App Shell", "source_file": "frontend/src/App.vue", "file_type": "code", "degree": 34},
+  {"id": "n29", "label": "API Utils", "color": "#B07AA1", "community": 6, "community_name": "API Utilities", "source_file": "frontend/src/api.js", "file_type": "code", "degree": 25},
+  {"id": "n30", "label": "Pilot Display", "color": "#9C755F", "community": 8, "community_name": "Rating Profile", "source_file": "frontend/src/pilotDisplay.js", "file_type": "code", "degree": 18},
+  {"id": "n31", "label": "Router", "color": "#B07AA1", "community": 6, "community_name": "API Utilities", "source_file": "frontend/src/router.js", "file_type": "code", "degree": 26},
+  {"id": "n32", "label": "Store", "color": "#B07AA1", "community": 6, "community_name": "API Utilities", "source_file": "frontend/src/store.js", "file_type": "code", "degree": 24},
+  {"id": "n33", "label": "README", "color": "#F28E2B", "community": 31, "community_name": "Docs", "source_file": "README.md", "file_type": "concept", "degree": 8},
+  {"id": "n34", "label": "DEPLOY", "color": "#F28E2B", "community": 31, "community_name": "Docs", "source_file": "DEPLOY.md", "file_type": "document", "degree": 4},
+  {"id": "n35", "label": "Docker Compose", "color": "#F28E2B", "community": 41, "community_name": "Docker", "source_file": "docker-compose.yml", "file_type": "code", "degree": 4},
+  {"id": "n36", "label": "Design Mockup", "color": "#4E79A7", "community": 50, "community_name": "Design", "source_file": "design-mockups/bmrl-redesign.html", "file_type": "document", "degree": 4}
+];
+
+const RAW_EDGES = [
+  {"from": "n1", "to": "n2"}, {"from": "n1", "to": "n3"}, {"from": "n2", "to": "n22"}, {"from": "n2", "to": "n3"},
+  {"from": "n3", "to": "n24"}, {"from": "n3", "to": "n4"}, {"from": "n4", "to": "n5"}, {"from": "n4", "to": "n7"},
+  {"from": "n5", "to": "n6"}, {"from": "n5", "to": "n7"}, {"from": "n6", "to": "n12"}, {"from": "n6", "to": "n14"},
+  {"from": "n7", "to": "n23"}, {"from": "n7", "to": "n26"}, {"from": "n8", "to": "n14"}, {"from": "n8", "to": "n19"},
+  {"from": "n9", "to": "n19"}, {"from": "n10", "to": "n6"}, {"from": "n11", "to": "n7"}, {"from": "n11", "to": "n18"},
+  {"from": "n12", "to": "n24"}, {"from": "n13", "to": "n3"}, {"from": "n14", "to": "n8"}, {"from": "n14", "to": "n19"},
+  {"from": "n15", "to": "n7"}, {"from": "n16", "to": "n7"}, {"from": "n17", "to": "n7"}, {"from": "n18", "to": "n7"},
+  {"from": "n19", "to": "n26"}, {"from": "n19", "to": "n8"}, {"from": "n20", "to": "n7"}, {"from": "n21", "to": "n3"},
+  {"from": "n22", "to": "n7"}, {"from": "n23", "to": "n7"}, {"from": "n24", "to": "n3"}, {"from": "n25", "to": "n7"},
+  {"from": "n26", "to": "n7"}, {"from": "n27", "to": "n7"}, {"from": "n28", "to": "n29"}, {"from": "n28", "to": "n32"},
+  {"from": "n29", "to": "n31"}, {"from": "n30", "to": "n7"}, {"from": "n31", "to": "n32"}, {"from": "n33", "to": "n34"},
+  {"from": "n33", "to": "n35"}, {"from": "n34", "to": "n35"}, {"from": "n36", "to": "n33"}
+];
+
+const LEGEND = [
+  {"cid": 0, "color": "#4E79A7", "label": "Race Backend", "count": 3},
+  {"cid": 1, "color": "#F28E2B", "label": "Database Models", "count": 1},
+  {"cid": 2, "color": "#E15759", "label": "Teams Backend", "count": 2},
+  {"cid": 3, "color": "#76B7B2", "label": "Championship Backend", "count": 2},
+  {"cid": 6, "color": "#B07AA1", "label": "API Utilities", "count": 3},
+  {"cid": 8, "color": "#9C755F", "label": "Rating Profile", "count": 1},
+  {"cid": 11, "color": "#F28E2B", "label": "Avatar Upload", "count": 2},
+  {"cid": 18, "color": "#9C755F", "label": "Backend Dependencies", "count": 6},
+  {"cid": 19, "color": "#BAB0AC", "label": "Twitch", "count": 1},
+  {"cid": 21, "color": "#F28E2B", "label": "App Shell", "count": 1},
+  {"cid": 24, "color": "#59A14F", "label": "Backend Config", "count": 2},
+  {"cid": 26, "color": "#B07AA1", "label": "News", "count": 1},
+  {"cid": 27, "color": "#FF9DA7", "label": "Auth", "count": 1},
+  {"cid": 31, "color": "#F28E2B", "label": "Docs", "count": 2},
+  {"cid": 32, "color": "#E15759", "label": "Seed Demo", "count": 1},
+  {"cid": 33, "color": "#76B7B2", "label": "App Startup", "count": 1},
+  {"cid": 36, "color": "#B07AA1", "label": "Hall of Fame", "count": 1},
+  {"cid": 41, "color": "#F28E2B", "label": "Docker", "count": 1},
+  {"cid": 43, "color": "#76B7B2", "label": "Race Video", "count": 1},
+  {"cid": 50, "color": "#4E79A7", "label": "Design", "count": 1}
+];
+
+// ============ CANVAS SETUP ============
+const canvas = document.getElementById('graph');
+const ctx = canvas.getContext('2d');
+const container = document.getElementById('graph-container');
+
+let W, H;
+function resize() {
+  W = container.clientWidth;
+  H = container.clientHeight;
+  canvas.width = W;
+  canvas.height = H;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ============ ПОЗИЦИИ УЗЛОВ ============
+const nodeMap = {};
+RAW_NODES.forEach(n => {
+  nodeMap[n.id] = {
+    ...n,
+    x: Math.random() * 600 + 100,
+    y: Math.random() * 400 + 100,
+    vx: 0, vy: 0
+  };
+});
+
+// Простая симуляция
+function simulateLayout() {
+  const nodes = Object.values(nodeMap);
+  const iterations = 400;
+  const k = 150;
+
+  for (let iter = 0; iter < iterations; iter++) {
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i], b = nodes[j];
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const force = k * k / (dist * dist);
+        a.vx += (dx / dist) * force * 0.01;
+        a.vy += (dy / dist) * force * 0.01;
+        b.vx -= (dx / dist) * force * 0.01;
+        b.vy -= (dy / dist) * force * 0.01;
+      }
+    }
+
+    RAW_EDGES.forEach(edge => {
+      const a = nodeMap[edge.from];
+      const b = nodeMap[edge.to];
+      if (!a || !b) return;
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const force = dist * dist / k * 0.005;
+      a.vx -= (dx / dist) * force;
+      a.vy -= (dy / dist) * force;
+      b.vx += (dx / dist) * force;
+      b.vy += (dy / dist) * force;
+    });
+
+    nodes.forEach(n => {
+      n.vx += (W/2 - n.x) * 0.0003;
+      n.vy += (H/2 - n.y) * 0.0003;
+    });
+
+    nodes.forEach(n => {
+      n.x += n.vx;
+      n.y += n.vy;
+      n.vx *= 0.92;
+      n.vy *= 0.92;
+      n.x = Math.max(30, Math.min(W - 30, n.x));
+      n.y = Math.max(30, Math.min(H - 30, n.y));
+    });
+  }
+}
+
+simulateLayout();
+
+// ============ ОТРИСОВКА ============
+let hoveredNode = null;
+let selectedNode = null;
+let dragNode = null;
+let dragOffsetX = 0, dragOffsetY = 0;
+let isDragging = false;
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Рёбра
+  RAW_EDGES.forEach(edge => {
+    const a = nodeMap[edge.from];
+    const b = nodeMap[edge.to];
+    if (!a || !b) return;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = '#2a2a4e';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  });
+
+  // Узлы
+  Object.values(nodeMap).forEach(n => {
+    const isHover = hoveredNode === n.id;
+    const isSelected = selectedNode === n.id;
+    const radius = isHover ? 16 : (isSelected ? 14 : 10);
+
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = n.color;
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    ctx.strokeStyle = isHover ? '#ffffff' : 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = isHover ? 2 : 1;
+    ctx.stroke();
+
+    ctx.fillStyle = '#e0e0e0';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(n.label, n.x, n.y - radius - 4);
+  });
+
+  requestAnimationFrame(draw);
+}
+
+draw();
+
+// ============ ВЗАИМОДЕЙСТВИЕ ============
+function getNodeAt(mx, my) {
+  let best = null, bestDist = 30;
+  Object.values(nodeMap).forEach(n => {
+    const dist = Math.hypot(mx - n.x, my - n.y);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = n;
+    }
+  });
+  return best;
+}
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  if (isDragging && dragNode) {
+    dragNode.x = mx - dragOffsetX;
+    dragNode.y = my - dragOffsetY;
+    return;
+  }
+
+  const node = getNodeAt(mx, my);
+  hoveredNode = node ? node.id : null;
+  canvas.style.cursor = node ? 'pointer' : 'default';
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const node = getNodeAt(mx, my);
+  if (node) {
+    isDragging = true;
+    dragNode = node;
+    dragOffsetX = mx - node.x;
+    dragOffsetY = my - node.y;
+    selectedNode = node.id;
+    showInfo(node.id);
+  }
+});
+
+canvas.addEventListener('mouseup', () => {
+  isDragging = false;
+  dragNode = null;
+});
+
+canvas.addEventListener('mouseleave', () => {
+  isDragging = false;
+  dragNode = null;
+});
+
+// ============ INFO PANEL ============
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function showInfo(nodeId) {
+  const n = nodeMap[nodeId];
+  if (!n) return;
+  const neighbors = RAW_EDGES
+    .filter(e => e.from === nodeId || e.to === nodeId)
+    .map(e => e.from === nodeId ? e.to : e.from)
+    .map(id => nodeMap[id])
+    .filter(Boolean);
+
+  const neighborItems = neighbors.map(nb =>
+    `<span class="neighbor-link" style="border-left-color:${esc(nb.color)}" data-nid="${esc(nb.id)}">${esc(nb.label)}</span>`
+  ).join('');
+
+  document.getElementById('info-content').innerHTML = `
+    <div class="field"><b>${esc(n.label)}</b></div>
+    <div class="field">Type: ${esc(n.file_type || 'unknown')}</div>
+    <div class="field">Community: ${esc(n.community_name)}</div>
+    <div class="field">Source: ${esc(n.source_file || '-')}</div>
+    <div class="field">Degree: ${n.degree}</div>
+    ${neighbors.length ? `<div class="field" style="margin-top:8px;color:#aaa;font-size:11px">Neighbors (${neighbors.length})</div><div id="neighbors-list">${neighborItems}</div>` : ''}
+  `;
+}
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('.neighbor-link');
+  if (el && el.dataset.nid !== undefined) {
+    const id = el.dataset.nid;
+    selectedNode = id;
+    showInfo(id);
+  }
+});
+
+// ============ SEARCH ============
+const searchInput = document.getElementById('search');
+const searchResults = document.getElementById('search-results');
+
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.toLowerCase().trim();
+  searchResults.innerHTML = '';
+  if (!q) { searchResults.style.display = 'none'; return; }
+  const matches = RAW_NODES.filter(n => n.label.toLowerCase().includes(q)).slice(0, 20);
+  if (!matches.length) { searchResults.style.display = 'none'; return; }
+  searchResults.style.display = 'block';
+  matches.forEach(n => {
+    const el = document.createElement('div');
+    el.className = 'search-item';
+    el.textContent = n.label;
+    el.style.borderLeft = `3px solid ${n.color}`;
+    el.style.paddingLeft = '8px';
+    el.onclick = () => {
+      selectedNode = n.id;
+      showInfo(n.id);
+      searchResults.style.display = 'none';
+      searchInput.value = '';
+      const node = nodeMap[n.id];
+      if (node) {
+        const dx = node.x - W/2;
+        const dy = node.y - H/2;
+        Object.values(nodeMap).forEach(n2 => {
+          n2.x -= dx * 0.3;
+          n2.y -= dy * 0.3;
+        });
+      }
+    };
+    searchResults.appendChild(el);
+  });
+});
+
+document.addEventListener('click', e => {
+  if (!searchResults.contains(e.target) && e.target !== searchInput)
+    searchResults.style.display = 'none';
+});
+
+// ============ LEGEND ============
+const hiddenCommunities = new Set();
+const selectAllCb = document.getElementById('select-all-cb');
+const legendEl = document.getElementById('legend');
+
+function updateSelectAllState() {
+  const total = LEGEND.length;
+  const hidden = hiddenCommunities.size;
+  selectAllCb.checked = hidden === 0;
+  selectAllCb.indeterminate = hidden > 0 && hidden < total;
+}
+
+function toggleAllCommunities(hide) {
+  document.querySelectorAll('.legend-item').forEach(item => {
+    hide ? item.classList.add('dimmed') : item.classList.remove('dimmed');
+  });
+  document.querySelectorAll('.legend-cb').forEach(cb => {
+    cb.checked = !hide;
+  });
+  LEGEND.forEach(c => {
+    if (hide) hiddenCommunities.add(c.cid); else hiddenCommunities.delete(c.cid);
+  });
+  updateSelectAllState();
+}
+
+selectAllCb.addEventListener('change', function() {
+  toggleAllCommunities(!this.checked);
+});
+
+LEGEND.forEach(c => {
+  const item = document.createElement('div');
+  item.className = 'legend-item';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'legend-cb';
+  cb.checked = true;
+  cb.addEventListener('change', (e) => {
+    e.stopPropagation();
+    if (cb.checked) {
+      hiddenCommunities.delete(c.cid);
+      item.classList.remove('dimmed');
+    } else {
+      hiddenCommunities.add(c.cid);
+      item.classList.add('dimmed');
+    }
+    updateSelectAllState();
+  });
+  item.innerHTML = `<div class="legend-dot" style="background:${c.color}"></div>
+    <span class="legend-label">${c.label}</span>
+    <span class="legend-count">${c.count}</span>`;
+  item.prepend(cb);
+  item.onclick = (e) => {
+    if (e.target === cb) return;
+    cb.checked = !cb.checked;
+    cb.dispatchEvent(new Event('change'));
+  };
+  legendEl.appendChild(item);
+});
+
+updateSelectAllState();
+
+console.log('Graph loaded successfully!');
+</script>
+</body>
+</html>

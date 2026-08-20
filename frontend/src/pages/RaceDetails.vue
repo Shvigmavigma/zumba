@@ -46,6 +46,9 @@ const fanVoteVoting = ref(false)
 const manualPilotSearch = ref('')
 const manualPilotResults = ref([])
 const manualPilotLoading = ref(false)
+const myTeam = ref(null)
+const teamRaceNumber = ref(pilotNumberDraft(state.user?.pilot_number))
+const teamDriverIds = ref([])
 const raceAssetConfig = computed(() => {
   const game = race.value?.game
   if (!game) return { track_images: {} }
@@ -56,10 +59,15 @@ const raceTrackImage = computed(() => trackImageFromConfig(raceAssetConfig.value
 
 const raceRatingGame = computed(() => race.value?.game || 'ACC')
 const participants = computed(() => race.value?.registered_pilots || [])
+const teamRegistrations = computed(() => race.value?.team_registrations || [])
 const visibleParticipants = computed(() => sortPilots(filterPilots(participants.value, participantSearch.value), participantSort.value, raceRatingGame.value))
 const participantTotalPages = computed(() => Math.max(1, Math.ceil(visibleParticipants.value.length / participantPageSize)))
 const pagedParticipants = computed(() => visibleParticipants.value.slice((participantPage.value - 1) * participantPageSize, participantPage.value * participantPageSize))
 const registered = computed(() => participants.value.some((item) => item.user_id === state.user?.id))
+const myTeamRegistration = computed(() => teamRegistrations.value.find((item) => item.team_id === state.user?.team_id) || null)
+const teamRegistered = computed(() => Boolean(myTeamRegistration.value))
+const teamRegistrationDrivers = computed(() => myTeamRegistration.value?.drivers || [])
+const canManageTeamRegistration = computed(() => Boolean(race.value?.is_team_event && myTeam.value?.is_owner))
 const canManageRace = computed(() => ['admin', 'moder'].includes(state.user?.role))
 const canIssuePenalty = computed(() => ['admin', 'moder', 'marshall'].includes(state.user?.role) && ['ongoing', 'finished'].includes(race.value?.status))
 const isChampionshipStage = computed(() => Boolean(race.value?.championship_id))
@@ -427,6 +435,38 @@ function removeManualRow(userId) {
   manualRows.value = manualRows.value.filter((row) => row.user_id !== userId)
 }
 
+function teamMemberName(member) {
+  return participantName({ ...member, user_id: member.id })
+}
+
+function isTeamDriverSelected(userId) {
+  return teamDriverIds.value.includes(Number(userId))
+}
+
+function toggleTeamDriver(userId) {
+  const id = Number(userId)
+  if (isTeamDriverSelected(id)) {
+    teamDriverIds.value = teamDriverIds.value.filter((item) => item !== id)
+  } else {
+    teamDriverIds.value = [...teamDriverIds.value, id]
+  }
+}
+
+function moveTeamDriver(userId, direction) {
+  const id = Number(userId)
+  const index = teamDriverIds.value.indexOf(id)
+  const nextIndex = index + direction
+  if (index < 0 || nextIndex < 0 || nextIndex >= teamDriverIds.value.length) return
+  const next = [...teamDriverIds.value]
+  ;[next[index], next[nextIndex]] = [next[nextIndex], next[index]]
+  teamDriverIds.value = next
+}
+
+function selectedTeamDriverMembers() {
+  const members = new Map((myTeam.value?.members || []).map((member) => [member.id, member]))
+  return teamDriverIds.value.map((id) => members.get(id)).filter(Boolean)
+}
+
 async function load() {
   try {
     const loadedRace = await api(`/races/${route.params.id}`)
@@ -441,6 +481,15 @@ async function load() {
     race.value = loadedRace
     fanVote.value = loadedFanVote
     raceAssets.value = loadedRaceAssets
+    if (state.user?.team_id && loadedRace.is_team_event) {
+      try {
+        myTeam.value = await api(`/teams/${state.user.team_id}`)
+      } catch {
+        myTeam.value = null
+      }
+    } else {
+      myTeam.value = null
+    }
     syncFanVoteSelection()
     if (state.user) {
       penalties.value = await api(`/penalties?race_id=${route.params.id}`)
@@ -448,6 +497,9 @@ async function load() {
     }
     car.value = race.value.allowed_cars?.[0] || ''
     pilotNumber.value = pilotNumberDraft(state.user?.pilot_number)
+    const existingTeamRegistration = race.value.team_registrations?.find((item) => item.team_id === state.user?.team_id)
+    teamRaceNumber.value = pilotNumberDraft(existingTeamRegistration?.race_number ?? state.user?.pilot_number)
+    teamDriverIds.value = existingTeamRegistration?.drivers?.map((driver) => driver.user_id) || myTeam.value?.members?.map((member) => member.id).slice(0, 2) || []
     fillManualRows()
   } catch (err) {
     error.value = err.message
@@ -461,15 +513,53 @@ async function refreshFanVote() {
 }
 
 async function register() {
-  const body = { car_model: car.value || 'TBD' }
-  if (!isChampionshipStage.value) {
-    body.pilot_number = parsePilotNumber(pilotNumber.value)
+  error.value = ''
+  try {
+    if (race.value?.is_team_event) {
+      await registerTeam()
+      return
+    }
+    const body = { car_model: car.value || 'TBD' }
+    if (!isChampionshipStage.value) {
+      body.pilot_number = parsePilotNumber(pilotNumber.value)
+    }
+    race.value = await api(`/races/${race.value.id}/register`, { method: 'POST', body })
+  } catch (err) {
+    error.value = err.message
   }
-  race.value = await api(`/races/${race.value.id}/register`, { method: 'POST', body })
 }
 
 async function unregister() {
-  race.value = await api(`/races/${race.value.id}/register`, { method: 'DELETE' })
+  error.value = ''
+  try {
+    if (race.value?.is_team_event) {
+      await unregisterTeam()
+      return
+    }
+    race.value = await api(`/races/${race.value.id}/register`, { method: 'DELETE' })
+  } catch (err) {
+    error.value = err.message
+  }
+}
+
+async function registerTeam() {
+  if (!canManageTeamRegistration.value) {
+    throw new Error('Зарегистрировать команду может только владелец команды')
+  }
+  const selectedDrivers = teamDriverIds.value.map(Number).filter(Boolean)
+  if (!selectedDrivers.length) throw new Error('Выберите пилотов команды')
+  race.value = await api(`/races/${race.value.id}/team-register`, {
+    method: 'POST',
+    body: {
+      car_model: car.value || 'TBD',
+      race_number: parsePilotNumber(teamRaceNumber.value),
+      drivers: selectedDrivers.map((user_id) => ({ user_id }))
+    }
+  })
+}
+
+async function unregisterTeam() {
+  race.value = await api(`/races/${race.value.id}/team-register`, { method: 'DELETE' })
 }
 
 async function closeRace() {
@@ -750,7 +840,67 @@ watch(visibleParticipants, () => {
       </section>
 
       <section v-if="canShowRegistrationPanel" class="card race-registration-panel">
-        <div v-if="registered" class="section-header">
+        <div v-if="race.is_team_event && teamRegistered" class="section-header">
+          <div>
+            <strong>Команда зарегистрирована</strong>
+            <p class="muted">
+              #{{ formatPilotNumber(myTeamRegistration.race_number) }} · {{ myTeamRegistration.car_model }} ·
+              {{ teamRegistrationDrivers.map((driver) => participantName(driver)).join(' → ') }}
+            </p>
+          </div>
+          <button v-if="canManageTeamRegistration" class="button danger" @click="unregister">{{ t('common.unregister') }}</button>
+        </div>
+        <form v-else-if="race.is_team_event" class="form" @submit.prevent="register">
+          <div v-if="canManageTeamRegistration">
+            <p class="muted">Заявку на командную гонку отправляет только владелец команды. Порядок ниже попадёт в ACC entrylist.</p>
+          </div>
+          <div v-else class="empty-row">Зарегистрировать команду может только владелец команды.</div>
+          <template v-if="canManageTeamRegistration">
+            <label class="field">
+              <span>{{ t('common.car') }}</span>
+              <select v-model="car">
+                <option v-if="!race.allowed_cars?.length" value="">TBD</option>
+                <option v-for="item in race.allowed_cars" :key="item">{{ item }}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Номер машины</span>
+              <input v-model="teamRaceNumber" inputmode="numeric" pattern="[0-9]{3}" minlength="3" maxlength="3" placeholder="000" required />
+            </label>
+            <div class="manual-results-table">
+              <div class="manual-results-head">
+                <span>Пилоты команды</span>
+                <span>В заявке</span>
+                <span>Порядок</span>
+                <span></span>
+              </div>
+              <div v-for="member in myTeam.members" :key="member.id" class="manual-results-row">
+                <span>{{ teamMemberName(member) }}</span>
+                <label class="toggle-field">
+                  <input :checked="isTeamDriverSelected(member.id)" type="checkbox" @change="toggleTeamDriver(member.id)" />
+                  <span>{{ isTeamDriverSelected(member.id) ? 'Да' : 'Нет' }}</span>
+                </label>
+                <span>{{ teamDriverIds.indexOf(member.id) + 1 || '-' }}</span>
+                <span>
+                  <button class="button small" type="button" :disabled="!isTeamDriverSelected(member.id)" @click="moveTeamDriver(member.id, -1)">↑</button>
+                  <button class="button small" type="button" :disabled="!isTeamDriverSelected(member.id)" @click="moveTeamDriver(member.id, 1)">↓</button>
+                </span>
+              </div>
+            </div>
+            <div class="race-participant-list">
+              <article v-for="member in selectedTeamDriverMembers()" :key="`selected-team-driver-${member.id}`" class="race-participant-row">
+                <UserAvatar class="pilot-avatar-slot" :src="member.avatar_url" :color="member.avatar_color" :label="teamMemberName(member)" />
+                <div class="race-participant-main">
+                  <strong>{{ teamMemberName(member) }}</strong>
+                  <span>#{{ formatPilotNumber(member.pilot_number) }}</span>
+                </div>
+              </article>
+            </div>
+            <p v-if="isChampionshipStage" class="muted">Для командного чемпионата заявка подаётся отдельно на этот этап.</p>
+            <button class="button primary" type="submit">{{ t('common.register') }}</button>
+          </template>
+        </form>
+        <div v-else-if="registered" class="section-header">
           <strong>{{ isChampionshipStage ? t('raceDetails.championshipStageRegistered') : t('raceDetails.alreadyRegistered') }}</strong>
           <button class="button danger" @click="unregister">{{ t('common.unregister') }}</button>
         </div>

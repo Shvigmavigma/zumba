@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.db import get_session
@@ -19,6 +20,7 @@ from app.models import (
     Role,
     Team,
     TeamApplicationStatus,
+    TeamRaceRegistration,
     User,
     UserStatus,
 )
@@ -146,6 +148,20 @@ async def attach_registered_pilots(session: AsyncSession, races: list[Race]) -> 
         grouped.setdefault(registration.race_id, []).append(race_registration_payload(registration, user, team_name, team_abbreviation))
     for race in races:
         set_committed_value(race, "registered_pilots", grouped.get(race.id, []))
+
+    team_grouped: dict[int, list[TeamRaceRegistration]] = {race_id: [] for race_id in race_ids}
+    team_rows = (
+        await session.execute(
+            select(TeamRaceRegistration)
+            .options(selectinload(TeamRaceRegistration.team))
+            .where(TeamRaceRegistration.race_id.in_(race_ids))
+            .order_by(TeamRaceRegistration.race_id, TeamRaceRegistration.registered_at, TeamRaceRegistration.id)
+        )
+    ).scalars().all()
+    for registration in team_rows:
+        team_grouped.setdefault(registration.race_id, []).append(registration)
+    for race in races:
+        set_committed_value(race, "team_registrations", team_grouped.get(race.id, []))
 
 
 async def championship_registration_rows(session: AsyncSession, championship_id: int) -> list[tuple[ChampionshipRegistration, User, str | None, str | None]]:
@@ -344,6 +360,7 @@ def create_stage(
         has_qualification=payload.has_qualification if payload else True,
         scoring_system=payload.scoring_system if payload else championship.scoring_system,
         pole_bonus_enabled=payload.pole_bonus_enabled if payload else championship.pole_bonus_enabled,
+        is_team_event=championship.is_team_event if payload is None or payload.is_team_event is None else payload.is_team_event,
         championship_id=championship.id,
         championship_round=round_number,
         creator_id=creator_id,
@@ -371,7 +388,6 @@ async def sync_championship_settings_to_stages(session: AsyncSession, championsh
             stage.lmu_results_at = stage.lmu_results_at or stage.datetime_end
         else:
             stage.lmu_results_at = None
-
     registrations = (
         await session.scalars(
             select(ChampionshipRegistration).where(
@@ -445,6 +461,7 @@ async def serialize_championship(session: AsyncSession, championship: Championsh
         "car_change_allowed": championship.car_change_allowed,
         "scoring_system": championship.scoring_system,
         "pole_bonus_enabled": championship.pole_bonus_enabled,
+        "is_team_event": championship.is_team_event,
         "is_published": championship.is_published,
         "creator_id": championship.creator_id,
         "status": current_status,
@@ -453,6 +470,7 @@ async def serialize_championship(session: AsyncSession, championship: Championsh
             and current_user.status == UserStatus.active
             and current_status == "registration_open"
             and my_registration is None
+            and not championship.is_team_event
         ),
         "my_registration_status": my_registration.status if my_registration else None,
         "participant_count": participant_count,
@@ -536,6 +554,7 @@ async def create_championship(
         default_car=None,
         scoring_system=payload.scoring_system,
         pole_bonus_enabled=payload.pole_bonus_enabled,
+        is_team_event=payload.is_team_event,
         is_published=payload.is_published,
         creator_id=user.id,
     )
@@ -680,6 +699,8 @@ async def update_championship_stage(
         stage.scoring_system = data["scoring_system"]
     if "pole_bonus_enabled" in data:
         stage.pole_bonus_enabled = data["pole_bonus_enabled"]
+    if "is_team_event" in data:
+        stage.is_team_event = data["is_team_event"]
     await session.commit()
     await session.refresh(championship)
     return await serialize_championship(session, championship, user)

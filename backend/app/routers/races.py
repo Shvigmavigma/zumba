@@ -5,18 +5,19 @@ from sqlalchemy import delete
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.db import get_session
 from app.deps import require_admin
 from app.deps import get_optional_user, require_moder_plus, require_pilot_plus
 from app.models import AppSetting, RaceFanVote
-from app.models import Championship, ChampionshipRegistration, RACE_GAMES, Penalty, Race, RaceRegistration, RaceStatus, Role, Setup, Team, TeamApplicationStatus, User
+from app.models import Championship, ChampionshipRegistration, RACE_GAMES, Penalty, Race, RaceRegistration, RaceStatus, Role, Setup, Team, TeamApplicationStatus, TeamRaceRegistration, User, UserStatus
 from app.race_assets import normalize_race_create_assets, normalize_race_update_assets
 from app.race_videos import remove_race_video_file, save_race_video_file
 from app.rate_limit import limiter
 from app.schemas import FanVoteCast, FanVoteConfigRead, FanVoteConfigUpdate, FanVoteRead, FanVoteSetup
-from app.schemas import AccResultsUpload, ManualResultsUpload, RaceCreate, RaceManageRead, RaceRead, RaceRegisterRequest, RaceUpdate, ResultsUpload
+from app.schemas import AccResultsUpload, ManualResultsUpload, RaceCreate, RaceManageRead, RaceRead, RaceRegisterRequest, RaceUpdate, ResultsUpload, TeamRaceRegisterRequest
 from app.services import apply_sr_penalties, recalculate_all_ratings, recalculate_race_results, restore_race_sr_bonus, restore_sr_penalty, result_rows
 
 
@@ -335,6 +336,24 @@ def registration_to_json(registration: RaceRegistration, user: User | None = Non
     return data
 
 
+def team_registration_to_json(registration: TeamRaceRegistration, team: Team | None = None) -> dict:
+    return {
+        "id": registration.id,
+        "race_id": registration.race_id,
+        "team_id": registration.team_id,
+        "team_name": team.name if team else None,
+        "team_abbreviation": team.abbreviation if team else None,
+        "team_avatar_color": team.avatar_color if team else None,
+        "team_avatar_url": team.avatar_url if team else None,
+        "car_model": registration.car_model,
+        "race_number": registration.race_number,
+        "drivers": registration.drivers or [],
+        "registered_by": registration.registered_by,
+        "registered_at": registration.registered_at.isoformat(),
+        "updated_at": registration.updated_at.isoformat(),
+    }
+
+
 def normalize_acc_player_id(value: str | None) -> str:
     raw = str(value or "").strip()
     if raw.upper().startswith("S") and raw[1:].isdigit():
@@ -405,6 +424,38 @@ def acc_entrylist_entry(registration: RaceRegistration, user: User, car_model: s
     }
 
 
+def acc_team_entrylist_entry(registration: TeamRaceRegistration, team: Team, drivers: list[dict]) -> dict:
+    resolved_car_model = (registration.car_model or "").strip()
+    return {
+        "teamName": f"{team.name} - {team.abbreviation}",
+        "raceNumber": registration.race_number,
+        "defaultGridPosition": -1,
+        "ballastKg": 0,
+        "restrictor": 0,
+        "isServerAdmin": 0,
+        "forcedCarModel": acc_forced_car_model(resolved_car_model),
+        "overrideCarModelForCustomCar": 0,
+        "overrideDriverInfo": 1,
+        "customCar": "",
+        "drivers": [
+            {
+                "driverCategory": 0,
+                "firstName": driver.get("first_name"),
+                "lastName": driver.get("last_name"),
+                "playerID": acc_player_id(driver.get("steam_id")),
+                "shortName": driver.get("short_name") or short_driver_name_from_text(driver.get("nickname") or driver.get("login"), registration.race_number),
+                "nationality": 0,
+            }
+            for driver in drivers
+        ],
+    }
+
+
+def short_driver_name_from_text(value: str | None, fallback_number: int | None = None) -> str:
+    letters = "".join(char for char in str(value or "").upper() if char.isalnum())
+    return (letters[:3] or f"P{fallback_number or 0}")[:3]
+
+
 async def get_registration_rows(session: AsyncSession, race_id: int) -> list[tuple[RaceRegistration, User]]:
     return list(
         (
@@ -418,8 +469,27 @@ async def get_registration_rows(session: AsyncSession, race_id: int) -> list[tup
     )
 
 
+async def get_team_registration_rows(session: AsyncSession, race_id: int) -> list[tuple[TeamRaceRegistration, Team]]:
+    return list(
+        (
+            await session.execute(
+                select(TeamRaceRegistration, Team)
+                .join(Team, Team.id == TeamRaceRegistration.team_id)
+                .where(TeamRaceRegistration.race_id == race_id)
+                .order_by(TeamRaceRegistration.registered_at, TeamRaceRegistration.id)
+            )
+        ).all()
+    )
+
+
 async def build_acc_entrylist(session: AsyncSession, race_id: int) -> dict:
     race = await session.get(Race, race_id)
+    if race and race.is_team_event:
+        rows = await get_team_registration_rows(session, race_id)
+        return {
+            "entries": [acc_team_entrylist_entry(registration, team, registration.drivers or []) for registration, team in rows],
+            "forceEntryList": 0,
+        }
     rows = await get_registration_rows(session, race_id)
     championship_cars: dict[int, str] = {}
     default_car = ""
@@ -577,6 +647,36 @@ def ensure_acc_lines_are_registered(session_name: str, payload: dict, users_by_s
         preview = "; ".join(missing[:8])
         suffix = f"; +{len(missing) - 8} more" if len(missing) > 8 else ""
         raise HTTPException(status_code=400, detail=f"ACC {session_name} JSON contains pilots who are not registered for this race: {preview}{suffix}")
+
+
+def team_driver_lookup_maps(rows: list[tuple[TeamRaceRegistration, Team]]) -> tuple[dict[str, dict], dict[int, TeamRaceRegistration]]:
+    by_steam: dict[str, dict] = {}
+    by_number: dict[int, TeamRaceRegistration] = {}
+    for registration, team in rows:
+        by_number[registration.race_number] = registration
+        for driver in registration.drivers or []:
+            normalized = normalize_acc_player_id(driver.get("steam_id"))
+            if normalized:
+                by_steam[normalized] = {**driver, "team_id": team.id, "team_name": team.name, "team_abbreviation": team.abbreviation}
+    return by_steam, by_number
+
+
+def acc_line_team_driver(line: dict, drivers_by_steam: dict[str, dict]) -> dict | None:
+    player_id = acc_line_player_id(line)
+    return drivers_by_steam.get(player_id) if player_id else None
+
+
+def ensure_acc_team_lines_are_registered(session_name: str, payload: dict, drivers_by_steam: dict[str, dict], teams_by_number: dict[int, TeamRaceRegistration]) -> None:
+    missing: list[str] = []
+    for position, line in enumerate(payload["sessionResult"]["leaderBoardLines"], start=1):
+        driver = acc_line_team_driver(line, drivers_by_steam)
+        race_number = acc_line_race_number(line)
+        if driver is None and (race_number is None or race_number not in teams_by_number):
+            missing.append(acc_line_label(line, position))
+    if missing:
+        preview = "; ".join(missing[:8])
+        suffix = f"; +{len(missing) - 8} more" if len(missing) > 8 else ""
+        raise HTTPException(status_code=400, detail=f"ACC {session_name} JSON contains teams or drivers who are not registered for this race: {preview}{suffix}")
 
 
 async def build_lmu_results_payload(session: AsyncSession, race: Race, qualification_results: dict | None, race_results: dict) -> dict:
@@ -739,6 +839,106 @@ def build_acc_results_payload(race: Race, qualification_results: dict | None, ra
     }
 
 
+def build_acc_team_results_payload(race: Race, qualification_results: dict | None, race_results: dict, rows: list[tuple[TeamRaceRegistration, Team]]) -> dict:
+    if race.has_qualification and qualification_results is None:
+        raise HTTPException(status_code=400, detail="Qualification results JSON is required for this race")
+    if qualification_results is not None:
+        validate_acc_session(qualification_results, "Q")
+    validate_acc_session(race_results, "R")
+    drivers_by_steam, teams_by_number = team_driver_lookup_maps(rows)
+    if qualification_results is not None:
+        ensure_acc_team_lines_are_registered("qualification", qualification_results, drivers_by_steam, teams_by_number)
+    ensure_acc_team_lines_are_registered("race", race_results, drivers_by_steam, teams_by_number)
+    qualification_by_player = acc_best_lap_map(qualification_results)
+
+    result_rows: list[dict] = []
+    matched_team_ids: set[int] = set()
+    for raw_position, line in enumerate(race_results["sessionResult"]["leaderBoardLines"], start=1):
+        player_id = acc_line_player_id(line)
+        race_number = acc_line_race_number(line)
+        team_registration = teams_by_number.get(race_number) if race_number is not None else None
+        driver = acc_line_team_driver(line, drivers_by_steam)
+        if team_registration is None and driver is not None:
+            team_registration = next((registration for registration, team in rows if team.id == driver.get("team_id")), None)
+        team = next((team for registration, team in rows if registration.id == getattr(team_registration, "id", None)), None)
+        timing = line.get("timing") or {}
+        finish_ms = timing.get("totalTime")
+        driver_total_times = line.get("driverTotalTimes") if isinstance(line.get("driverTotalTimes"), list) else []
+        qualification = qualification_by_player.get(player_id, {})
+        if team_registration is not None:
+            matched_team_ids.add(team_registration.team_id)
+        result_rows.append(
+            {
+                "user_id": driver.get("user_id") if driver else None,
+                "login": driver.get("login") if driver else None,
+                "nickname": driver.get("nickname") if driver else None,
+                "first_name": driver.get("first_name") if driver else "",
+                "last_name": driver.get("last_name") if driver else "",
+                "pilot_number": driver.get("pilot_number") if driver else None,
+                "driver_name": acc_line_name(line),
+                "player_id": acc_player_id(player_id),
+                "race_number": race_number if race_number is not None else (team_registration.race_number if team_registration else None),
+                "team_id": team_registration.team_id if team_registration else driver.get("team_id") if driver else None,
+                "team_name": team.name if team else driver.get("team_name") if driver else None,
+                "team_abbreviation": team.abbreviation if team else driver.get("team_abbreviation") if driver else None,
+                "car_model": line.get("car", {}).get("carModel"),
+                "finish_ms": int(finish_ms) if isinstance(finish_ms, (int, float)) else None,
+                "driver_total_time_ms": int(driver_total_times[0]) if driver_total_times else None,
+                "lap_count": int(timing.get("lapCount") or 0),
+                "best_lap_ms": timing.get("bestLap"),
+                "qualification_position": qualification.get("qualification_position"),
+                "qualification_best_lap_ms": qualification.get("qualification_best_lap_ms"),
+                "raw_position": raw_position,
+                "source": "acc_team",
+            }
+        )
+
+    for registration, team in rows:
+        if team.id not in matched_team_ids:
+            lead_driver = next(iter(registration.drivers or []), {})
+            result_rows.append(
+                {
+                    "user_id": lead_driver.get("user_id"),
+                    "login": lead_driver.get("login"),
+                    "nickname": lead_driver.get("nickname"),
+                    "driver_name": lead_driver.get("nickname") or lead_driver.get("login") or team.name,
+                    "player_id": acc_player_id(lead_driver.get("steam_id")),
+                    "race_number": registration.race_number,
+                    "team_id": team.id,
+                    "team_name": team.name,
+                    "team_abbreviation": team.abbreviation,
+                    "car_model": registration.car_model,
+                    "finish_ms": None,
+                    "lap_count": 0,
+                    "best_lap_ms": None,
+                    "qualification_position": None,
+                    "qualification_best_lap_ms": None,
+                    "raw_position": None,
+                    "source": "acc_team",
+                    "status": "missing",
+                }
+            )
+
+    return {
+        "format": "acc_team",
+        "track": race_results.get("trackName") or race.track,
+        "qualification_enabled": race.has_qualification,
+        "qualification": (
+            {
+                "session_type": qualification_results.get("sessionType"),
+                "raw": qualification_results,
+            }
+            if qualification_results is not None
+            else None
+        ),
+        "race": {
+            "session_type": race_results.get("sessionType"),
+            "raw": race_results,
+        },
+        "rows": result_rows,
+    }
+
+
 def manual_result_pilot_data(user: User, team_name: str | None = None, team_abbreviation: str | None = None) -> dict:
     return {
         "user_id": user.id,
@@ -869,6 +1069,49 @@ async def ensure_race_pilot_number_available(session: AsyncSession, race_id: int
         raise HTTPException(status_code=409, detail="Pilot number is already taken in this race")
 
 
+async def ensure_team_race_number_available(session: AsyncSession, race_id: int, race_number: int, exclude_registration_id: int | None = None) -> None:
+    stmt = select(TeamRaceRegistration.id).where(
+        TeamRaceRegistration.race_id == race_id,
+        TeamRaceRegistration.race_number == race_number,
+    )
+    if exclude_registration_id is not None:
+        stmt = stmt.where(TeamRaceRegistration.id != exclude_registration_id)
+    if await session.scalar(stmt):
+        raise HTTPException(status_code=409, detail="Race number is already taken in this race")
+
+
+async def build_team_driver_payloads(session: AsyncSession, team: Team, driver_ids: list[int]) -> list[dict]:
+    rows = (
+        await session.scalars(
+            select(User)
+            .where(User.id.in_(driver_ids), User.team_id == team.id, User.status == UserStatus.active)
+        )
+    ).all()
+    users_by_id = {user.id: user for user in rows}
+    missing = [user_id for user_id in driver_ids if user_id not in users_by_id]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Drivers must be active members of your team: {', '.join(map(str, missing))}")
+    return [
+        {
+            "user_id": user.id,
+            "login": user.login,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "nickname": user.nickname,
+            "pilot_number": user.pilot_number,
+            "steam_id": user.steam_id,
+            "country": user.country,
+            "short_name": short_driver_name(user, user.pilot_number),
+            "avatar_color": user.avatar_color,
+            "avatar_url": user.avatar_url,
+            "rating": int(round(float(user.rating))),
+            "game_ratings": user.game_ratings or {},
+            "sr": float(user.sr),
+        }
+        for user in (users_by_id[user_id] for user_id in driver_ids)
+    ]
+
+
 async def attach_registered_pilots(session: AsyncSession, races: list[Race]) -> None:
     race_ids = [race.id for race in races]
     if not race_ids:
@@ -888,6 +1131,20 @@ async def attach_registered_pilots(session: AsyncSession, races: list[Race]) -> 
         grouped.setdefault(registration.race_id, []).append(registration_to_json(registration, user, team_name, team_abbreviation))
     for race in races:
         set_committed_value(race, "registered_pilots", grouped.get(race.id, []))
+
+    team_rows = (
+        await session.execute(
+            select(TeamRaceRegistration)
+            .options(selectinload(TeamRaceRegistration.team))
+            .where(TeamRaceRegistration.race_id.in_(race_ids))
+            .order_by(TeamRaceRegistration.race_id, TeamRaceRegistration.registered_at, TeamRaceRegistration.id)
+        )
+    ).scalars().all()
+    grouped_team_rows: dict[int, list[TeamRaceRegistration]] = {race_id: [] for race_id in race_ids}
+    for registration in team_rows:
+        grouped_team_rows.setdefault(registration.race_id, []).append(registration)
+    for race in races:
+        set_committed_value(race, "team_registrations", grouped_team_rows.get(race.id, []))
 
 
 @router.get("", response_model=list[RaceRead])
@@ -951,11 +1208,22 @@ async def manage_races(
     session: AsyncSession = Depends(get_session),
 ):
     limit = min(limit, 1000)
-    registered_count = func.count(RaceRegistration.id).label("registered_count")
+    solo_registered_count = (
+        select(func.count(RaceRegistration.id))
+        .where(RaceRegistration.race_id == Race.id)
+        .correlate(Race)
+        .scalar_subquery()
+        .label("registered_count")
+    )
+    team_registered_count = (
+        select(func.count(TeamRaceRegistration.id))
+        .where(TeamRaceRegistration.race_id == Race.id)
+        .correlate(Race)
+        .scalar_subquery()
+        .label("team_registered_count")
+    )
     stmt = (
-        select(Race, registered_count)
-        .outerjoin(RaceRegistration, RaceRegistration.race_id == Race.id)
-        .group_by(Race.id)
+        select(Race, solo_registered_count, team_registered_count)
     )
     if status_filter == "not_finished":
         stmt = stmt.where(Race.status != RaceStatus.finished)
@@ -977,7 +1245,7 @@ async def manage_races(
     rows = list((await session.execute(stmt)).all())
 
     changed = False
-    for race, _ in rows:
+    for race, _, _ in rows:
         before = race.status
         update_time_based_status(race)
         changed = changed or before != race.status
@@ -995,7 +1263,7 @@ async def manage_races(
             "datetime_start": race.datetime_start,
             "datetime_end": race.datetime_end,
             "max_pilots": race.max_pilots,
-            "registered_count": int(count or 0),
+            "registered_count": int((team_count if race.is_team_event else count) or 0),
             "car_class": race.car_class,
             "track": race.track,
             "track_id": race.track_id,
@@ -1003,6 +1271,7 @@ async def manage_races(
             "has_qualification": race.has_qualification,
             "scoring_system": race.scoring_system,
             "pole_bonus_enabled": race.pole_bonus_enabled,
+            "is_team_event": race.is_team_event,
             "rating_applied": race.rating_applied,
             "championship_id": race.championship_id,
             "championship_round": race.championship_round,
@@ -1011,7 +1280,7 @@ async def manage_races(
             "created_at": race.created_at,
             "updated_at": race.updated_at,
         }
-        for race, count in rows
+        for race, count, team_count in rows
     ]
 
 
@@ -1291,6 +1560,8 @@ async def register_for_race(
     if race is None:
         raise HTTPException(status_code=404, detail="Race not found")
     update_time_based_status(race)
+    if race.is_team_event:
+        raise HTTPException(status_code=400, detail="Use team registration for this race")
     registration_car = payload.car_model
     registration_number = payload.pilot_number
     if race.championship_id is not None:
@@ -1349,6 +1620,74 @@ async def register_for_race(
     return race
 
 
+@router.post("/{race_id}/team-register", response_model=RaceRead)
+@limiter.limit("120/minute")
+async def register_team_for_race(
+    race_id: int,
+    request: Request,
+    payload: TeamRaceRegisterRequest,
+    user: User = Depends(require_pilot_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(select(Race).where(Race.id == race_id).with_for_update())
+    race = result.scalar_one_or_none()
+    if race is None:
+        raise HTTPException(status_code=404, detail="Race not found")
+    update_time_based_status(race)
+    if not race.is_team_event:
+        raise HTTPException(status_code=400, detail="This race uses pilot registration")
+    if race.championship_id is not None:
+        if race.status != RaceStatus.not_started:
+            raise HTTPException(status_code=400, detail="Championship stage registration is closed")
+    elif race.status != RaceStatus.registration_open:
+        raise HTTPException(status_code=400, detail="Registration is not open")
+    if user.team_id is None:
+        raise HTTPException(status_code=403, detail="Create or join a team first")
+    team = await session.get(Team, user.team_id)
+    if team is None or team.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Only the team owner can register the team")
+    car_model = payload.car_model.strip()
+    if race.allowed_cars and car_model not in race.allowed_cars:
+        raise HTTPException(status_code=400, detail="Car is not allowed")
+    driver_ids = [driver.user_id for driver in payload.drivers]
+    drivers = await build_team_driver_payloads(session, team, driver_ids)
+    existing = await session.scalar(
+        select(TeamRaceRegistration).where(
+            TeamRaceRegistration.race_id == race.id,
+            TeamRaceRegistration.team_id == team.id,
+        )
+    )
+    await ensure_team_race_number_available(session, race.id, payload.race_number, existing.id if existing else None)
+    if existing is None:
+        registered_count = await session.scalar(select(func.count()).select_from(TeamRaceRegistration).where(TeamRaceRegistration.race_id == race.id))
+        if (registered_count or 0) >= race.max_pilots:
+            raise HTTPException(status_code=409, detail="Race is full")
+        session.add(
+            TeamRaceRegistration(
+                race_id=race.id,
+                team_id=team.id,
+                car_model=car_model,
+                race_number=payload.race_number,
+                drivers=drivers,
+                registered_by=user.id,
+                registered_at=datetime.now(timezone.utc),
+            )
+        )
+    else:
+        existing.car_model = car_model
+        existing.race_number = payload.race_number
+        existing.drivers = drivers
+        existing.registered_by = user.id
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="Team or race number is already registered") from exc
+    await session.refresh(race)
+    await attach_registered_pilots(session, [race])
+    return race
+
+
 @router.delete("/{race_id}/register", response_model=RaceRead)
 @limiter.limit("600/minute")
 async def unregister_from_race(
@@ -1362,6 +1701,8 @@ async def unregister_from_race(
     if race is None:
         raise HTTPException(status_code=404, detail="Race not found")
     update_time_based_status(race)
+    if race.is_team_event:
+        raise HTTPException(status_code=400, detail="Use team registration for this race")
     if race.championship_id is not None:
         if race.status != RaceStatus.not_started:
             raise HTTPException(status_code=400, detail="Championship stage registration is closed")
@@ -1390,6 +1731,45 @@ async def unregister_from_race(
     return race
 
 
+@router.delete("/{race_id}/team-register", response_model=RaceRead)
+@limiter.limit("120/minute")
+async def unregister_team_from_race(
+    race_id: int,
+    request: Request,
+    user: User = Depends(require_pilot_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(select(Race).where(Race.id == race_id).with_for_update())
+    race = result.scalar_one_or_none()
+    if race is None:
+        raise HTTPException(status_code=404, detail="Race not found")
+    update_time_based_status(race)
+    if not race.is_team_event:
+        raise HTTPException(status_code=400, detail="This race uses pilot registration")
+    if race.championship_id is not None:
+        if race.status != RaceStatus.not_started:
+            raise HTTPException(status_code=400, detail="Championship stage registration is closed")
+    elif race.status != RaceStatus.registration_open:
+        raise HTTPException(status_code=400, detail="Registration is not open")
+    if user.team_id is None:
+        raise HTTPException(status_code=403, detail="Create or join a team first")
+    team = await session.get(Team, user.team_id)
+    if team is None or team.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Only the team owner can unregister the team")
+    registration = await session.scalar(
+        select(TeamRaceRegistration).where(
+            TeamRaceRegistration.race_id == race.id,
+            TeamRaceRegistration.team_id == team.id,
+        )
+    )
+    if registration is not None:
+        await session.delete(registration)
+    await session.commit()
+    await session.refresh(race)
+    await attach_registered_pilots(session, [race])
+    return race
+
+
 @router.get("/{race_id}/registered-pilots")
 @limiter.limit("120/minute")
 async def export_registered_pilots(
@@ -1402,6 +1782,9 @@ async def export_registered_pilots(
     ensure_can_manage_race(user, race, "export pilots from")
     if race.game == "ACC":
         return await build_acc_entrylist(session, race.id)
+    if race.is_team_event:
+        rows = await get_team_registration_rows(session, race.id)
+        return {"race_id": race.id, "team_registrations": [team_registration_to_json(registration, team) for registration, team in rows]}
     return {"race_id": race.id, "registered_pilots": await get_registered_pilots(session, race.id)}
 
 
@@ -1448,9 +1831,14 @@ async def upload_acc_results(
     if race.game != "ACC":
         raise HTTPException(status_code=400, detail="Simulator result JSON can only be uploaded for ACC races")
     registration_rows = await get_registration_rows(session, race.id)
+    team_registration_rows = await get_team_registration_rows(session, race.id) if race.is_team_event else []
     if race.status == RaceStatus.finished:
         await restore_race_sr_bonus(session, race)
-    race.results = build_acc_results_payload(race, payload.qualification_results, payload.race_results, registration_rows)
+    race.results = (
+        build_acc_team_results_payload(race, payload.qualification_results, payload.race_results, team_registration_rows)
+        if race.is_team_event
+        else build_acc_results_payload(race, payload.qualification_results, payload.race_results, registration_rows)
+    )
     race.status = RaceStatus.finished
     race.is_passed = True
     await recalculate_race_results(session, race)
