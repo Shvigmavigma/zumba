@@ -102,7 +102,11 @@ async function exportRegistrations(race) {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = race.game === 'ACC' ? `race-${race.id}-entrylist.json` : `race-${race.id}-registered-pilots.json`
+    link.download = race.game === 'ACC'
+      ? `race-${race.id}-entrylist.json`
+      : race.is_team_event
+      ? `race-${race.id}-team-registrations.json`
+      : `race-${race.id}-registered-pilots.json`
     link.click()
     URL.revokeObjectURL(url)
   } catch (err) {
@@ -175,6 +179,7 @@ watch(page, load)
                 <RouterLink v-else :to="raceOpenHref(race)">{{ race.name }}</RouterLink>
                 <p class="muted">
                   {{ [gameLabel(t, race.game), race.track, race.car_class, race.game !== 'LMU' ? (race.has_qualification ? t('raceDetails.withQualification') : t('raceDetails.withoutQualification')) : ''].filter(Boolean).join(' - ') }}
+                  <template v-if="race.is_team_event"> - Командная</template>
                 </p>
                 <p>{{ race.description }}</p>
               </div>

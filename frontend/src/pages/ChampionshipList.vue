@@ -44,7 +44,8 @@ const defaultStage = () => ({
   lmu_results_at: '',
   has_qualification: true,
   scoring_system: 'fia',
-  pole_bonus_enabled: false
+  pole_bonus_enabled: false,
+  is_team_event: null
 })
 const stageForm = ref(defaultStage())
 const stageEditForm = ref(defaultStage())
@@ -64,6 +65,7 @@ const defaultForm = () => ({
   car_change_allowed: false,
   scoring_system: 'fia',
   pole_bonus_enabled: false,
+  is_team_event: false,
   is_published: false,
   stages: []
 })
@@ -141,7 +143,7 @@ function toLocalInput(value) {
 }
 
 function addStage() {
-  form.value.stages.push(defaultStage())
+  form.value.stages.push({ ...defaultStage(), is_team_event: form.value.is_team_event })
 }
 
 function removeStage(index) {
@@ -179,7 +181,7 @@ function resetForm() {
 }
 
 function resetStageForm() {
-  stageForm.value = defaultStage()
+  stageForm.value = { ...defaultStage(), is_team_event: Boolean(selected.value?.is_team_event) }
 }
 
 function resetStageEditForm() {
@@ -232,7 +234,11 @@ function championshipUserStatus(championship) {
 }
 
 function isStageRegistered(stage) {
-  return Boolean(state.user && stage.registered_pilots?.some((item) => item.user_id === state.user.id))
+  if (!state.user) return false
+  if (stage.is_team_event) {
+    return Boolean(state.user.team_id && stage.team_registrations?.some((item) => item.team_id === state.user.team_id))
+  }
+  return Boolean(stage.registered_pilots?.some((item) => item.user_id === state.user.id))
 }
 
 function championshipCar(userId) {
@@ -377,6 +383,7 @@ function startEditChampionship() {
     car_change_allowed: Boolean(selected.value.car_change_allowed),
     scoring_system: selected.value.scoring_system || 'fia',
     pole_bonus_enabled: Boolean(selected.value.pole_bonus_enabled),
+    is_team_event: Boolean(selected.value.is_team_event),
     is_published: Boolean(selected.value.is_published),
     stages: []
   }
@@ -566,7 +573,8 @@ function startEditStage(stage) {
     lmu_results_at: stage.lmu_results_at ? toLocalInput(stage.lmu_results_at) : '',
     has_qualification: Boolean(stage.has_qualification),
     scoring_system: stage.scoring_system || 'fia',
-    pole_bonus_enabled: Boolean(stage.pole_bonus_enabled)
+    pole_bonus_enabled: Boolean(stage.pole_bonus_enabled),
+    is_team_event: Boolean(stage.is_team_event)
   }
 }
 
@@ -631,6 +639,11 @@ onMounted(async () => {
 })
 
 watch(filter, loadChampionships)
+watch(() => form.value.is_team_event, (value) => {
+  form.value.stages.forEach((stage) => {
+    stage.is_team_event = value
+  })
+})
 watch(selected, () => {
   standingsPage.value = 1
   const drafts = {}
@@ -731,6 +744,7 @@ watch(standings, () => {
       <div class="form-row">
         <div class="championship-switches">
           <label class="toggle-field"><input v-model="form.car_change_allowed" type="checkbox" /><span>{{ t('championships.carCanChange') }}</span></label>
+          <label class="toggle-field"><input v-model="form.is_team_event" type="checkbox" /><span>Командный чемпионат</span></label>
         </div>
       </div>
 
@@ -759,6 +773,7 @@ watch(standings, () => {
             </select>
           </label>
           <label v-if="form.game !== 'LMU'" class="toggle-field"><input v-model="stage.has_qualification" type="checkbox" /><span>{{ t('fields.qualification') }}</span></label>
+          <label v-if="form.game !== 'LMU'" class="toggle-field"><input v-model="stage.is_team_event" type="checkbox" /><span>Командный этап</span></label>
           <label class="field">
             <span>{{ t('championships.stageScoring') }}</span>
             <select v-model="stage.scoring_system">
@@ -793,10 +808,10 @@ watch(standings, () => {
             @click="selectedId = championship.id"
           >
             <span class="championship-list-icon"><Flag :size="18" /></span>
-            <span>
-              <strong>{{ championship.name }}</strong>
-              <small>{{ championship.game }} - {{ championship.classes.join(', ') }}</small>
-            </span>
+              <span>
+                <strong>{{ championship.name }}</strong>
+                <small>{{ [championship.game, championship.is_team_event ? 'Командный' : '', championship.classes.join(', ')].filter(Boolean).join(' - ') }}</small>
+              </span>
             <span class="championship-card-badges">
               <span v-if="championshipUserStatus(championship)" class="status-badge championship-user-badge">{{ championshipUserStatus(championship) }}</span>
               <span class="status-badge" :class="statusClass(championship.status)">{{ statusText(championship.status) }}</span>
@@ -814,6 +829,7 @@ watch(standings, () => {
           <div>
             <div class="championship-eyebrow">
               <span>{{ selected.game }}</span>
+              <span v-if="selected.is_team_event">Командный</span>
               <span>{{ stageCount(selected.stages.length) }}</span>
             </div>
             <h2>{{ selected.name }}</h2>
@@ -917,6 +933,7 @@ watch(standings, () => {
           <div class="form-row">
             <div class="championship-switches">
               <label class="toggle-field"><input v-model="editForm.car_change_allowed" type="checkbox" /><span>{{ t('championships.carCanChange') }}</span></label>
+              <label class="toggle-field"><input v-model="editForm.is_team_event" type="checkbox" /><span>Командный чемпионат</span></label>
             </div>
           </div>
 
@@ -954,6 +971,7 @@ watch(standings, () => {
               </select>
             </label>
             <label v-if="selected.game !== 'LMU'" class="toggle-field"><input v-model="stageForm.has_qualification" type="checkbox" /><span>{{ t('fields.qualification') }}</span></label>
+            <label v-if="selected.game !== 'LMU'" class="toggle-field"><input v-model="stageForm.is_team_event" type="checkbox" /><span>Командный этап</span></label>
             <label class="field">
               <span>{{ t('championships.stageScoring') }}</span>
               <select v-model="stageForm.scoring_system">
@@ -974,6 +992,7 @@ watch(standings, () => {
                   <small>{{ [dateLabel(stage.datetime_start), stage.track, stage.car_class].filter(Boolean).join(' - ') }}</small>
                   <small class="championship-stage-scoring">
                     {{ scoringText(stage.scoring_system) }}<template v-if="stage.pole_bonus_enabled"> + {{ t('championships.poleShort') }}</template>
+                    <template v-if="stage.is_team_event"> - Командный</template>
                   </small>
                 </span>
                 <span class="championship-stage-statuses">
@@ -1005,6 +1024,7 @@ watch(standings, () => {
                   </select>
                 </label>
                 <label v-if="selected.game !== 'LMU'" class="toggle-field"><input v-model="stageEditForm.has_qualification" type="checkbox" /><span>{{ t('fields.qualification') }}</span></label>
+                <label v-if="selected.game !== 'LMU'" class="toggle-field"><input v-model="stageEditForm.is_team_event" type="checkbox" /><span>Командный этап</span></label>
                 <label class="field">
                   <span>{{ t('championships.stageScoring') }}</span>
                   <select v-model="stageEditForm.scoring_system">

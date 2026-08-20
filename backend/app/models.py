@@ -246,6 +246,7 @@ class Championship(Base):
         server_default=ChampionshipScoringSystem.fia.value,
     )
     pole_bonus_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_team_event: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", index=True)
     creator_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
@@ -312,6 +313,7 @@ class Race(Base):
         server_default=ChampionshipScoringSystem.fia.value,
     )
     pole_bonus_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_team_event: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     championship_id: Mapped[int | None] = mapped_column(ForeignKey("championships.id", ondelete="CASCADE"), index=True)
     championship_round: Mapped[int | None] = mapped_column(Integer)
     creator_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
@@ -326,6 +328,45 @@ class Race(Base):
     penalties: Mapped[list["Penalty"]] = relationship(back_populates="race", cascade="all, delete-orphan")
     appeals: Mapped[list["Appeal"]] = relationship(back_populates="race", cascade="all, delete-orphan")
     fan_votes: Mapped[list["RaceFanVote"]] = relationship(back_populates="race", cascade="all, delete-orphan")
+    team_registrations: Mapped[list["TeamRaceRegistration"]] = relationship(back_populates="race", cascade="all, delete-orphan")
+
+
+class TeamRaceRegistration(Base):
+    __tablename__ = "team_race_registrations"
+    __table_args__ = (
+        UniqueConstraint("race_id", "team_id", name="uq_team_race_registration_race_team"),
+        UniqueConstraint("race_id", "race_number", name="uq_team_race_registration_race_number"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    race_id: Mapped[int] = mapped_column(ForeignKey("races.id", ondelete="CASCADE"), index=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    car_model: Mapped[str] = mapped_column(String(80))
+    race_number: Mapped[int] = mapped_column(Integer)
+    drivers: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    registered_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    race: Mapped[Race] = relationship(back_populates="team_registrations")
+    team: Mapped[Team] = relationship()
+    registrar: Mapped[User | None] = relationship(foreign_keys=[registered_by])
+
+    @property
+    def team_name(self) -> str | None:
+        return self.team.name if self.team else None
+
+    @property
+    def team_abbreviation(self) -> str | None:
+        return self.team.abbreviation if self.team else None
+
+    @property
+    def team_avatar_color(self) -> str | None:
+        return self.team.avatar_color if self.team else None
+
+    @property
+    def team_avatar_url(self) -> str | None:
+        return self.team.avatar_url if self.team else None
 
 
 class RaceRegistration(Base):
@@ -490,6 +531,8 @@ Index("ix_races_registered_pilots_gin", Race.registered_pilots, postgresql_using
 Index("ix_races_mods_pack_gin", Race.mods_pack, postgresql_using="gin")
 Index("ix_race_registrations_race_registered_at", RaceRegistration.race_id, RaceRegistration.registered_at)
 Index("ix_race_registrations_user_registered_at", RaceRegistration.user_id, RaceRegistration.registered_at)
+Index("ix_team_race_registrations_race_registered_at", TeamRaceRegistration.race_id, TeamRaceRegistration.registered_at)
+Index("ix_team_race_registrations_team_registered_at", TeamRaceRegistration.team_id, TeamRaceRegistration.registered_at)
 Index(
     "uq_championship_registration_pilot_number",
     ChampionshipRegistration.championship_id,

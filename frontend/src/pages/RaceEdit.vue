@@ -28,6 +28,7 @@ const form = ref({
   allowed_cars: [],
   game: 'ACC',
   has_qualification: true,
+  is_team_event: false,
   is_official: false
 })
 const modsText = ref('')
@@ -219,6 +220,7 @@ onMounted(async () => {
         </div>
       </div>
       <label v-if="!isLmuRace"><input v-model="form.has_qualification" type="checkbox" /> {{ t('fields.qualification') }}</label>
+      <label v-if="!isLmuRace"><input v-model="form.is_team_event" type="checkbox" /> Командная гонка</label>
       <label v-if="!isLmuRace"><input v-model="form.is_official" type="checkbox" /> {{ t('fields.officialRace') }}</label>
       <p v-if="error" class="error">{{ error }}</p>
       <button class="button primary" type="submit">{{ t('common.save') }}</button>

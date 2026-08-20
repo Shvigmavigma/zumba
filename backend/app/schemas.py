@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 import re
 from typing import Literal
@@ -296,6 +298,7 @@ class RaceBase(BaseModel):
     has_qualification: bool = True
     scoring_system: ChampionshipScoringSystem = ChampionshipScoringSystem.fia
     pole_bonus_enabled: bool = False
+    is_team_event: bool = False
     is_official: bool = False
 
 
@@ -403,7 +406,26 @@ class RaceUpdate(BaseModel):
     has_qualification: bool | None = None
     scoring_system: ChampionshipScoringSystem | None = None
     pole_bonus_enabled: bool | None = None
+    is_team_event: bool | None = None
     is_official: bool | None = None
+
+
+class TeamRaceRegistrationRead(BaseModel):
+    id: int
+    race_id: int
+    team_id: int
+    team_name: str | None = None
+    team_abbreviation: str | None = None
+    team_avatar_color: str | None = None
+    team_avatar_url: str | None = None
+    car_model: str
+    race_number: int
+    drivers: list[dict] = Field(default_factory=list)
+    registered_by: int | None = None
+    registered_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class RaceRead(RaceBase):
@@ -419,6 +441,7 @@ class RaceRead(RaceBase):
     championship_round: int | None = None
     creator_id: int
     registered_pilots: list[dict]
+    team_registrations: list[TeamRaceRegistrationRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -443,6 +466,7 @@ class RaceManageRead(BaseModel):
     has_qualification: bool
     scoring_system: ChampionshipScoringSystem
     pole_bonus_enabled: bool
+    is_team_event: bool
     rating_applied: bool
     championship_id: int | None = None
     championship_round: int | None = None
@@ -510,6 +534,24 @@ class RaceRegisterRequest(BaseModel):
     pilot_number: int | None = Field(default=None, ge=0, le=999)
 
 
+class TeamRaceDriverInput(BaseModel):
+    user_id: int = Field(ge=1)
+
+
+class TeamRaceRegisterRequest(BaseModel):
+    car_model: str = Field(min_length=1, max_length=80)
+    race_number: int = Field(ge=0, le=999)
+    drivers: list[TeamRaceDriverInput] = Field(min_length=1, max_length=6)
+
+    @field_validator("drivers")
+    @classmethod
+    def unique_drivers(cls, value: list[TeamRaceDriverInput]):
+        ids = [item.user_id for item in value]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Choose different team pilots")
+        return value
+
+
 class ResultsUpload(BaseModel):
     results: dict | list
 
@@ -540,6 +582,7 @@ class ChampionshipStageCreate(BaseModel):
     has_qualification: bool = True
     scoring_system: ChampionshipScoringSystem = ChampionshipScoringSystem.fia
     pole_bonus_enabled: bool = False
+    is_team_event: bool | None = None
 
 
 class ChampionshipCreate(BaseModel):
@@ -555,6 +598,7 @@ class ChampionshipCreate(BaseModel):
     car_change_allowed: bool = False
     scoring_system: ChampionshipScoringSystem = ChampionshipScoringSystem.fia
     pole_bonus_enabled: bool = False
+    is_team_event: bool = False
     is_published: bool = False
     stages: list[ChampionshipStageCreate] = Field(default_factory=list, max_length=50)
 
@@ -586,6 +630,7 @@ class ChampionshipUpdate(BaseModel):
     car_change_allowed: bool | None = None
     scoring_system: ChampionshipScoringSystem | None = None
     pole_bonus_enabled: bool | None = None
+    is_team_event: bool | None = None
     is_published: bool | None = None
 
     @model_validator(mode="after")
@@ -612,6 +657,7 @@ class ChampionshipStageUpdate(BaseModel):
     has_qualification: bool | None = None
     scoring_system: ChampionshipScoringSystem | None = None
     pole_bonus_enabled: bool | None = None
+    is_team_event: bool | None = None
 
 
 class ChampionshipApplyRequest(BaseModel):
@@ -691,6 +737,7 @@ class ChampionshipRead(BaseModel):
     car_change_allowed: bool
     scoring_system: ChampionshipScoringSystem
     pole_bonus_enabled: bool
+    is_team_event: bool
     is_published: bool
     creator_id: int
     status: str

@@ -394,6 +394,7 @@ async def init_db() -> None:
         await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS championship_round INTEGER"))
         await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS scoring_system VARCHAR(20)"))
         await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS pole_bonus_enabled BOOLEAN"))
+        await conn.execute(text("ALTER TABLE races ADD COLUMN IF NOT EXISTS is_team_event BOOLEAN DEFAULT FALSE"))
         await conn.execute(
             text(
                 """
@@ -418,10 +419,13 @@ async def init_db() -> None:
             )
         )
         await conn.execute(text("UPDATE races SET pole_bonus_enabled = FALSE WHERE pole_bonus_enabled IS NULL"))
+        await conn.execute(text("UPDATE races SET is_team_event = FALSE WHERE is_team_event IS NULL"))
         await conn.execute(text("ALTER TABLE races ALTER COLUMN scoring_system SET DEFAULT 'fia'"))
         await conn.execute(text("ALTER TABLE races ALTER COLUMN pole_bonus_enabled SET DEFAULT FALSE"))
+        await conn.execute(text("ALTER TABLE races ALTER COLUMN is_team_event SET DEFAULT FALSE"))
         await conn.execute(text("ALTER TABLE races ALTER COLUMN scoring_system SET NOT NULL"))
         await conn.execute(text("ALTER TABLE races ALTER COLUMN pole_bonus_enabled SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE races ALTER COLUMN is_team_event SET NOT NULL"))
         await conn.execute(
             text(
                 """
@@ -451,13 +455,42 @@ async def init_db() -> None:
         await conn.execute(text("ALTER TABLE championships ALTER COLUMN game SET NOT NULL"))
         await conn.execute(text("UPDATE championships SET car_change_allowed = FALSE WHERE car_change_allowed IS NULL"))
         await conn.execute(text("UPDATE championships SET pole_bonus_enabled = FALSE WHERE pole_bonus_enabled IS NULL"))
+        await conn.execute(text("ALTER TABLE championships ADD COLUMN IF NOT EXISTS is_team_event BOOLEAN DEFAULT FALSE"))
+        await conn.execute(text("UPDATE championships SET is_team_event = FALSE WHERE is_team_event IS NULL"))
         await conn.execute(text("UPDATE championships SET is_published = FALSE WHERE is_published IS NULL"))
         await conn.execute(text("ALTER TABLE championships ALTER COLUMN car_change_allowed SET DEFAULT FALSE"))
         await conn.execute(text("ALTER TABLE championships ALTER COLUMN pole_bonus_enabled SET DEFAULT FALSE"))
+        await conn.execute(text("ALTER TABLE championships ALTER COLUMN is_team_event SET DEFAULT FALSE"))
         await conn.execute(text("ALTER TABLE championships ALTER COLUMN is_published SET DEFAULT FALSE"))
         await conn.execute(text("ALTER TABLE championships ALTER COLUMN car_change_allowed SET NOT NULL"))
         await conn.execute(text("ALTER TABLE championships ALTER COLUMN pole_bonus_enabled SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE championships ALTER COLUMN is_team_event SET NOT NULL"))
         await conn.execute(text("ALTER TABLE championships ALTER COLUMN is_published SET NOT NULL"))
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS team_race_registrations (
+                    id SERIAL PRIMARY KEY,
+                    race_id INTEGER NOT NULL REFERENCES races(id) ON DELETE CASCADE,
+                    team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+                    car_model VARCHAR(80) NOT NULL,
+                    race_number INTEGER NOT NULL,
+                    drivers JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    registered_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    registered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                )
+                """
+            )
+        )
+        await conn.execute(text("ALTER TABLE team_race_registrations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()"))
+        await conn.execute(text("UPDATE team_race_registrations SET drivers = '[]'::jsonb WHERE drivers IS NULL OR jsonb_typeof(drivers) <> 'array'"))
+        await conn.execute(text("ALTER TABLE team_race_registrations ALTER COLUMN drivers SET DEFAULT '[]'::jsonb"))
+        await conn.execute(text("ALTER TABLE team_race_registrations ALTER COLUMN drivers SET NOT NULL"))
+        await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_team_race_registration_race_team ON team_race_registrations (race_id, team_id)"))
+        await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_team_race_registration_race_number ON team_race_registrations (race_id, race_number)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_team_race_registrations_race_registered_at ON team_race_registrations (race_id, registered_at)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_team_race_registrations_team_registered_at ON team_race_registrations (team_id, registered_at)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_championships_published_registration ON championships (is_published, registration_start, registration_end)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_championships_published_dates ON championships (is_published, championship_start, championship_end)"))
         await conn.execute(text("ALTER TABLE race_registrations ADD COLUMN IF NOT EXISTS pilot_number INTEGER"))
