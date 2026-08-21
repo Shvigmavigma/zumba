@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CalendarDays, Calculator, Clock3, Flag, Home, Languages, ListChecks, LogIn, LogOut, Medal, Moon, MoreHorizontal, Newspaper, Shield, Sun, Trophy, User, Users } from 'lucide-vue-next'
 import { statusLabel } from './i18nLabels'
+import { brandingSettings, ensureBrandingSettings } from './brandingSettings'
 import { clearSession, state } from './store'
 import { timeZoneOptions } from './timezone'
 
@@ -163,6 +164,7 @@ function handleDocumentPointerDown(event) {
 }
 
 onMounted(() => {
+  ensureBrandingSettings().catch(() => {})
   navResizeObserver = new ResizeObserver(queueNavReflow)
   if (navContainer.value) navResizeObserver.observe(navContainer.value)
   document.addEventListener('pointerdown', handleDocumentPointerDown)
@@ -188,8 +190,8 @@ watch(navItems, () => {
   <div class="app-shell">
     <header class="topbar">
       <RouterLink class="brand" to="/">
-        <img class="brand-logo brand-logo-light" src="/assets/bmrl-logo-light-cutout.png" alt="" />
-        <img class="brand-logo brand-logo-dark" src="/assets/bmrl-logo-dark-cutout.png" alt="" />
+        <img class="brand-logo brand-logo-light" :src="brandingSettings.light_logo_url" alt="" />
+        <img class="brand-logo brand-logo-dark" :src="brandingSettings.dark_logo_url" alt="" />
         <span class="brand-text">BMRL</span>
       </RouterLink>
 

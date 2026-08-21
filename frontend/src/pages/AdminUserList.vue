@@ -1,17 +1,20 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Ban, Edit3, Plus, Save, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
 import { api } from '../api'
+import { brandingSettings, setBrandingSettings } from '../brandingSettings'
 import AvatarViewer from '../components/AvatarViewer.vue'
 import CountryCombobox from '../components/CountryCombobox.vue'
 import GameCheckboxGroup from '../components/GameCheckboxGroup.vue'
+import ImageCropper from '../components/ImageCropper.vue'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
 import RaceAssetsEditor from '../components/RaceAssetsEditor.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryOptionsWithCurrent } from '../countries'
 import { gameOptions, roleLabel, statusLabel } from '../i18nLabels'
+import { isGifFile } from '../media'
 import { setLicenseTiers } from '../licenseSettings'
 import { DEFAULT_LICENSE_TIERS, formatPilotNumber, formatRating, licenseBadgeStyle, normalizeLicenseTiers, ratingForGame, teamShortName } from '../pilotDisplay'
 import { setSession, state } from '../store'
@@ -45,6 +48,10 @@ const donationSaved = ref(false)
 const licenseTiers = ref(DEFAULT_LICENSE_TIERS)
 const licenseSaving = ref(false)
 const licenseSaved = ref(false)
+const logoFiles = ref({ light: null, dark: null })
+const logoSaving = ref({ light: false, dark: false })
+const logoSaved = ref({ light: false, dark: false })
+const logoCropper = ref(null)
 const dangerDialog = ref(null)
 const dangerForm = ref({ confirmation: '', confirmation_repeat: '', password: '' })
 const dangerSaving = ref(false)
@@ -132,13 +139,14 @@ async function load() {
       rating_game: userRatingGame.value
     })
     if (userSearch.value.trim()) params.set('search', userSearch.value.trim())
-    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedDonationSettings, loadedLicenseSettings] = await Promise.all([
+    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedDonationSettings, loadedLicenseSettings, loadedBrandingSettings] = await Promise.all([
       api(`/users/admin?${params.toString()}`),
       api('/teams/config'),
       api('/races/fan-vote/config'),
       api('/twitch/config'),
       api('/app-settings/donations'),
-      api('/app-settings/licenses')
+      api('/app-settings/licenses'),
+      api('/app-settings/branding')
     ])
     users.value = loadedUsers
     teamLimit.value = teamConfig.member_limit
@@ -149,6 +157,7 @@ async function load() {
     }
     donationSettings.value = normalizeDonationSettings(loadedDonationSettings)
     licenseTiers.value = normalizeLicenseTiers(loadedLicenseSettings)
+    setBrandingSettings(loadedBrandingSettings)
   } catch (err) {
     error.value = err.message
   }
@@ -279,6 +288,64 @@ async function saveLicenseSettings() {
   } finally {
     licenseSaving.value = false
   }
+}
+
+function setLogoFile(theme, event) {
+  const file = event.target.files?.[0] || null
+  event.target.value = ''
+  logoSaved.value = { ...logoSaved.value, [theme]: false }
+  if (!file) return
+  if (isGifFile(file)) {
+    logoFiles.value = { ...logoFiles.value, [theme]: file }
+    return
+  }
+  closeLogoCropper()
+  logoFiles.value = { ...logoFiles.value, [theme]: null }
+  logoCropper.value = { theme, sourceUrl: URL.createObjectURL(file), error: '' }
+}
+
+async function saveLogo(theme, file) {
+  logoSaving.value = { ...logoSaving.value, [theme]: true }
+  logoSaved.value = { ...logoSaved.value, [theme]: false }
+  error.value = ''
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    setBrandingSettings(await api(`/app-settings/branding/${theme}/upload`, {
+      method: 'POST',
+      body: formData
+    }))
+    logoFiles.value = { ...logoFiles.value, [theme]: null }
+    logoSaved.value = { ...logoSaved.value, [theme]: true }
+    return true
+  } catch (err) {
+    error.value = err.message
+    if (logoCropper.value?.theme === theme) {
+      logoCropper.value = { ...logoCropper.value, error: err.message }
+    }
+    return false
+  } finally {
+    logoSaving.value = { ...logoSaving.value, [theme]: false }
+  }
+}
+
+async function uploadLogo(theme) {
+  const file = logoFiles.value[theme]
+  if (file) await saveLogo(theme, file)
+}
+
+async function uploadCroppedLogo(blob) {
+  const theme = logoCropper.value?.theme
+  if (!theme) return
+  if (await saveLogo(theme, new File([blob], `${theme}-logo.webp`, { type: 'image/webp' }))) {
+    closeLogoCropper()
+  }
+}
+
+function closeLogoCropper() {
+  if (!logoCropper.value || logoSaving.value[logoCropper.value.theme]) return
+  URL.revokeObjectURL(logoCropper.value.sourceUrl)
+  logoCropper.value = null
 }
 
 function openDangerDialog(type) {
@@ -505,6 +572,7 @@ async function deleteAccount(user) {
 }
 
 onMounted(load)
+onBeforeUnmount(closeLogoCropper)
 watch(page, load)
 watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
 </script>
@@ -515,6 +583,41 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       <h1>{{ t('nav.admin') }}</h1>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
+
+    <!-- Loading/empty states are N/A: bundled logos are always available as immediate defaults. -->
+    <section class="admin-settings-card admin-logo-config-card card">
+      <div>
+        <h2>{{ t('adminUsers.logoTitle') }}</h2>
+        <p class="muted">{{ t('adminUsers.logoHint') }}</p>
+      </div>
+      <article v-for="theme in ['light', 'dark']" :key="theme" class="admin-logo-option">
+        <div class="admin-logo-preview" :class="`is-${theme}`">
+          <img :src="brandingSettings[`${theme}_logo_url`]" alt="" />
+        </div>
+        <label class="field">
+          <span>{{ t(`adminUsers.${theme}Logo`) }}</span>
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="setLogoFile(theme, $event)" />
+        </label>
+        <button class="button primary" type="button" :disabled="logoSaving[theme] || !logoFiles[theme]" @click="uploadLogo(theme)">
+          <Upload :size="16" />
+          {{ t('common.upload') }}
+        </button>
+        <span v-if="logoSaved[theme]" class="pill">{{ t('common.saved') }}</span>
+      </article>
+    </section>
+
+    <ImageCropper
+      v-if="logoCropper"
+      :source-url="logoCropper.sourceUrl"
+      :title="t('adminUsers.logoCropTitle')"
+      :hint="t('adminUsers.logoCropHint')"
+      :target-width="780"
+      :target-height="200"
+      :saving="logoSaving[logoCropper.theme]"
+      :error="logoCropper.error"
+      @close="closeLogoCropper"
+      @crop="uploadCroppedLogo"
+    />
 
     <form class="admin-settings-card card" @submit.prevent="saveTeamLimit">
       <div>

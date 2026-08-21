@@ -1,17 +1,35 @@
-from fastapi import APIRouter, Depends, Request
+from pathlib import Path
+from typing import Literal
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db import get_session
 from app.deps import require_admin
 from app.models import AppSetting, User
 from app.rate_limit import limiter
-from app.schemas import DonationSettingsRead, DonationSettingsUpdate, LicenseSettingsRead, LicenseSettingsUpdate
+from app.schemas import BrandingSettingsRead, DonationSettingsRead, DonationSettingsUpdate, LicenseSettingsRead, LicenseSettingsUpdate
 
 
 router = APIRouter()
+settings = get_settings()
 
 DONATION_SETTINGS_KEY = "donation_settings"
 LICENSE_SETTINGS_KEY = "license_settings"
+BRANDING_SETTINGS_KEY = "branding_settings"
+LOGO_UPLOAD_DIR = Path(settings.upload_dir) / "logos"
+DEFAULT_LOGOS = {
+    "light_logo_url": "/assets/bmrl-logo-light-cutout.png",
+    "dark_logo_url": "/assets/bmrl-logo-dark-cutout.png",
+}
+ALLOWED_LOGO_MEDIA_TYPES = {
+    "image/gif": ".gif",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
 DEFAULT_LICENSE_TIERS = [
     {"min_rating": 0, "max_rating": 1499, "name": "Rookie", "color": "#64748b"},
     {"min_rating": 1500, "max_rating": 2499, "name": "Bronze", "color": "#b45309"},
@@ -52,6 +70,19 @@ def donation_settings_from_value(value: dict | None) -> DonationSettingsRead:
 async def get_donation_settings_value(session: AsyncSession) -> DonationSettingsRead:
     setting = await session.get(AppSetting, DONATION_SETTINGS_KEY)
     return donation_settings_from_value(setting.value if setting is not None else None)
+
+
+def branding_settings_from_value(value: dict | None) -> BrandingSettingsRead:
+    value = value if isinstance(value, dict) else {}
+    return BrandingSettingsRead(
+        light_logo_url=str(value.get("light_logo_url") or DEFAULT_LOGOS["light_logo_url"]),
+        dark_logo_url=str(value.get("dark_logo_url") or DEFAULT_LOGOS["dark_logo_url"]),
+    )
+
+
+async def get_branding_settings_value(session: AsyncSession) -> BrandingSettingsRead:
+    setting = await session.get(AppSetting, BRANDING_SETTINGS_KEY)
+    return branding_settings_from_value(setting.value if setting is not None else None)
 
 
 def license_settings_from_value(value: dict | None) -> LicenseSettingsRead:
@@ -98,6 +129,47 @@ async def update_donation_settings(
         setting.value = value
     await session.commit()
     return donation_settings_from_value(value)
+
+
+@router.get("/branding", response_model=BrandingSettingsRead)
+@limiter.limit("600/minute")
+async def get_branding_settings(request: Request, session: AsyncSession = Depends(get_session)):
+    return await get_branding_settings_value(session)
+
+
+@router.post("/branding/{theme}/upload", response_model=BrandingSettingsRead)
+@limiter.limit("10/minute")
+async def upload_branding_logo(
+    theme: Literal["light", "dark"],
+    request: Request,
+    file: UploadFile = File(...),
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    extension = ALLOWED_LOGO_MEDIA_TYPES.get(file.content_type or "")
+    if extension is None:
+        raise HTTPException(status_code=415, detail="Only PNG, JPG, WEBP and GIF files are allowed")
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    if len(data) > settings.max_logo_upload_mb * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"File is larger than {settings.max_logo_upload_mb} MB")
+
+    LOGO_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    path = LOGO_UPLOAD_DIR / f"{theme}-{uuid4().hex}{extension}"
+    path.write_bytes(data)
+
+    current = await get_branding_settings_value(session)
+    value = current.model_dump()
+    value[f"{theme}_logo_url"] = f"/api/uploads/logos/{path.name}"
+    setting = await session.get(AppSetting, BRANDING_SETTINGS_KEY)
+    if setting is None:
+        session.add(AppSetting(key=BRANDING_SETTINGS_KEY, value=value))
+    else:
+        setting.value = value
+    await session.commit()
+    return branding_settings_from_value(value)
 
 
 @router.get("/licenses", response_model=LicenseSettingsRead)
