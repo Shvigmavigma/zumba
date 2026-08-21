@@ -929,6 +929,11 @@ class DonationSettingsUpdate(BaseModel):
     top_donations: list[DonationEntry] = Field(default_factory=list, max_length=5)
 
 
+class BrandingSettingsRead(BaseModel):
+    light_logo_url: str
+    dark_logo_url: str
+
+
 class LicenseTierRead(BaseModel):
     min_rating: int
     max_rating: int

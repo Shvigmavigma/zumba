@@ -9,7 +9,7 @@ from app.avatar_uploads import ensure_avatar_upload_allowed, mark_avatar_uploade
 from app.config import get_settings
 from app.db import get_session
 from app.deps import as_utc, clear_expired_timeout, require_admin, require_moder_plus, require_pilot_plus
-from app.models import RACE_GAMES, Appeal, Banner, Penalty, Race, RaceRegistration, Role, Setup, Team, TeamApplication, TeamCreationRequest, User, UserStatus
+from app.models import RACE_GAMES, Appeal, Banner, Championship, Penalty, Race, RaceRegistration, Role, Setup, Team, TeamApplication, TeamCreationRequest, User, UserStatus
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
 from app.schemas import AdminDangerDeleteRequest, RoleUpdate, TimeoutRequest, UserAdminUpdate, UserPrivate, UserPublic, UserUpdate
@@ -58,6 +58,16 @@ def ensure_danger_request(payload: AdminDangerDeleteRequest, admin: User, expect
         raise HTTPException(status_code=400, detail="Confirmation phrase is invalid")
     if not verify_password(payload.password, admin.password_hash):
         raise HTTPException(status_code=403, detail="Admin password is invalid")
+
+
+async def reassign_restricted_user_references(
+    session: AsyncSession,
+    user_ids: list[int],
+    admin_id: int,
+) -> None:
+    await session.execute(update(Championship).where(Championship.creator_id.in_(user_ids)).values(creator_id=admin_id))
+    await session.execute(update(Race).where(Race.creator_id.in_(user_ids)).values(creator_id=admin_id))
+    await session.execute(update(Penalty).where(Penalty.issuer_id.in_(user_ids)).values(issuer_id=admin_id))
 
 
 PROFILE_REQUIRED_FIELDS = {"email", "first_name", "last_name", "nickname", "avatar_color", "games"}
@@ -239,7 +249,7 @@ async def delete_all_pilots(
     await session.execute(update(TeamCreationRequest).where(TeamCreationRequest.resolved_by.in_(pilot_ids)).values(resolved_by=None))
     await session.execute(update(Banner).where(Banner.updated_by.in_(pilot_ids)).values(updated_by=None))
     await session.execute(update(Team).where(Team.owner_id.in_(pilot_ids)).values(owner_id=None))
-    await session.execute(update(Race).where(Race.creator_id.in_(pilot_ids)).values(creator_id=admin.id))
+    await reassign_restricted_user_references(session, pilot_ids, admin.id)
 
     result = await session.execute(delete(User).where(User.id.in_(pilot_ids)))
     await session.commit()
@@ -449,8 +459,7 @@ async def delete_user_account(
     await session.execute(delete(TeamCreationRequest).where(TeamCreationRequest.requester_id == user.id))
     await session.execute(update(TeamCreationRequest).where(TeamCreationRequest.resolved_by == user.id).values(resolved_by=None))
     await session.execute(update(Banner).where(Banner.updated_by == user.id).values(updated_by=None))
-    await session.execute(update(Race).where(Race.creator_id == user.id).values(creator_id=admin.id))
-    await session.execute(update(Penalty).where(Penalty.issuer_id == user.id).values(issuer_id=admin.id))
+    await reassign_restricted_user_references(session, [user.id], admin.id)
 
     await session.delete(user)
     try:

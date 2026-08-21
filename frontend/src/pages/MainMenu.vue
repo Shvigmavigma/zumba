@@ -8,6 +8,7 @@ import { gameLabel, gameOptions, isExternalRace, raceOpenHref, statusLabel } fro
 import { isVideoUrl } from '../media'
 import { state } from '../store'
 import { formatDayPart, formatInTimeZone, formatMonthPart, formatTimeOnly } from '../timezone'
+import { validTwitchParent } from '../twitchEmbed'
 
 const { t } = useI18n()
 const stats = ref({ pilots: 0, completed_races: 0, open_races: 0, staff: 0 })
@@ -81,6 +82,7 @@ const raceGameOptions = computed(() => gameOptions(t, true))
 const canFilterMyGames = computed(() => Boolean(state.user?.games?.length))
 const racesHasNextPage = computed(() => races.value.length === racePageSize)
 const canEmbedTwitch = computed(() => {
+  if (!twitchParent.value) return false
   if (twitchStatus.value.is_live && twitchStatus.value.embed_type === 'channel') return true
   return twitchStatus.value.status === 'vod' && twitchStatus.value.embed_type === 'video' && Boolean(twitchStatus.value.embed_value)
 })
@@ -88,7 +90,7 @@ const canEmbedTwitchPreview = computed(() => twitchStatus.value.is_live && canEm
 const twitchWidgetStyle = computed(() => ({
   transform: `translate3d(${twitchWidgetPosition.value.x}px, ${twitchWidgetPosition.value.y}px, 0)`
 }))
-const twitchParent = computed(() => (typeof window === 'undefined' ? 'localhost' : window.location.hostname))
+const twitchParent = computed(() => validTwitchParent(typeof window === 'undefined' ? 'localhost' : window.location.hostname))
 const twitchEmbedSrc = computed(() => createTwitchEmbedSrc({ autoplay: twitchStatus.value.is_live }))
 const twitchPreviewSrc = computed(() => createTwitchEmbedSrc({ preview: true }))
 
@@ -100,6 +102,7 @@ function formatTwitchTime(totalSeconds) {
 }
 
 function createTwitchEmbedSrc({ autoplay = false, preview = false } = {}) {
+  if (!twitchParent.value) return ''
   const params = new URLSearchParams({
     parent: twitchParent.value,
     muted: 'true',
