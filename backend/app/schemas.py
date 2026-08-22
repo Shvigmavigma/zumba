@@ -891,6 +891,7 @@ class NewsItemRead(BaseModel):
     body: str
     image_url: str
     is_published: bool
+    is_pinned: bool
     created_at: datetime
     updated_at: datetime
     created_by: int | None
@@ -902,6 +903,20 @@ class NewsItemUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=120)
     body: str | None = Field(default=None, min_length=1, max_length=1000)
     is_published: bool | None = None
+    is_pinned: bool | None = None
+
+
+class AuditLogRead(BaseModel):
+    id: int
+    created_at: datetime
+    actor_id: int | None = None
+    actor_login: str | None = None
+    actor_role: str | None = None
+    method: str
+    path: str
+    status_code: int
+    action: str
+    details: dict = Field(default_factory=dict)
 
 
 class TwitchStatus(BaseModel):

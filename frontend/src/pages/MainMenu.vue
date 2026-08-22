@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, Eye, Flag, HeartHandshake, Mail, Maximize2, MessageCircle, Minimize2, Music2, PlayCircle, Plus, Radio, Send, ShieldCheck, Users, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
 import RaceTypeFilters from '../components/RaceTypeFilters.vue'
@@ -13,6 +14,7 @@ import { formatDayPart, formatInTimeZone, formatMonthPart, formatTimeOnly } from
 import { validTwitchParent } from '../twitchEmbed'
 
 const { t } = useI18n()
+const router = useRouter()
 const stats = ref({ pilots: 0, completed_races: 0, open_races: 0, staff: 0 })
 const races = ref([])
 const setups = ref([])
@@ -207,8 +209,13 @@ function clampNewsIndex(index) {
   return Math.min(Math.max(index, 0), news.value.length - 1)
 }
 
+function wrapNewsIndex(index) {
+  if (!news.value.length) return 0
+  return ((index % news.value.length) + news.value.length) % news.value.length
+}
+
 function goToNews(index, behavior = 'smooth') {
-  const nextIndex = clampNewsIndex(index)
+  const nextIndex = wrapNewsIndex(index)
   activeNewsIndex.value = nextIndex
   const track = newsTrack.value
   if (!track) return
@@ -241,6 +248,16 @@ function closeNewsViewer() {
 
 function moveNewsFromViewer(direction) {
   goToNews(activeNewsIndex.value + direction)
+}
+
+function openRace(race, event) {
+  if (event?.target?.closest?.('a, button, input, select, textarea, summary')) return
+  const href = raceOpenHref(race)
+  if (isExternalRace(race)) {
+    window.location.assign(href)
+    return
+  }
+  router.push(href)
 }
 
 function handleNewsKeydown(event) {
@@ -403,7 +420,8 @@ onMounted(async () => {
     news.value = newsData
     registrationChampionships.value = championshipData
     donationSettings.value = donationData
-    activeNewsIndex.value = 0
+    const pinnedIndex = newsData.findIndex((item) => item.is_pinned)
+    activeNewsIndex.value = pinnedIndex >= 0 ? pinnedIndex : 0
     await loadRaces()
   } catch (err) {
     error.value = err.message
@@ -569,7 +587,16 @@ onBeforeUnmount(() => {
             </details>
           </div>
           <div class="main-race-grid">
-            <article v-for="race in races" :key="race.id" class="card main-race-card">
+            <article
+              v-for="race in races"
+              :key="race.id"
+              class="card main-race-card"
+              role="link"
+              tabindex="0"
+              @click="openRace(race, $event)"
+              @keydown.enter.prevent="openRace(race, $event)"
+              @keydown.space.prevent="openRace(race, $event)"
+            >
               <div class="main-race-date-tile">
                 <strong>{{ formatRaceDay(race.datetime_start) }}</strong>
                 <span>{{ formatRaceMonth(race.datetime_start) }}</span>
