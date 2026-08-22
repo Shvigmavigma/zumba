@@ -9,7 +9,7 @@ from app.avatar_uploads import ensure_avatar_upload_allowed, mark_avatar_uploade
 from app.config import get_settings
 from app.db import get_session
 from app.deps import as_utc, clear_expired_timeout, require_admin, require_moder_plus, require_pilot_plus
-from app.models import RACE_GAMES, Appeal, Banner, Championship, Penalty, Race, RaceRegistration, Role, Setup, Team, TeamApplication, TeamCreationRequest, User, UserStatus
+from app.models import RACE_GAMES, Appeal, Banner, Championship, Penalty, Race, RaceRegistration, Role, Setup, Team, TeamApplication, TeamCreationRequest, User, UserStatus, default_game_ratings
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
 from app.schemas import AdminDangerDeleteRequest, RoleUpdate, TimeoutRequest, UserAdminUpdate, UserPrivate, UserPublic, UserUpdate
@@ -344,8 +344,27 @@ async def update_user_profile(
         raise HTTPException(status_code=400, detail="Required profile fields cannot be null")
     await ensure_unique_user_fields(session, data, user.id)
 
+    overall_rating = data.pop("rating", None)
+    sr_value = data.pop("sr", None)
+    game_ratings = data.pop("game_ratings", None)
+
     for field, value in data.items():
         setattr(user, field, value)
+    if overall_rating is not None:
+        user.rating = overall_rating
+    if sr_value is not None:
+        user.sr = sr_value
+    if game_ratings is not None:
+        normalized_ratings = default_game_ratings()
+        existing_ratings = user.game_ratings if isinstance(user.game_ratings, dict) else {}
+        for game in RACE_GAMES:
+            existing = existing_ratings.get(game)
+            if isinstance(existing, dict):
+                normalized_ratings[game]["rating"] = int(existing.get("rating", normalized_ratings[game]["rating"]))
+                normalized_ratings[game]["race_count"] = max(0, int(existing.get("race_count", 0)))
+        for game, rating in game_ratings.items():
+            normalized_ratings[game]["rating"] = int(rating)
+        user.game_ratings = normalized_ratings
     user.pending_profile_changes = None
     await session.commit()
     await session.refresh(user)
@@ -374,14 +393,15 @@ async def approve_user(user_id: int, request: Request, _: User = Depends(require
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.pending_profile_changes:
-        if "email" in user.pending_profile_changes:
+    if user.pending_profile_changes is not None:
+        pending_changes = user.pending_profile_changes or {}
+        if "email" in pending_changes:
             existing_email = await session.scalar(
-                select(User).where(User.email == str(user.pending_profile_changes["email"]), User.id != user.id)
+                select(User).where(User.email == str(pending_changes["email"]), User.id != user.id)
             )
             if existing_email is not None:
                 raise HTTPException(status_code=409, detail="Email already exists")
-        for field, value in user.pending_profile_changes.items():
+        for field, value in pending_changes.items():
             setattr(user, field, value)
         user.pending_profile_changes = None
     if user.status == UserStatus.unapproved:
@@ -400,7 +420,7 @@ async def reject_user(user_id: int, request: Request, _: User = Depends(require_
     avatar_url = user.avatar_url
     if user.status == UserStatus.unapproved:
         await session.delete(user)
-    elif user.pending_profile_changes:
+    elif user.pending_profile_changes is not None:
         user.pending_profile_changes = None
     else:
         raise HTTPException(status_code=400, detail="No registration or profile change to reject")

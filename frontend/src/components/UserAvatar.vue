@@ -1,4 +1,6 @@
 <script setup>
+import { brandingSettings } from '../brandingSettings'
+
 defineProps({
   color: {
     type: String,
@@ -21,6 +23,6 @@ defineProps({
 
 <template>
   <div class="user-avatar" :class="{ 'is-mini': mini, 'has-upload': !!src }" :style="{ '--avatar-color': color || '#2563eb' }" role="img" :aria-label="label">
-    <img :src="src || '/assets/avatar-template.jpg'" alt="" aria-hidden="true" />
+    <img :src="src || brandingSettings.default_avatar_url" alt="" aria-hidden="true" />
   </div>
 </template>

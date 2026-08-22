@@ -48,10 +48,17 @@ const donationSaved = ref(false)
 const licenseTiers = ref(DEFAULT_LICENSE_TIERS)
 const licenseSaving = ref(false)
 const licenseSaved = ref(false)
+const systemSettings = ref({ requests_per_user_per_minute: 1200, rating_change_coefficient: 1.5, sr_per_race: 0.3 })
+const systemSettingsSaving = ref(false)
+const systemSettingsSaved = ref(false)
 const logoFiles = ref({ light: null, dark: null })
 const logoSaving = ref({ light: false, dark: false })
 const logoSaved = ref({ light: false, dark: false })
 const logoCropper = ref(null)
+const defaultAvatarFile = ref(null)
+const defaultAvatarSaving = ref(false)
+const defaultAvatarSaved = ref(false)
+const defaultAvatarCropper = ref(null)
 const dangerDialog = ref(null)
 const dangerForm = ref({ confirmation: '', confirmation_repeat: '', password: '' })
 const dangerSaving = ref(false)
@@ -139,14 +146,15 @@ async function load() {
       rating_game: userRatingGame.value
     })
     if (userSearch.value.trim()) params.set('search', userSearch.value.trim())
-    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedDonationSettings, loadedLicenseSettings, loadedBrandingSettings] = await Promise.all([
+    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedDonationSettings, loadedLicenseSettings, loadedBrandingSettings, loadedSystemSettings] = await Promise.all([
       api(`/users/admin?${params.toString()}`),
       api('/teams/config'),
       api('/races/fan-vote/config'),
       api('/twitch/config'),
       api('/app-settings/donations'),
       api('/app-settings/licenses'),
-      api('/app-settings/branding')
+      api('/app-settings/branding'),
+      api('/app-settings/system')
     ])
     users.value = loadedUsers
     teamLimit.value = teamConfig.member_limit
@@ -158,6 +166,11 @@ async function load() {
     donationSettings.value = normalizeDonationSettings(loadedDonationSettings)
     licenseTiers.value = normalizeLicenseTiers(loadedLicenseSettings)
     setBrandingSettings(loadedBrandingSettings)
+    systemSettings.value = {
+      requests_per_user_per_minute: loadedSystemSettings.requests_per_user_per_minute,
+      rating_change_coefficient: loadedSystemSettings.rating_change_coefficient,
+      sr_per_race: loadedSystemSettings.sr_per_race
+    }
   } catch (err) {
     error.value = err.message
   }
@@ -290,6 +303,28 @@ async function saveLicenseSettings() {
   }
 }
 
+async function saveSystemSettings() {
+  systemSettingsSaving.value = true
+  systemSettingsSaved.value = false
+  error.value = ''
+  try {
+    const saved = await api('/app-settings/system', {
+      method: 'PATCH',
+      body: {
+        requests_per_user_per_minute: Number(systemSettings.value.requests_per_user_per_minute),
+        rating_change_coefficient: Number(systemSettings.value.rating_change_coefficient),
+        sr_per_race: Number(systemSettings.value.sr_per_race)
+      }
+    })
+    systemSettings.value = saved
+    systemSettingsSaved.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    systemSettingsSaving.value = false
+  }
+}
+
 function setLogoFile(theme, event) {
   const file = event.target.files?.[0] || null
   event.target.value = ''
@@ -346,6 +381,59 @@ function closeLogoCropper() {
   if (!logoCropper.value || logoSaving.value[logoCropper.value.theme]) return
   URL.revokeObjectURL(logoCropper.value.sourceUrl)
   logoCropper.value = null
+}
+
+function setDefaultAvatarFile(event) {
+  const file = event.target.files?.[0] || null
+  event.target.value = ''
+  defaultAvatarSaved.value = false
+  if (!file) return
+  if (isGifFile(file)) {
+    defaultAvatarFile.value = file
+    return
+  }
+  closeDefaultAvatarCropper()
+  defaultAvatarFile.value = null
+  defaultAvatarCropper.value = { sourceUrl: URL.createObjectURL(file), error: '' }
+}
+
+async function saveDefaultAvatar(file) {
+  defaultAvatarSaving.value = true
+  defaultAvatarSaved.value = false
+  error.value = ''
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    setBrandingSettings(await api('/app-settings/branding/default-avatar/upload', {
+      method: 'POST',
+      body: formData
+    }))
+    defaultAvatarFile.value = null
+    defaultAvatarSaved.value = true
+    return true
+  } catch (err) {
+    error.value = err.message
+    if (defaultAvatarCropper.value) defaultAvatarCropper.value = { ...defaultAvatarCropper.value, error: err.message }
+    return false
+  } finally {
+    defaultAvatarSaving.value = false
+  }
+}
+
+async function uploadDefaultAvatar() {
+  if (defaultAvatarFile.value) await saveDefaultAvatar(defaultAvatarFile.value)
+}
+
+async function uploadCroppedDefaultAvatar(blob) {
+  if (await saveDefaultAvatar(new File([blob], 'default-avatar.webp', { type: 'image/webp' }))) {
+    closeDefaultAvatarCropper()
+  }
+}
+
+function closeDefaultAvatarCropper() {
+  if (!defaultAvatarCropper.value || defaultAvatarSaving.value) return
+  URL.revokeObjectURL(defaultAvatarCropper.value.sourceUrl)
+  defaultAvatarCropper.value = null
 }
 
 function openDangerDialog(type) {
@@ -440,6 +528,10 @@ function closeTimeoutDialog() {
 
 function openEditDialog(user) {
   editDialogUser.value = user
+  const gameRatings = Object.fromEntries(gameOptions(t).map((option) => [
+    option.value,
+    Number(user.game_ratings?.[option.value]?.rating ?? user.rating ?? 1000)
+  ]))
   editForm.value = {
     login: user.login || '',
     email: user.email || '',
@@ -449,7 +541,10 @@ function openEditDialog(user) {
     pilot_number: formatPilotNumber(user.pilot_number),
     country: user.country || '',
     discord: user.discord || '',
-    games: user.games?.length ? [...user.games] : ['ACC']
+    games: user.games?.length ? [...user.games] : ['ACC'],
+    sr: Number(user.sr ?? 5),
+    rating: Number(user.rating ?? 1000),
+    game_ratings: gameRatings
   }
   editAvatarFile.value = null
 }
@@ -488,7 +583,10 @@ async function saveUserProfile() {
         pilot_number: Number(editForm.value.pilot_number),
         country: editForm.value.country || null,
         discord: editForm.value.discord || null,
-        games: editForm.value.games
+        games: editForm.value.games,
+        sr: Number(editForm.value.sr),
+        rating: Number(editForm.value.rating),
+        game_ratings: Object.fromEntries(Object.entries(editForm.value.game_ratings || {}).map(([game, rating]) => [game, Number(rating)]))
       }
     })
     updateUserInList(updatedUser)
@@ -572,7 +670,10 @@ async function deleteAccount(user) {
 }
 
 onMounted(load)
-onBeforeUnmount(closeLogoCropper)
+onBeforeUnmount(() => {
+  closeLogoCropper()
+  closeDefaultAvatarCropper()
+})
 watch(page, load)
 watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
 </script>
@@ -618,6 +719,62 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       @close="closeLogoCropper"
       @crop="uploadCroppedLogo"
     />
+
+    <section class="admin-settings-card admin-avatar-config-card card">
+      <div>
+        <h2>{{ t('adminUsers.defaultAvatarTitle') }}</h2>
+        <p class="muted">{{ t('adminUsers.defaultAvatarHint') }}</p>
+      </div>
+      <div class="admin-default-avatar-preview">
+        <UserAvatar :src="brandingSettings.default_avatar_url" :label="t('adminUsers.defaultAvatarTitle')" />
+      </div>
+      <label class="field">
+        <span>{{ t('adminUsers.defaultAvatarField') }}</span>
+        <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="setDefaultAvatarFile" />
+      </label>
+      <button class="button primary" type="button" :disabled="defaultAvatarSaving || !defaultAvatarFile" @click="uploadDefaultAvatar">
+        <Upload :size="16" />
+        {{ t('common.upload') }}
+      </button>
+      <span v-if="defaultAvatarSaved" class="pill">{{ t('common.saved') }}</span>
+    </section>
+
+    <ImageCropper
+      v-if="defaultAvatarCropper"
+      :source-url="defaultAvatarCropper.sourceUrl"
+      :title="t('adminUsers.defaultAvatarCropTitle')"
+      :hint="t('adminUsers.defaultAvatarCropHint')"
+      :target-width="320"
+      :target-height="320"
+      :saving="defaultAvatarSaving"
+      :error="defaultAvatarCropper.error"
+      @close="closeDefaultAvatarCropper"
+      @crop="uploadCroppedDefaultAvatar"
+    />
+
+    <form class="admin-settings-card admin-system-config-card card" @submit.prevent="saveSystemSettings">
+      <div>
+        <h2>{{ t('adminUsers.systemTitle') }}</h2>
+        <p class="muted">{{ t('adminUsers.systemHint') }}</p>
+      </div>
+      <label class="field">
+        <span>{{ t('adminUsers.rateLimitField') }}</span>
+        <input v-model.number="systemSettings.requests_per_user_per_minute" type="number" min="1" max="10000" required />
+      </label>
+      <label class="field">
+        <span>{{ t('adminUsers.ratingCoefficientField') }}</span>
+        <input v-model.number="systemSettings.rating_change_coefficient" type="number" min="0.01" max="10" step="0.01" required />
+      </label>
+      <label class="field">
+        <span>{{ t('adminUsers.srPerRaceField') }}</span>
+        <input v-model.number="systemSettings.sr_per_race" type="number" min="0" max="100" step="0.01" required />
+      </label>
+      <button class="button primary" type="submit" :disabled="systemSettingsSaving">
+        <Save :size="16" />
+        {{ t('common.save') }}
+      </button>
+      <span v-if="systemSettingsSaved" class="pill">{{ t('common.saved') }}</span>
+    </form>
 
     <form class="admin-settings-card card" @submit.prevent="saveTeamLimit">
       <div>
@@ -1020,6 +1177,19 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
             <span>{{ t('fields.discord') }}</span>
             <input v-model="editForm.discord" maxlength="100" />
           </label>
+          <label class="field">
+            <span>{{ t('fields.sr') }}</span>
+            <input v-model.number="editForm.sr" type="number" min="0" max="30" step="0.1" required />
+          </label>
+          <div class="field admin-profile-ratings">
+            <span>{{ t('adminUsers.simulatorRatings') }}</span>
+            <div class="admin-profile-ratings-grid">
+              <label v-for="option in gameOptions(t)" :key="option.value" class="field">
+                <span>{{ option.label }}</span>
+                <input v-model.number="editForm.game_ratings[option.value]" type="number" min="10" max="10000" step="1" required />
+              </label>
+            </div>
+          </div>
           <div class="field admin-profile-games is-required">
             <span>{{ t('fields.games') }}</span>
             <GameCheckboxGroup v-model="editForm.games" />

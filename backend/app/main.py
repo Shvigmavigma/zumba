@@ -26,6 +26,7 @@ async def lifespan(_: FastAPI):
             await init_db()
             async with SessionLocal() as session:
                 await seed_defaults(session)
+                await app_settings.load_runtime_settings(session)
     yield
 
 

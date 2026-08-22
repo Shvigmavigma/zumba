@@ -20,13 +20,21 @@ async function load() {
 }
 
 async function approve(user) {
-  await api(`/users/${user.id}/approve`, { method: 'POST' })
-  await load()
+  try {
+    await api(`/users/${user.id}/approve`, { method: 'POST' })
+    users.value = users.value.filter((item) => item.id !== user.id)
+  } catch (err) {
+    error.value = err.message
+  }
 }
 
 async function reject(user) {
-  await api(`/users/${user.id}/reject`, { method: 'DELETE' })
-  await load()
+  try {
+    await api(`/users/${user.id}/reject`, { method: 'DELETE' })
+    users.value = users.value.filter((item) => item.id !== user.id)
+  } catch (err) {
+    error.value = err.message
+  }
 }
 
 onMounted(async () => {

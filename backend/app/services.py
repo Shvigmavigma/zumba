@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import DEFAULT_RATING, MAX_RATING, MAX_SR, MIN_RATING, MIN_SR, RACE_GAMES, Penalty, PenaltyStatus, PenaltyType, Race, RaceStatus, User, default_game_ratings
+from app.models import AppSetting, DEFAULT_RATING, MAX_RATING, MAX_SR, MIN_RATING, MIN_SR, RACE_GAMES, Penalty, PenaltyStatus, PenaltyType, Race, RaceStatus, User, default_game_ratings
 
 
 APPLIED_PENALTY_STATUSES = {PenaltyStatus.active, PenaltyStatus.appealed}
@@ -9,6 +9,7 @@ RATING_K_NEWCOMER = 64
 RATING_K_DEFAULT = 32
 RATING_K_VETERAN = 16
 RATING_DELTA_SCALE = 1.5
+SYSTEM_SETTINGS_KEY = "system_settings"
 RATING_ROW_KEYS = ("rating_old", "rating_new", "rating_delta", "rating_expected", "rating_score", "rating_k")
 SR_FINISH_BONUS = 0.3
 SR_BONUS_META_KEY = "sr_bonus"
@@ -226,7 +227,12 @@ def rating_positions(rows: list[dict]) -> dict[int, float]:
     return positions
 
 
-def build_rating_changes(race_rows: list[dict], users: dict[int, User], game: str) -> tuple[list[dict], float]:
+def build_rating_changes(
+    race_rows: list[dict],
+    users: dict[int, User],
+    game: str,
+    rating_change_coefficient: float = RATING_DELTA_SCALE,
+) -> tuple[list[dict], float]:
     eligible_rows = [row for row in race_rows if int(row.get("user_id") or 0) in users and rating_time_ms(row) is not None]
     participant_count = len(eligible_rows)
     if participant_count < 2:
@@ -248,7 +254,7 @@ def build_rating_changes(race_rows: list[dict], users: dict[int, User], game: st
             expected += 1 / (1 + 10 ** ((opponent_rating - old_rating) / 400))
         score = participant_count - positions[user_id]
         k_factor = rating_k_factor(race_count_before)
-        delta = k_factor * (score - expected) / RATING_DELTA_SCALE
+        delta = k_factor * (score - expected) / max(0.01, float(rating_change_coefficient))
         new_rating = clamp_rating(old_rating + delta)
         changes.append(
             {
@@ -340,7 +346,26 @@ async def restore_race_rating(session: AsyncSession, race: Race) -> None:
     race.rating_applied = False
 
 
-async def apply_race_rating(session: AsyncSession, race: Race) -> None:
+async def get_rating_change_coefficient(session: AsyncSession) -> float:
+    setting = await session.get(AppSetting, SYSTEM_SETTINGS_KEY)
+    value = setting.value if setting is not None and isinstance(setting.value, dict) else {}
+    try:
+        return max(
+            0.01,
+            min(
+                10.0,
+                float(value.get("rating_change_coefficient", value.get("sr_change_coefficient", RATING_DELTA_SCALE))),
+            ),
+        )
+    except (TypeError, ValueError):
+        return RATING_DELTA_SCALE
+
+
+async def apply_race_rating(
+    session: AsyncSession,
+    race: Race,
+    rating_change_coefficient: float | None = None,
+) -> None:
     await restore_race_rating(session, race)
     if not race.is_official:
         return
@@ -350,7 +375,8 @@ async def apply_race_rating(session: AsyncSession, race: Race) -> None:
     if len(user_ids) < 2:
         return
     users = {user.id: user for user in (await session.scalars(select(User).where(User.id.in_(user_ids)))).all()}
-    changes, sof = build_rating_changes(rows, users, game)
+    coefficient = rating_change_coefficient if rating_change_coefficient is not None else await get_rating_change_coefficient(session)
+    changes, sof = build_rating_changes(rows, users, game, coefficient)
     if not changes:
         return
     for change in changes:
@@ -378,11 +404,12 @@ async def recalculate_all_ratings(session: AsyncSession) -> None:
             )
         ).all()
     )
+    rating_change_coefficient = await get_rating_change_coefficient(session)
     for race in races:
         race.results = clear_rating_annotations(race.results)
         race.rating_applied = False
         await recalculate_race_results(session, race)
-        await apply_race_rating(session, race)
+        await apply_race_rating(session, race, rating_change_coefficient)
 
 
 def recalculate_results(results: dict | list | None, penalties: list[Penalty]) -> dict | list | None:
@@ -432,6 +459,15 @@ async def recalculate_race_results(session: AsyncSession, race: Race) -> None:
     race.results = recalculate_results(race.results, penalties)
 
 
+async def get_sr_per_race(session: AsyncSession) -> float:
+    setting = await session.get(AppSetting, SYSTEM_SETTINGS_KEY)
+    value = setting.value if setting is not None and isinstance(setting.value, dict) else {}
+    try:
+        return max(0.0, min(100.0, float(value.get("sr_per_race", value.get("sr_finish_bonus", SR_FINISH_BONUS)))))
+    except (TypeError, ValueError):
+        return SR_FINISH_BONUS
+
+
 async def restore_race_sr_bonus(session: AsyncSession, race: Race) -> None:
     meta = sr_bonus_meta(race.results)
     changes = meta.get("changes", []) if meta else []
@@ -457,13 +493,14 @@ async def award_race_sr_bonus(session: AsyncSession, race: Race) -> None:
         race.results = set_sr_bonus_meta(race.results, None)
         return
     users = {user.id: user for user in (await session.scalars(select(User).where(User.id.in_(user_ids)))).all()}
+    bonus_value = await get_sr_per_race(session)
     changes: list[dict] = []
     for user_id in user_ids:
         user = users.get(user_id)
         if user is None:
             continue
         old_sr = clamp_sr(float(user.sr or 0))
-        applied_value = min(SR_FINISH_BONUS, max(0, MAX_SR - old_sr))
+        applied_value = min(bonus_value, max(0, MAX_SR - old_sr))
         new_sr = clamp_sr(old_sr + applied_value)
         user.sr = new_sr
         changes.append(
@@ -471,15 +508,15 @@ async def award_race_sr_bonus(session: AsyncSession, race: Race) -> None:
                 "user_id": user_id,
                 "old_sr": old_sr,
                 "new_sr": new_sr,
-                "bonus_value": SR_FINISH_BONUS,
-                "applied_value": round(applied_value, 1),
+                "bonus_value": round(bonus_value, 3),
+                "applied_value": round(applied_value, 3),
             }
         )
     race.results = set_sr_bonus_meta(
         race.results,
         {
             "system": "SR",
-            "bonus_value": SR_FINISH_BONUS,
+            "bonus_value": round(bonus_value, 3),
             "participants": len(changes),
             "changes": changes,
         },
