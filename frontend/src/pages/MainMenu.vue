@@ -1,11 +1,13 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ChevronLeft, ChevronRight, ClipboardCheck, Eye, Flag, HeartHandshake, Mail, Maximize2, MessageCircle, Minimize2, Music2, PlayCircle, Plus, Radio, Send, ShieldCheck, Users, X } from 'lucide-vue-next'
+import { ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, Eye, Flag, HeartHandshake, Mail, Maximize2, MessageCircle, Minimize2, Music2, PlayCircle, Plus, Radio, Send, ShieldCheck, Users, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
+import RaceTypeFilters from '../components/RaceTypeFilters.vue'
 import { gameLabel, gameOptions, isExternalRace, raceOpenHref, statusLabel } from '../i18nLabels'
 import { isVideoUrl } from '../media'
+import { appendRaceTypeFilters, defaultRaceTypeFilters } from '../raceFilters'
 import { state } from '../store'
 import { formatDayPart, formatInTimeZone, formatMonthPart, formatTimeOnly } from '../timezone'
 import { validTwitchParent } from '../twitchEmbed'
@@ -26,6 +28,7 @@ const error = ref('')
 const raceGameFilter = ref('all')
 const raceStatusFilter = ref('not_finished')
 const myGamesOnly = ref(false)
+const raceTypeFilters = ref(defaultRaceTypeFilters())
 const racePage = ref(1)
 const racePageSize = 5
 const defaultTwitchStatus = {
@@ -181,11 +184,15 @@ function stageCount(count) {
 
 function registeredCount(race) {
   if (race.game === 'LMU') return 0
+  if (race.is_team_event) return race.team_registrations?.length || 0
   return race.registered_pilots?.length || 0
 }
 
 function isRaceRegistered(race) {
   if (race.game === 'LMU') return false
+  if (race.is_team_event) {
+    return Boolean(state.user?.team_id && race.team_registrations?.some((item) => item.team_id === state.user.team_id))
+  }
   return Boolean(state.user && race.registered_pilots?.some((item) => item.user_id === state.user.id))
 }
 
@@ -269,6 +276,7 @@ async function loadRaces() {
   if (myGamesOnly.value && canFilterMyGames.value) {
     params.set('my_games_only', 'true')
   }
+  appendRaceTypeFilters(params, raceTypeFilters.value)
   races.value = await api(`/races?${params.toString()}`)
 }
 
@@ -410,7 +418,7 @@ watch(racePage, async () => {
   }
 })
 
-watch([raceGameFilter, raceStatusFilter, myGamesOnly], async () => {
+watch([raceGameFilter, raceStatusFilter, myGamesOnly, raceTypeFilters], async () => {
   try {
     await resetRacePageAndLoad()
   } catch (err) {
@@ -550,6 +558,15 @@ onBeforeUnmount(() => {
               <input v-model="myGamesOnly" type="checkbox" :disabled="!canFilterMyGames" />
               <span>{{ t('raceFilters.myGamesOnly') }}</span>
             </label>
+            <details class="main-race-type-dropdown">
+              <summary>
+                <span>{{ t('raceFilters.moreFilters') }}</span>
+                <ChevronDown :size="16" />
+              </summary>
+              <div class="main-race-type-dropdown-panel">
+                <RaceTypeFilters v-model="raceTypeFilters" class-name="main-race-type-filters" />
+              </div>
+            </details>
           </div>
           <div class="main-race-grid">
             <article v-for="race in races" :key="race.id" class="card main-race-card">
@@ -570,6 +587,7 @@ onBeforeUnmount(() => {
                       <span v-if="race.car_class">{{ race.car_class }}</span>
                     </p>
                   </div>
+                  <span v-if="race.is_team_event" class="status-badge race-team-badge">{{ t('raceFilters.teamBadge') }}</span>
                 </div>
 
                 <div class="main-race-meta">
@@ -578,7 +596,7 @@ onBeforeUnmount(() => {
                     <strong>{{ formatRaceDate(race.datetime_start) }}</strong>
                   </span>
                   <span v-if="race.game !== 'LMU'">
-                    <small>{{ t('fields.participants') }}</small>
+                    <small>{{ race.is_team_event ? t('raceDetails.teams') : t('fields.participants') }}</small>
                     <strong>{{ registeredCount(race) }} / {{ race.max_pilots }}</strong>
                   </span>
                 </div>

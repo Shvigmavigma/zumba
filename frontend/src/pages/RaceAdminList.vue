@@ -4,7 +4,9 @@ import { Download, Eye, Pencil, Plus, RotateCw, SquareCheckBig, Trash2 } from 'l
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
+import RaceTypeFilters from '../components/RaceTypeFilters.vue'
 import { gameLabel, gameOptions, isExternalRace, raceOpenHref, statusLabel } from '../i18nLabels'
+import { appendRaceTypeFilters, defaultRaceTypeFilters } from '../raceFilters'
 import { formatDateTime } from '../timezone'
 
 const { t } = useI18n()
@@ -12,6 +14,7 @@ const races = ref([])
 const search = ref('')
 const statusFilter = ref('all')
 const gameFilter = ref('all')
+const raceTypeFilters = ref(defaultRaceTypeFilters())
 const error = ref('')
 const busyRace = ref({})
 const page = ref(1)
@@ -51,6 +54,7 @@ async function load() {
     if (search.value.trim()) {
       params.set('search', search.value.trim())
     }
+    appendRaceTypeFilters(params, raceTypeFilters.value)
     races.value = await api(`/races/manage?${params.toString()}`)
   } catch (err) {
     error.value = err.message
@@ -155,6 +159,7 @@ watch(page, load)
           <option v-for="option in raceGameOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
         </select>
       </label>
+      <RaceTypeFilters v-model="raceTypeFilters" class-name="race-admin-type-filters" />
       <button class="button primary" type="submit">{{ t('common.apply') }}</button>
     </form>
 
@@ -175,11 +180,13 @@ watch(page, load)
           <tr v-for="race in races" :key="race.id">
             <td>
               <div class="race-admin-title">
-                <a v-if="isExternalRace(race)" :href="raceOpenHref(race)">{{ race.name }}</a>
-                <RouterLink v-else :to="raceOpenHref(race)">{{ race.name }}</RouterLink>
+                <div class="race-admin-title-row">
+                  <a v-if="isExternalRace(race)" :href="raceOpenHref(race)">{{ race.name }}</a>
+                  <RouterLink v-else :to="raceOpenHref(race)">{{ race.name }}</RouterLink>
+                  <span v-if="race.is_team_event" class="status-badge race-team-badge">{{ t('raceFilters.teamBadge') }}</span>
+                </div>
                 <p class="muted">
                   {{ [gameLabel(t, race.game), race.track, race.car_class, race.game !== 'LMU' ? (race.has_qualification ? t('raceDetails.withQualification') : t('raceDetails.withoutQualification')) : ''].filter(Boolean).join(' - ') }}
-                  <template v-if="race.is_team_event"> - Командная</template>
                 </p>
                 <p>{{ race.description }}</p>
               </div>
@@ -196,6 +203,7 @@ watch(page, load)
             <td>
               <div v-if="race.game !== 'LMU'" class="race-registration-cell">
                 <strong>{{ race.registered_count }} / {{ race.max_pilots }}</strong>
+                <small>{{ race.is_team_event ? t('raceDetails.teams') : t('fields.participants') }}</small>
                 <span class="race-registration-meter">
                   <span :style="{ width: `${fillPercent(race)}%` }"></span>
                 </span>
