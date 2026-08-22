@@ -4,7 +4,9 @@ import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
+import RaceTypeFilters from '../components/RaceTypeFilters.vue'
 import { gameLabel, gameOptions, isExternalRace, raceCountLabel, raceOpenHref } from '../i18nLabels'
+import { appendRaceTypeFilters, defaultRaceTypeFilters } from '../raceFilters'
 import { state } from '../store'
 import { dateKeyInTimeZone, formatTimeOnly } from '../timezone'
 
@@ -16,6 +18,7 @@ const selected = ref(dateKeyInTimeZone(new Date()))
 const gameFilter = ref('all')
 const statusFilter = ref('not_finished')
 const myGamesOnly = ref(false)
+const raceTypeFilters = ref(defaultRaceTypeFilters())
 const raceSource = ref('regular')
 const selectedPage = ref(1)
 const selectedPageSize = 6
@@ -125,6 +128,7 @@ async function loadRaces() {
   if (myGamesOnly.value && canFilterMyGames.value) {
     params.set('my_games_only', 'true')
   }
+  appendRaceTypeFilters(params, raceTypeFilters.value)
   races.value = await api(`/races?${params.toString()}`)
 }
 
@@ -139,8 +143,8 @@ onMounted(() => {
   loadChampionships()
   loadRaces()
 })
-watch([gameFilter, statusFilter, myGamesOnly, raceSource], loadRaces)
-watch([selected, gameFilter, statusFilter, myGamesOnly, raceSource], () => {
+watch([gameFilter, statusFilter, myGamesOnly, raceSource, raceTypeFilters], loadRaces)
+watch([selected, gameFilter, statusFilter, myGamesOnly, raceSource, raceTypeFilters], () => {
   selectedPage.value = 1
 })
 watch(selectedRaces, () => {
@@ -180,6 +184,7 @@ watch(selectedRaces, () => {
         <input v-model="myGamesOnly" type="checkbox" :disabled="!canFilterMyGames" />
         <span>{{ t('raceFilters.myGamesOnly') }}</span>
       </label>
+      <RaceTypeFilters v-model="raceTypeFilters" />
     </div>
 
     <div class="calendar-board-layout">
@@ -216,7 +221,10 @@ watch(selectedRaces, () => {
               </span>
             </span>
             <span class="calendar-race-stack">
-              <span v-for="race in dayRaces(day).slice(0, 2)" :key="race.id" class="pill calendar-race-pill">{{ race.name }}</span>
+              <span v-for="race in dayRaces(day).slice(0, 2)" :key="race.id" class="pill calendar-race-pill">
+                <small v-if="race.is_team_event" class="calendar-team-mark">{{ t('raceFilters.teamShort') }}</small>
+                {{ race.name }}
+              </span>
               <span v-if="dayRaces(day).length > 2" class="calendar-more">+{{ dayRaces(day).length - 2 }}</span>
             </span>
           </button>
@@ -266,7 +274,10 @@ watch(selectedRaces, () => {
       <div class="race-list">
         <article v-for="race in pagedSelectedRaces" :key="race.id" class="card race-item">
           <div>
-            <h3>{{ race.name }}</h3>
+            <div class="race-item-title-row">
+              <h3>{{ race.name }}</h3>
+              <span v-if="race.is_team_event" class="status-badge race-team-badge">{{ t('raceFilters.teamBadge') }}</span>
+            </div>
             <p class="muted">
               {{ race.game === 'LMU'
                 ? gameLabel(t, race.game)

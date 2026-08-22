@@ -6358,7 +6358,7 @@ select,
 
 .main-race-filter-bar {
   display: grid;
-  grid-template-columns: minmax(250px, 1fr) minmax(170px, 220px) minmax(188px, max-content);
+  grid-template-columns: minmax(250px, 1fr) minmax(170px, 220px) minmax(188px, max-content) minmax(190px, 220px);
   align-items: center;
   margin: 0;
   padding: 10px;
@@ -7024,7 +7024,12 @@ select,
   }
 
   .main-race-filter-bar {
-    grid-template-columns: minmax(240px, 1fr) minmax(180px, 220px) minmax(180px, auto);
+    grid-template-columns: minmax(240px, 1fr) minmax(180px, 220px);
+  }
+
+  .main-race-filter-bar .toggle-field,
+  .main-race-type-dropdown {
+    grid-column: auto;
   }
 }
 
@@ -7406,6 +7411,7 @@ body {
 input,
 textarea,
 select,
+.main-race-type-dropdown > summary,
 .country-combobox-trigger,
 .pilot-control-field {
   border-color: color-mix(in srgb, var(--border) 88%, var(--panel));
@@ -8722,6 +8728,7 @@ body {
 input,
 textarea,
 select,
+.main-race-type-dropdown > summary,
 .country-combobox-trigger,
 .pilot-control-field,
 .pilot-list-search,
@@ -13151,5 +13158,236 @@ body,
   .hall-search,
   .hall-controls select {
     min-width: 0;
+  }
+}
+
+/* Shared six-checkbox race property filters. */
+.main-race-type-dropdown {
+  position: relative;
+  min-width: 0;
+}
+
+.main-race-type-dropdown > summary {
+  display: flex;
+  min-height: var(--input-height);
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  line-height: normal;
+  list-style: none;
+  white-space: nowrap;
+  transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.main-race-type-dropdown > summary::-webkit-details-marker {
+  display: none;
+}
+
+.main-race-type-dropdown > summary:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+}
+
+.main-race-type-dropdown > summary:active {
+  transform: translateY(1px);
+}
+
+.main-race-type-dropdown > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.main-race-type-dropdown > summary svg {
+  flex: 0 0 auto;
+  transition: transform 150ms ease;
+}
+
+.main-race-type-dropdown[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.main-race-type-dropdown-panel {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(760px, calc(100vw - 32px));
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.main-race-type-dropdown-panel .race-type-filters {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.main-race-type-dropdown-panel .race-type-filter-options {
+  grid-template-columns: 1fr;
+}
+
+.race-type-filters {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.race-type-filter-group {
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel-muted) 55%, transparent);
+}
+
+.race-type-filter-group legend {
+  padding: 0 5px;
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-weight: 700;
+}
+
+.race-type-filter-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.race-type-filter-option {
+  display: flex;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  font-size: var(--small-text-size);
+  transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.race-type-filter-option:hover {
+  border-color: var(--border);
+  background: var(--panel);
+}
+
+.race-type-filter-option:active {
+  transform: translateY(1px);
+}
+
+.race-type-filter-option:focus-within {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.race-type-filter-option:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.race-type-filter-option:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.race-type-filter-option input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.race-type-filter-option span {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  overflow-wrap: normal;
+}
+
+.race-team-badge {
+  flex: 0 0 auto;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  color: var(--primary);
+}
+
+.main-race-card-head,
+.race-item-title-row,
+.race-admin-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.race-item-title-row h3 {
+  margin: 0;
+}
+
+.race-admin-title-row a {
+  min-width: 0;
+}
+
+.calendar-race-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.calendar-team-mark {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--panel);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.race-admin-type-filters {
+  margin-top: 2px;
+}
+
+@media (max-width: 900px) {
+  .main-race-type-dropdown-panel .race-type-filters,
+  .race-type-filters {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .main-race-type-dropdown {
+    grid-column: 1 / -1;
+  }
+
+  .main-race-type-dropdown-panel {
+    right: auto;
+    left: 0;
+  }
+
+  .race-type-filter-options {
+    grid-template-columns: 1fr;
+  }
+
+  .main-race-card-head,
+  .race-item-title-row,
+  .race-admin-title-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

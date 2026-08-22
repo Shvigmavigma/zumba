@@ -20,11 +20,14 @@
 - 2026-08-22 — init: existing Vue/Vite stack and CSS token system documented; no Tailwind or unused utility layer added.
 - 2026-08-22 — theme logos: admin controls reuse the existing card, field, button, border, background, `--logo-preview-dark`, and responsive tokens; uploaded light/dark assets update the shared brand state immediately.
 - 2026-08-22 — logo cropper: raster logos use the existing banner crop visual language and a 780x200 output matching the header slot; pointer, keyboard, zoom, disabled, and responsive states are included.
+- 2026-08-22 — main race filters: the six race-property checkboxes remain inline on calendar/admin pages and use a native, keyboard-accessible dropdown only on the main menu.
+- 2026-08-22 — main race filter typography: the dropdown trigger inherits the same font, line height, and `--text` color as neighboring form controls.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo upload and preview controls (loading is represented by disabled upload actions; empty state uses bundled default logos).
 - `frontend/src/App.vue` — existing application shell, navigation, and theme-specific brand logo.
 - `frontend/src/components/ImageCropper.vue` — reusable fixed-ratio crop dialog for selected raster images.
+- `frontend/src/pages/MainMenu.vue` — main race filter bar with a compact native dropdown for qualification, format, and official-status options.
 
 ## Non-Goals
 - No Figma sync

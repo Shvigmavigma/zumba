@@ -814,9 +814,11 @@ watch(visibleParticipants, () => {
         <p>{{ race.description }}</p>
         <div class="race-details-meta">
           <span class="status-badge race-status-badge" :class="`race-status-${race.status}`">{{ statusLabel(t, race.status) }}</span>
+          <span v-if="race.is_team_event" class="status-badge race-team-badge">{{ t('raceFilters.teamBadge') }}</span>
           <span>{{ formatDate(race.datetime_start) }}</span>
           <span>{{ formatDate(race.datetime_end) }}</span>
-          <span v-if="!isLmuRace">{{ participants.length }} / {{ race.max_pilots }}</span>
+          <span v-if="!isLmuRace && race.is_team_event">{{ t('raceDetails.registeredTeamsLimit', { count: teamRegistrations.length, max: race.max_pilots }) }}</span>
+          <span v-else-if="!isLmuRace">{{ participants.length }} / {{ race.max_pilots }}</span>
           <span>{{ race.has_qualification ? t('raceDetails.withQualification') : t('raceDetails.withoutQualification') }}</span>
         </div>
         <p>{{ t('fields.server') }}: <a :href="race.server_link">{{ race.server_link }}</a></p>
@@ -1052,11 +1054,15 @@ watch(visibleParticipants, () => {
       <section v-if="!isLmuRace" class="card race-participants-panel">
         <div class="section-header">
           <div>
-            <h2>{{ t('raceDetails.participants') }}</h2>
-            <p class="muted">{{ t('raceDetails.registeredPilots', { count: participants.length }) }}</p>
+            <h2>{{ race.is_team_event ? t('raceDetails.teams') : t('raceDetails.participants') }}</h2>
+            <p class="muted">
+              {{ race.is_team_event
+                ? t('raceDetails.registeredTeams', { count: teamRegistrations.length })
+                : t('raceDetails.registeredPilots', { count: participants.length }) }}
+            </p>
           </div>
           <div class="toolbar">
-            <span class="pill">{{ visibleParticipants.length }} / {{ participants.length }}</span>
+            <span class="pill">{{ race.is_team_event ? teamRegistrations.length : `${visibleParticipants.length} / ${participants.length}` }}</span>
             <button class="icon-button" type="button" :title="participantsExpanded ? t('raceDetails.collapseParticipants') : t('raceDetails.expandParticipants')" :aria-label="participantsExpanded ? t('raceDetails.collapseParticipants') : t('raceDetails.expandParticipants')" @click="participantsExpanded = !participantsExpanded">
               <ChevronUp v-if="participantsExpanded" :size="18" />
               <ChevronDown v-else :size="18" />
@@ -1064,7 +1070,7 @@ watch(visibleParticipants, () => {
           </div>
         </div>
 
-        <div v-if="participantsExpanded" class="pilot-inline-controls">
+        <div v-if="participantsExpanded && !race.is_team_event" class="pilot-inline-controls">
           <input v-model="participantSearch" type="search" :placeholder="t('raceDetails.participantSearch')" />
           <select v-model="participantSort" :aria-label="t('common.sort')">
             <option value="rating_desc">{{ t('sort.ratingDesc') }}</option>
@@ -1076,7 +1082,25 @@ watch(visibleParticipants, () => {
           </select>
         </div>
 
-        <div v-if="participantsExpanded && visibleParticipants.length" class="race-participant-list">
+        <div v-if="participantsExpanded && race.is_team_event && teamRegistrations.length" class="race-participant-list">
+          <article v-for="item in teamRegistrations" :key="item.id" class="race-participant-row race-team-registration-row">
+            <UserAvatar class="pilot-avatar-slot" :src="item.team_avatar_url" :color="item.team_avatar_color" :label="item.team_name" />
+            <div class="race-participant-main">
+              <strong>{{ item.team_name }} <span v-if="item.team_abbreviation">({{ item.team_abbreviation }})</span></strong>
+              <span>{{ (item.drivers || []).map((driver) => participantName(driver)).join(' → ') }}</span>
+            </div>
+            <div class="race-participant-stat">
+              <span>#</span>
+              <strong>{{ formatPilotNumber(item.race_number) }}</strong>
+            </div>
+            <div class="race-participant-car">
+              <span>{{ t('common.car') }}</span>
+              <strong>{{ item.car_model }}</strong>
+            </div>
+          </article>
+        </div>
+
+        <div v-else-if="participantsExpanded && visibleParticipants.length" class="race-participant-list">
           <article v-for="item in pagedParticipants" :key="item.user_id" class="race-participant-row">
             <UserAvatar class="pilot-avatar-slot" :src="item.avatar_url" :color="item.avatar_color" :label="participantName(item)" />
             <div class="race-participant-main">
@@ -1105,9 +1129,10 @@ watch(visibleParticipants, () => {
           </article>
         </div>
 
-        <PaginationControls v-if="participantsExpanded && visibleParticipants.length" v-model:page="participantPage" :page-size="participantPageSize" :total-items="visibleParticipants.length" />
+        <PaginationControls v-if="participantsExpanded && !race.is_team_event && visibleParticipants.length" v-model:page="participantPage" :page-size="participantPageSize" :total-items="visibleParticipants.length" />
 
-        <div v-if="participantsExpanded && !visibleParticipants.length" class="empty-row">{{ participants.length ? t('common.noMatches') : t('raceDetails.noRegisteredPilots') }}</div>
+        <div v-if="participantsExpanded && race.is_team_event && !teamRegistrations.length" class="empty-row">{{ t('raceDetails.noRegisteredTeams') }}</div>
+        <div v-else-if="participantsExpanded && !race.is_team_event && !visibleParticipants.length" class="empty-row">{{ participants.length ? t('common.noMatches') : t('raceDetails.noRegisteredPilots') }}</div>
       </section>
 
       <section class="card race-results-panel">

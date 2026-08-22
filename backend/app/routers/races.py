@@ -1153,6 +1153,9 @@ async def list_races(
     request: Request,
     status_filter: str = "all",
     game_filter: str = "all",
+    has_qualification: bool | None = None,
+    is_team_event: bool | None = None,
+    is_official: bool | None = None,
     my_games_only: bool = False,
     include_championship: bool = False,
     championship_id: int | None = None,
@@ -1177,6 +1180,12 @@ async def list_races(
         stmt = stmt.where(Race.status == RaceStatus(status_filter))
     if game_filter in RACE_GAMES:
         stmt = stmt.where(Race.game == game_filter)
+    if has_qualification is not None:
+        stmt = stmt.where(Race.has_qualification == has_qualification)
+    if is_team_event is not None:
+        stmt = stmt.where(Race.is_team_event == is_team_event)
+    if is_official is not None:
+        stmt = stmt.where(Race.is_official == is_official)
     if my_games_only:
         user_games = user.games if user else []
         if not user_games:
@@ -1201,6 +1210,9 @@ async def manage_races(
     request: Request,
     status_filter: str = "all",
     game_filter: str = "all",
+    has_qualification: bool | None = None,
+    is_team_event: bool | None = None,
+    is_official: bool | None = None,
     search: str | None = None,
     offset: int = 0,
     limit: int = 500,
@@ -1231,6 +1243,12 @@ async def manage_races(
         stmt = stmt.where(Race.status == RaceStatus(status_filter))
     if game_filter in RACE_GAMES:
         stmt = stmt.where(Race.game == game_filter)
+    if has_qualification is not None:
+        stmt = stmt.where(Race.has_qualification == has_qualification)
+    if is_team_event is not None:
+        stmt = stmt.where(Race.is_team_event == is_team_event)
+    if is_official is not None:
+        stmt = stmt.where(Race.is_official == is_official)
     if search:
         like = f"%{search}%"
         stmt = stmt.where(
