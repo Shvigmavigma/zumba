@@ -45,6 +45,11 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE"))
+        await conn.execute(text("UPDATE news_items SET is_pinned = FALSE WHERE is_pinned IS NULL"))
+        await conn.execute(text("ALTER TABLE news_items ALTER COLUMN is_pinned SET DEFAULT FALSE"))
+        await conn.execute(text("ALTER TABLE news_items ALTER COLUMN is_pinned SET NOT NULL"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_news_items_is_pinned ON news_items (is_pinned)"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(255)"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_upload_count INTEGER DEFAULT 0"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_upload_window_start TIMESTAMP WITH TIME ZONE"))

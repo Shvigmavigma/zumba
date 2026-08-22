@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { Eye, EyeOff, Plus, Save, Trash2 } from 'lucide-vue-next'
+import { Eye, EyeOff, Pin, PinOff, Plus, Save, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import { isVideoUrl, mediaUploadAccept } from '../media'
@@ -16,10 +16,11 @@ const form = ref({
   title: '',
   body: '',
   is_published: true,
+  is_pinned: false,
   file: null
 })
 
-const sortedItems = computed(() => [...items.value].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
+const sortedItems = computed(() => [...items.value].sort((a, b) => Number(b.is_pinned) - Number(a.is_pinned) || new Date(b.created_at) - new Date(a.created_at)))
 
 function formatDate(value) {
   return formatDateTime(value)
@@ -43,6 +44,7 @@ function resetForm() {
     title: '',
     body: '',
     is_published: true,
+    is_pinned: false,
     file: null
   }
   if (fileInput.value) {
@@ -59,6 +61,7 @@ async function createNews() {
     body.append('title', form.value.title)
     body.append('body', form.value.body)
     body.append('is_published', String(form.value.is_published))
+    body.append('is_pinned', String(form.value.is_pinned))
     body.append('file', form.value.file)
     const created = await api('/news', { method: 'POST', body })
     items.value = [created, ...items.value]
@@ -79,7 +82,8 @@ async function saveNews(item) {
       body: {
         title: item.title,
         body: item.body,
-        is_published: item.is_published
+        is_published: item.is_published,
+        is_pinned: item.is_pinned
       }
     })
     items.value = items.value.map((news) => (news.id === updated.id ? updated : news))
@@ -131,6 +135,11 @@ onMounted(load)
           <span>{{ t('fields.title') }}</span>
           <input v-model="form.title" required maxlength="120" />
         </label>
+        <label class="news-publish-toggle">
+          <input v-model="form.is_pinned" type="checkbox" />
+          <Pin :size="16" />
+          <span>{{ t('news.pinned') }}</span>
+        </label>
         <label class="field">
           <span>{{ t('news.image') }}</span>
           <input ref="fileInput" type="file" :accept="mediaUploadAccept" required @change="chooseFile" />
@@ -160,6 +169,7 @@ onMounted(load)
           <div class="section-header news-manage-card-head">
             <div>
               <span class="pill">{{ item.is_published ? t('news.published') : t('news.hidden') }}</span>
+              <span v-if="item.is_pinned" class="pill news-pinned-badge"><Pin :size="13" /> {{ t('news.pinned') }}</span>
               <p class="muted">{{ formatDate(item.created_at) }}</p>
             </div>
             <div class="toolbar">
@@ -167,6 +177,11 @@ onMounted(load)
                 <EyeOff v-if="item.is_published" :size="16" />
                 <Eye v-else :size="16" />
                 {{ item.is_published ? t('news.hide') : t('news.publish') }}
+              </button>
+              <button class="button news-publish-button" type="button" :disabled="busyItems[item.id]" @click="item.is_pinned = !item.is_pinned; saveNews(item)">
+                <PinOff v-if="item.is_pinned" :size="16" />
+                <Pin v-else :size="16" />
+                {{ item.is_pinned ? t('news.unpin') : t('news.pin') }}
               </button>
               <button class="icon-button danger-icon" type="button" :title="t('common.delete')" :disabled="busyItems[item.id]" @click="deleteNews(item)">
                 <Trash2 :size="16" />
@@ -176,6 +191,11 @@ onMounted(load)
           <label class="field">
             <span>{{ t('fields.title') }}</span>
             <input v-model="item.title" maxlength="120" />
+          </label>
+          <label class="news-publish-toggle">
+            <input v-model="item.is_pinned" type="checkbox" />
+            <Pin :size="16" />
+            <span>{{ t('news.pinned') }}</span>
           </label>
           <label class="field">
             <span>{{ t('fields.text') }}</span>

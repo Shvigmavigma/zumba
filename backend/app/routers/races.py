@@ -1770,6 +1770,38 @@ async def unregister_from_race(
     return race
 
 
+@router.delete("/{race_id}/registrations/{user_id}", response_model=RaceRead)
+@limiter.limit("120/minute")
+async def remove_pilot_registration(
+    race_id: int,
+    user_id: int,
+    request: Request,
+    _: User = Depends(require_moder_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(select(Race).where(Race.id == race_id).with_for_update())
+    race = result.scalar_one_or_none()
+    if race is None:
+        raise HTTPException(status_code=404, detail="Race not found")
+    update_time_based_status(race)
+    if race.is_team_event:
+        raise HTTPException(status_code=400, detail="Team registrations are removed by team")
+    if race.status in {RaceStatus.ongoing, RaceStatus.finished}:
+        raise HTTPException(status_code=400, detail="Registration can be changed only before the race starts")
+    registration = await session.scalar(
+        select(RaceRegistration).where(
+            RaceRegistration.race_id == race.id,
+            RaceRegistration.user_id == user_id,
+        )
+    )
+    if registration is not None:
+        await session.delete(registration)
+        await session.commit()
+    await session.refresh(race)
+    await attach_registered_pilots(session, [race])
+    return race
+
+
 @router.delete("/{race_id}/team-register", response_model=RaceRead)
 @limiter.limit("120/minute")
 async def unregister_team_from_race(

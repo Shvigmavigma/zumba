@@ -11,7 +11,8 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.config import get_settings
 from app.db import SessionLocal, db_initialization_lock, init_db
 from app.rate_limit import limiter
-from app.routers import app_settings, appeals, auth, banners, championships, dashboard, hall_of_fame, news, penalties, race_assets, races, setups, teams, twitch, users
+from app.audit import actor_from_request, request_audit_details, write_audit_log_with_details
+from app.routers import app_settings, appeals, audit, auth, banners, championships, dashboard, hall_of_fame, news, penalties, race_assets, races, setups, teams, twitch, users
 from app.seed import seed_defaults
 
 
@@ -42,6 +43,16 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, lambda request, exc: ORJSONResponse({"detail": "Rate limit exceeded"}, status_code=429))
 app.add_middleware(SlowAPIMiddleware)
 
+
+@app.middleware("http")
+async def audit_changes(request, call_next):
+    actor = actor_from_request(request)
+    details = await request_audit_details(request) if actor is not None else {}
+    response = await call_next(request)
+    if actor is not None and 200 <= response.status_code < 400:
+        await write_audit_log_with_details(request, response.status_code, actor, details)
+    return response
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -66,6 +77,7 @@ app.include_router(penalties.router, prefix="/api/penalties", tags=["penalties"]
 app.include_router(appeals.router, prefix="/api/appeals", tags=["appeals"])
 app.include_router(banners.router, prefix="/api/banners", tags=["banners"])
 app.include_router(news.router, prefix="/api/news", tags=["news"])
+app.include_router(audit.router, prefix="/api/audit", tags=["audit"])
 app.include_router(setups.router, prefix="/api/setups", tags=["setups"])
 app.include_router(teams.router, prefix="/api/teams", tags=["teams"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])

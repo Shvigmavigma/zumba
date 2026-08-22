@@ -483,6 +483,7 @@ class NewsItem(Base):
     body: Mapped[str] = mapped_column(Text)
     image_url: Mapped[str] = mapped_column(String(255))
     is_published: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
@@ -496,6 +497,22 @@ class AppSetting(Base):
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
     value: Mapped[dict] = mapped_column(JSONB, default=dict)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    actor_role: Mapped[str | None] = mapped_column(String(20), index=True)
+    method: Mapped[str] = mapped_column(String(10))
+    path: Mapped[str] = mapped_column(String(255))
+    status_code: Mapped[int] = mapped_column(Integer)
+    action: Mapped[str] = mapped_column(String(140))
+    details: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
+
+    actor: Mapped[User | None] = relationship()
 
 
 Index("ix_users_role_status", User.role, User.status)
@@ -518,6 +535,7 @@ Index(
 )
 Index("ix_team_applications_team_status_created", TeamApplication.team_id, TeamApplication.status, TeamApplication.created_at)
 Index("ix_team_applications_user_status", TeamApplication.user_id, TeamApplication.status)
+Index("ix_audit_logs_created_id", AuditLog.created_at, AuditLog.id)
 Index(
     "uq_team_application_pending_team_user",
     TeamApplication.team_id,

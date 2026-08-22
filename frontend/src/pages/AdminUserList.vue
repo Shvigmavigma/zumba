@@ -5,6 +5,7 @@ import { Ban, Edit3, Plus, Save, Timer, TimerOff, Trash2, Undo2, Upload, X } fro
 import { api } from '../api'
 import { brandingSettings, setBrandingSettings } from '../brandingSettings'
 import AvatarViewer from '../components/AvatarViewer.vue'
+import AuditLogPanel from '../components/AuditLogPanel.vue'
 import CountryCombobox from '../components/CountryCombobox.vue'
 import GameCheckboxGroup from '../components/GameCheckboxGroup.vue'
 import ImageCropper from '../components/ImageCropper.vue'
@@ -897,6 +898,8 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
     </form>
 
     <RaceAssetsEditor @error="error = $event" />
+
+    <AuditLogPanel />
 
     <section class="admin-danger-card card">
       <div>

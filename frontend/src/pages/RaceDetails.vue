@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, ChevronUp, Film, Heart, ImageUp, Scale, Trash2, Upload } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, Film, Heart, ImageUp, Scale, Trash2, Upload, UserMinus } from 'lucide-vue-next'
 import { api } from '../api'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
@@ -69,6 +69,7 @@ const teamRegistered = computed(() => Boolean(myTeamRegistration.value))
 const teamRegistrationDrivers = computed(() => myTeamRegistration.value?.drivers || [])
 const canManageTeamRegistration = computed(() => Boolean(race.value?.is_team_event && myTeam.value?.is_owner))
 const canManageRace = computed(() => ['admin', 'moder'].includes(state.user?.role))
+const canRemovePilotRegistration = computed(() => canManageRace.value && Boolean(race.value) && !race.value.is_team_event && !['ongoing', 'finished'].includes(race.value.status))
 const canIssuePenalty = computed(() => ['admin', 'moder', 'marshall'].includes(state.user?.role) && ['ongoing', 'finished'].includes(race.value?.status))
 const isChampionshipStage = computed(() => Boolean(race.value?.championship_id))
 const isLmuRace = computed(() => race.value?.game === 'LMU')
@@ -560,6 +561,22 @@ async function registerTeam() {
 
 async function unregisterTeam() {
   race.value = await api(`/races/${race.value.id}/team-register`, { method: 'DELETE' })
+}
+
+async function removePilotRegistration(item) {
+  if (!race.value || !canRemovePilotRegistration.value) return
+  const name = participantName(item)
+  if (!window.confirm(t('raceDetails.removePilotConfirm', { name }))) return
+  error.value = ''
+  actionPending.value = true
+  try {
+    race.value = await api(`/races/${race.value.id}/registrations/${item.user_id}`, { method: 'DELETE' })
+    participantPage.value = Math.min(participantPage.value, participantTotalPages.value)
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    actionPending.value = false
+  }
 }
 
 async function closeRace() {
@@ -1101,7 +1118,7 @@ watch(visibleParticipants, () => {
         </div>
 
         <div v-else-if="participantsExpanded && visibleParticipants.length" class="race-participant-list">
-          <article v-for="item in pagedParticipants" :key="item.user_id" class="race-participant-row">
+          <article v-for="item in pagedParticipants" :key="item.user_id" class="race-participant-row" :class="{ 'has-registration-action': canRemovePilotRegistration }">
             <UserAvatar class="pilot-avatar-slot" :src="item.avatar_url" :color="item.avatar_color" :label="participantName(item)" />
             <div class="race-participant-main">
               <span class="user-name-line">
@@ -1126,6 +1143,17 @@ watch(visibleParticipants, () => {
               <span>{{ t('common.car') }}</span>
               <strong>{{ item.car_model }}</strong>
             </div>
+            <button
+              v-if="canRemovePilotRegistration"
+              class="icon-button danger-icon"
+              type="button"
+              :title="t('raceDetails.removePilot')"
+              :aria-label="t('raceDetails.removePilot')"
+              :disabled="actionPending"
+              @click="removePilotRegistration(item)"
+            >
+              <UserMinus :size="16" />
+            </button>
           </article>
         </div>
 

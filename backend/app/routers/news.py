@@ -2,7 +2,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -66,7 +66,7 @@ async def list_news(request: Request, session: AsyncSession = Depends(get_sessio
         await session.scalars(
             select(NewsItem)
             .where(NewsItem.is_published.is_(True))
-            .order_by(desc(NewsItem.created_at))
+            .order_by(desc(NewsItem.is_pinned), desc(NewsItem.created_at))
             .limit(24)
         )
     ).all()
@@ -83,7 +83,7 @@ async def list_news_for_manage(
     return (
         await session.scalars(
             select(NewsItem)
-            .order_by(desc(NewsItem.created_at))
+            .order_by(desc(NewsItem.is_pinned), desc(NewsItem.created_at))
             .limit(100)
         )
     ).all()
@@ -96,6 +96,7 @@ async def create_news(
     title: str = Form(..., min_length=1, max_length=120),
     body: str = Form(..., min_length=1, max_length=1000),
     is_published: bool = Form(True),
+    is_pinned: bool = Form(False),
     file: UploadFile = File(...),
     user: User = Depends(require_news_editor),
     session: AsyncSession = Depends(get_session),
@@ -111,11 +112,14 @@ async def create_news(
     path = NEWS_UPLOAD_DIR / f"news-{uuid4().hex}{extension}"
     path.write_bytes(data)
 
+    if is_pinned:
+        await session.execute(update(NewsItem).where(NewsItem.is_pinned.is_(True)).values(is_pinned=False))
     item = NewsItem(
         title=title.strip(),
         body=body.strip(),
         image_url=news_file_url(path),
         is_published=is_published,
+        is_pinned=is_pinned,
         created_by=user.id,
     )
     session.add(item)
@@ -137,8 +141,14 @@ async def update_news(
     item = await session.get(NewsItem, news_id)
     if item is None:
         raise HTTPException(status_code=404, detail="News item not found")
-    update = payload.model_dump(exclude_unset=True)
-    for field, value in update.items():
+    payload_updates = payload.model_dump(exclude_unset=True)
+    if payload_updates.get("is_pinned") is True:
+        await session.execute(
+            update(NewsItem)
+            .where(NewsItem.is_pinned.is_(True), NewsItem.id != news_id)
+            .values(is_pinned=False)
+        )
+    for field, value in payload_updates.items():
         setattr(item, field, value.strip() if isinstance(value, str) else value)
     await session.commit()
     await session.refresh(item)
