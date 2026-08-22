@@ -138,6 +138,19 @@ class UserUpdate(BaseModel):
 class UserAdminUpdate(UserUpdate):
     login: str | None = Field(default=None, min_length=3, max_length=50)
     pilot_number: int | None = Field(default=None, ge=0, le=999)
+    sr: float | None = Field(default=None, ge=MIN_SR, le=MAX_SR)
+    rating: int | None = Field(default=None, ge=int(MIN_RATING), le=int(MAX_RATING))
+    game_ratings: dict[GameCode, int] | None = None
+
+    @field_validator("game_ratings")
+    @classmethod
+    def valid_game_ratings(cls, value: dict[GameCode, int] | None):
+        if value is None:
+            return value
+        for rating in value.values():
+            if rating < MIN_RATING or rating > MAX_RATING:
+                raise ValueError(f"Ratings must be between {int(MIN_RATING)} and {int(MAX_RATING)}")
+        return value
 
 
 class TeamBase(BaseModel):
@@ -932,6 +945,19 @@ class DonationSettingsUpdate(BaseModel):
 class BrandingSettingsRead(BaseModel):
     light_logo_url: str
     dark_logo_url: str
+    default_avatar_url: str
+
+
+class SystemSettingsRead(BaseModel):
+    requests_per_user_per_minute: int = Field(ge=1, le=10000)
+    rating_change_coefficient: float = Field(gt=0, le=10)
+    sr_per_race: float = Field(ge=0, le=100)
+
+
+class SystemSettingsUpdate(BaseModel):
+    requests_per_user_per_minute: int = Field(ge=1, le=10000)
+    rating_change_coefficient: float = Field(gt=0, le=10)
+    sr_per_race: float = Field(ge=0, le=100)
 
 
 class LicenseTierRead(BaseModel):

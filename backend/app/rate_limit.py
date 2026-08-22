@@ -1,6 +1,7 @@
 from time import time
 
 from fastapi import Request
+from redis import Redis
 from slowapi import Limiter
 
 from app.config import get_settings
@@ -79,4 +80,64 @@ def is_admin_request(request: Request) -> bool:
 
 
 settings = get_settings()
-limiter = Limiter(key_func=request_limit_key, headers_enabled=False, storage_uri=settings.rate_limit_storage_uri)
+DEFAULT_REQUESTS_PER_USER_PER_MINUTE = 1200
+RUNTIME_LIMIT_REDIS_KEY = "bmrl:settings:requests_per_user_per_minute"
+_requests_per_user_per_minute = DEFAULT_REQUESTS_PER_USER_PER_MINUTE
+_runtime_limit_store: Redis | None = None
+
+
+def _get_runtime_limit_store() -> Redis | None:
+    global _runtime_limit_store
+    if _runtime_limit_store is not None:
+        return _runtime_limit_store
+    uri = settings.rate_limit_storage_uri or ""
+    if not uri.startswith(("redis://", "rediss://")):
+        return None
+    try:
+        _runtime_limit_store = Redis.from_url(
+            uri,
+            decode_responses=True,
+            socket_connect_timeout=0.2,
+            socket_timeout=0.2,
+        )
+    except Exception:
+        return None
+    return _runtime_limit_store
+
+
+def set_requests_per_user_per_minute(value: int) -> int:
+    global _requests_per_user_per_minute
+    _requests_per_user_per_minute = max(1, min(10000, int(value)))
+    store = _get_runtime_limit_store()
+    if store is not None:
+        try:
+            store.set(RUNTIME_LIMIT_REDIS_KEY, _requests_per_user_per_minute)
+        except Exception:
+            # The database remains the source of truth; local state keeps the
+            # current worker functional if Redis is temporarily unavailable.
+            pass
+    return _requests_per_user_per_minute
+
+
+def set_rate_limit_per_minute(value: int) -> int:
+    """Backward-compatible alias for older callers."""
+    return set_requests_per_user_per_minute(value)
+
+
+def configured_application_limit() -> str:
+    value = _requests_per_user_per_minute
+    store = _get_runtime_limit_store()
+    if store is not None:
+        try:
+            value = max(1, min(10000, int(store.get(RUNTIME_LIMIT_REDIS_KEY) or value)))
+        except Exception:
+            pass
+    return f"{value}/minute"
+
+
+limiter = Limiter(
+    key_func=request_limit_key,
+    application_limits=[configured_application_limit],
+    headers_enabled=False,
+    storage_uri=settings.rate_limit_storage_uri,
+)

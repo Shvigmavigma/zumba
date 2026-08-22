@@ -22,9 +22,10 @@
 - 2026-08-22 — logo cropper: raster logos use the existing banner crop visual language and a 780x200 output matching the header slot; pointer, keyboard, zoom, disabled, and responsive states are included.
 - 2026-08-22 — main race filters: the six race-property checkboxes remain inline on calendar/admin pages and use a native, keyboard-accessible dropdown only on the main menu.
 - 2026-08-22 — main race filter typography: the dropdown trigger inherits the same font, line height, and `--text` color as neighboring form controls.
+- 2026-08-22 — admin controls: per-user request limits, one common simulator RER coefficient, and SR-per-race amount are stored in `AppSetting`; default avatar reuses the existing admin card and cropper, with a square output and shared reactive fallback state.
 
 ## Components
-- `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo upload and preview controls (loading is represented by disabled upload actions; empty state uses bundled default logos).
+- `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, default-avatar, system-setting, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
 - `frontend/src/App.vue` — existing application shell, navigation, and theme-specific brand logo.
 - `frontend/src/components/ImageCropper.vue` — reusable fixed-ratio crop dialog for selected raster images.
 - `frontend/src/pages/MainMenu.vue` — main race filter bar with a compact native dropdown for qualification, format, and official-status options.
