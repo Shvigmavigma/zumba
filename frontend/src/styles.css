@@ -3188,6 +3188,40 @@ textarea {
   margin: 0;
 }
 
+.admin-car-model-mapping {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 14px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.admin-car-model-mapping .section-header {
+  align-items: center;
+  margin: 0;
+}
+
+.admin-car-model-mapping h3 {
+  margin: 0;
+  font-size: var(--body-text-size);
+}
+
+.admin-car-model-mapping-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-car-model-mapping-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.35fr) minmax(240px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel-muted) 60%, var(--panel));
+}
+
 .admin-race-assets-classes h3 {
   margin: 0;
   font-size: var(--body-text-size);
@@ -6160,6 +6194,7 @@ select,
   .admin-profile-edit-grid,
   .admin-settings-card,
   .admin-race-class-row,
+  .admin-car-model-mapping-row,
   .admin-danger-card,
   .team-create-panel,
   .teams-layout,

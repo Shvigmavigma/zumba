@@ -8,7 +8,65 @@ from app.schemas import RaceAssetGameConfig, RaceAssetsConfig
 RACE_ASSETS_KEY = "race_assets"
 RACE_ASSET_GAMES = {"ACC", "AC", "iRacing", "LMU"}
 
+DEFAULT_ACC_CAR_MODEL_IDS = {
+    "Porsche 991 GT3 R": 0,
+    "Mercedes-AMG GT3": 1,
+    "Ferrari 488 GT3": 2,
+    "Audi R8 LMS": 3,
+    "Lamborghini Huracan GT3": 4,
+    "McLaren 650S GT3": 5,
+    "Nissan GT-R Nismo GT3 2018": 6,
+    "BMW M6 GT3": 7,
+    "Bentley Continental GT3 2018": 8,
+    "Porsche 991II GT3 Cup": 9,
+    "Nissan GT-R Nismo GT3 2017": 10,
+    "Bentley Continental GT3 2016": 11,
+    "Aston Martin V12 Vantage GT3": 12,
+    "Lamborghini Gallardo R-EX": 13,
+    "Jaguar G3": 14,
+    "Lexus RC F GT3": 15,
+    "Lamborghini Huracan Evo (2019)": 16,
+    "Honda NSX GT3": 17,
+    "Lamborghini Huracan SuperTrofeo": 18,
+    "Audi R8 LMS Evo (2019)": 19,
+    "AMR V8 Vantage (2019)": 20,
+    "Honda NSX Evo (2019)": 21,
+    "McLaren 720S GT3 (2019)": 22,
+    "Porsche 911II GT3 R (2019)": 23,
+    "Ferrari 488 GT3 Evo 2020": 24,
+    "Mercedes-AMG GT3 2020": 25,
+    "Ferrari 488 Challenge Evo": 26,
+    "BMW M2 CS Racing": 27,
+    "Porsche 911 GT3 Cup (Type 992)": 28,
+    "Lamborghini Huracán Super Trofeo EVO2": 29,
+    "BMW M4 GT3": 30,
+    "Audi R8 LMS GT3 evo II": 31,
+    "Ferrari 296 GT3": 32,
+    "Lamborghini Huracan Evo2": 33,
+    "Porsche 992 GT3 R": 34,
+    "McLaren 720S GT3 Evo 2023": 35,
+    "Ford Mustang GT3": 36,
+    "Alpine A110 GT4": 50,
+    "AMR V8 Vantage GT4": 51,
+    "Audi R8 LMS GT4": 52,
+    "BMW M4 GT4": 53,
+    "Chevrolet Camaro GT4": 55,
+    "Ginetta G55 GT4": 56,
+    "KTM X-Bow GT4": 57,
+    "Maserati MC GT4": 58,
+    "McLaren 570S GT4": 59,
+    "Mercedes-AMG GT4": 60,
+    "Porsche 718 Cayman GT4": 61,
+    "Audi R8 LMS GT2": 80,
+    "KTM XBOW GT2": 82,
+    "Maserati MC20 GT2": 83,
+    "Mercedes AMG GT2": 84,
+    "Porsche 911 GT2 RS CS Evo": 85,
+    "Porsche 935": 86,
+}
+
 DEFAULT_RACE_ASSETS = {
+    "car_model_ids": DEFAULT_ACC_CAR_MODEL_IDS,
     "tracks": [
         "Autodromo Internazionale Enzo e Dino Ferrari (2020 GT World Challenge Pack)",
         "Barcelona",
@@ -145,6 +203,8 @@ def preserve_track_metadata(previous: RaceAssetGameConfig, incoming: RaceAssetGa
 def normalize_race_assets(value: dict | None) -> RaceAssetsConfig:
     if not isinstance(value, dict):
         value = DEFAULT_RACE_ASSETS
+    elif "car_model_ids" not in value:
+        value = {**value, "car_model_ids": DEFAULT_ACC_CAR_MODEL_IDS}
     return RaceAssetsConfig.model_validate(value)
 
 

@@ -328,6 +328,11 @@ export const messages = {
       trackImages: 'Картинки трасс',
       raceAssetsClasses: 'Классы и машины',
       addRaceClass: 'Добавить класс',
+      raceAssetsCarModelMap: 'ID моделей ACC',
+      raceAssetsCarModelMapHint: 'Эти номера попадут в carModel и forcedCarModel экспортируемого ACC entrylist.',
+      carModelId: 'ID машины',
+      carModelName: 'Название машины',
+      addCarModel: 'Добавить модель',
       empty: 'Пользователи не найдены'
     },
     teams: {
@@ -437,7 +442,8 @@ export const messages = {
       noRacesFound: 'Гонки не найдены',
       confirmClose: 'Закрыть гонку "{name}"?',
       confirmDelete: 'Удалить гонку "{name}" навсегда?',
-      exportRegistrations: 'Экспорт регистраций'
+      exportRegistrations: 'Экспорт регистраций',
+      accEntrylistWarning: 'Это entrylist для Assetto Corsa Competizione (ACC). В нём используются числовые ID моделей машин. Продолжить выгрузку?'
     },
     calendar: {
       previousMonth: 'Предыдущий месяц',
@@ -1004,6 +1010,11 @@ export const messages = {
       trackImages: 'Track images',
       raceAssetsClasses: 'Classes and cars',
       addRaceClass: 'Add class',
+      raceAssetsCarModelMap: 'ACC car model IDs',
+      raceAssetsCarModelMapHint: 'These numbers are written to carModel and forcedCarModel in the exported ACC entrylist.',
+      carModelId: 'Car ID',
+      carModelName: 'Car model name',
+      addCarModel: 'Add model',
       empty: 'No users found'
     },
     teams: {
@@ -1113,7 +1124,8 @@ export const messages = {
       noRacesFound: 'No races found',
       confirmClose: 'Close race "{name}"?',
       confirmDelete: 'Delete race "{name}" permanently?',
-      exportRegistrations: 'Export registrations'
+      exportRegistrations: 'Export registrations',
+      accEntrylistWarning: 'This entrylist is for Assetto Corsa Competizione (ACC). It uses numeric car model IDs. Continue export?'
     },
     calendar: {
       previousMonth: 'Previous month',

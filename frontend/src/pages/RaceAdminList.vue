@@ -98,6 +98,7 @@ async function deleteRace(race) {
 }
 
 async function exportRegistrations(race) {
+  if (race.game === 'ACC' && !window.confirm(t('raceAdmin.accEntrylistWarning'))) return
   busyRace.value = { ...busyRace.value, [race.id]: true }
   error.value = ''
   try {
