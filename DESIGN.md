@@ -23,12 +23,14 @@
 - 2026-08-22 — main race filters: the six race-property checkboxes remain inline on calendar/admin pages and use a native, keyboard-accessible dropdown only on the main menu.
 - 2026-08-22 — main race filter typography: the dropdown trigger inherits the same font, line height, and `--text` color as neighboring form controls.
 - 2026-08-22 — admin controls: per-user request limits, one common simulator RER coefficient, and SR-per-race amount are stored in `AppSetting`; default avatar reuses the existing admin card and cropper, with a square output and shared reactive fallback state.
+- 2026-08-22 — ACC entrylist mapping: the admin race-assets card exposes editable numeric car-model IDs; exports warn about ACC and write the configured IDs to `carModel`/`forcedCarModel`.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, default-avatar, system-setting, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
 - `frontend/src/App.vue` — existing application shell, navigation, and theme-specific brand logo.
 - `frontend/src/components/ImageCropper.vue` — reusable fixed-ratio crop dialog for selected raster images.
 - `frontend/src/pages/MainMenu.vue` — main race filter bar with a compact native dropdown for qualification, format, and official-status options.
+- `frontend/src/components/RaceAssetsEditor.vue` — admin ACC car-model mapping rows with editable IDs, add/remove controls, and responsive collapse.
 
 ## Non-Goals
 - No Figma sync

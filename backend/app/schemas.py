@@ -363,6 +363,7 @@ class RaceAssetGameConfig(BaseModel):
 
 
 class RaceAssetsConfig(RaceAssetGameConfig):
+    car_model_ids: dict[str, int] = Field(default_factory=dict, max_length=200)
     games: dict[AssetGameCode, RaceAssetGameConfig] = Field(default_factory=dict)
 
     @model_validator(mode="before")
@@ -374,6 +375,7 @@ class RaceAssetsConfig(RaceAssetGameConfig):
                 "classes": value.get("classes", []),
                 "track_images": value.get("track_images", {}),
                 "track_ids": value.get("track_ids", {}),
+                "car_model_ids": value.get("car_model_ids", {}),
             }
             return {
                 **legacy,
@@ -388,6 +390,11 @@ class RaceAssetsConfig(RaceAssetGameConfig):
 
     @model_validator(mode="after")
     def sync_legacy_acc_fields(self):
+        self.car_model_ids = {
+            str(name).strip(): int(model_id)
+            for name, model_id in self.car_model_ids.items()
+            if str(name).strip() and 0 <= int(model_id) <= 100
+        }
         allowed_games = ("ACC", "AC", "iRacing", "LMU")
         self.games = {game: self.games.get(game, RaceAssetGameConfig()) for game in allowed_games}
         if not self.tracks and not self.classes and not self.track_images:

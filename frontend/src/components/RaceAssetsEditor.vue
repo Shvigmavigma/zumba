@@ -12,6 +12,7 @@ const raceAssetGame = ref('ACC')
 const raceAssetsByGame = ref(defaultRaceAssetsByGame())
 const raceAssetsSaving = ref(false)
 const raceAssetsSaved = ref(false)
+const accCarModelMappings = ref([])
 const activeRaceAssetsDraft = computed(() => raceAssetsByGame.value[raceAssetGame.value])
 
 function emptyRaceAssetDraft() {
@@ -43,6 +44,13 @@ function normalizeRaceAssetsDraft(config = {}) {
   }
 }
 
+function carModelMappingsFromConfig(config = {}) {
+  return Object.entries(config.car_model_ids || {}).map(([name, id]) => ({
+    name,
+    id: Number(id)
+  }))
+}
+
 function configFromDraft(draft = emptyRaceAssetDraft()) {
   const tracks = draft.tracksText.split('\n').map((item) => item.trim()).filter(Boolean)
   const knownTracks = new Set(tracks)
@@ -65,10 +73,20 @@ function setError(err) {
 async function loadRaceAssets() {
   try {
     emit('error', '')
-    raceAssetsByGame.value = normalizeRaceAssetsDraft(await api('/race-assets'))
+    const config = await api('/race-assets')
+    raceAssetsByGame.value = normalizeRaceAssetsDraft(config)
+    accCarModelMappings.value = carModelMappingsFromConfig(config)
   } catch (err) {
     setError(err)
   }
+}
+
+function addCarModelMapping() {
+  accCarModelMappings.value = [...accCarModelMappings.value, { id: 0, name: '' }]
+}
+
+function removeCarModelMapping(index) {
+  accCarModelMappings.value = accCarModelMappings.value.filter((_, itemIndex) => itemIndex !== index)
 }
 
 function addRaceAssetClass() {
@@ -89,10 +107,16 @@ async function saveRaceAssets() {
       method: 'PATCH',
       body: {
         ...games.ACC,
-        games
+        games,
+        car_model_ids: Object.fromEntries(
+          accCarModelMappings.value
+            .map((item) => [String(item.name || '').trim(), Number(item.id)])
+            .filter(([name, id]) => name && Number.isInteger(id) && id >= 0 && id <= 100)
+        )
       }
     })
     raceAssetsByGame.value = normalizeRaceAssetsDraft(config)
+    accCarModelMappings.value = carModelMappingsFromConfig(config)
     raceAssetsSaved.value = true
   } catch (err) {
     setError(err)
@@ -144,6 +168,30 @@ onMounted(loadRaceAssets)
           <Trash2 :size="16" />
         </button>
       </article>
+    </div>
+    <div v-if="raceAssetGame === 'ACC'" class="admin-car-model-mapping">
+      <div class="section-header compact">
+        <div>
+          <h3>{{ t('adminUsers.raceAssetsCarModelMap') }}</h3>
+          <p class="muted">{{ t('adminUsers.raceAssetsCarModelMapHint') }}</p>
+        </div>
+        <button class="button small" type="button" @click="addCarModelMapping"><Plus :size="15" />{{ t('adminUsers.addCarModel') }}</button>
+      </div>
+      <div class="admin-car-model-mapping-list">
+        <article v-for="(item, index) in accCarModelMappings" :key="`${index}-${item.name}`" class="admin-car-model-mapping-row">
+          <label class="field">
+            <span>{{ t('adminUsers.carModelId') }}</span>
+            <input v-model.number="item.id" type="number" min="0" max="100" required />
+          </label>
+          <label class="field">
+            <span>{{ t('adminUsers.carModelName') }}</span>
+            <input v-model="item.name" required />
+          </label>
+          <button class="icon-button danger-icon" type="button" :title="t('common.delete')" :aria-label="t('common.delete')" @click="removeCarModelMapping(index)">
+            <Trash2 :size="16" />
+          </button>
+        </article>
+      </div>
     </div>
     <div class="admin-race-assets-actions">
       <button class="button primary" type="submit" :disabled="raceAssetsSaving">

@@ -13,7 +13,7 @@ from app.deps import require_admin
 from app.deps import get_optional_user, require_moder_plus, require_pilot_plus
 from app.models import AppSetting, RaceFanVote
 from app.models import Championship, ChampionshipRegistration, RACE_GAMES, Penalty, Race, RaceRegistration, RaceStatus, Role, Setup, Team, TeamApplicationStatus, TeamRaceRegistration, User, UserStatus
-from app.race_assets import normalize_race_create_assets, normalize_race_update_assets
+from app.race_assets import DEFAULT_ACC_CAR_MODEL_IDS, get_race_assets, normalize_race_create_assets, normalize_race_update_assets
 from app.race_videos import remove_race_video_file, save_race_video_file
 from app.rate_limit import limiter
 from app.schemas import FanVoteCast, FanVoteConfigRead, FanVoteConfigUpdate, FanVoteRead, FanVoteSetup
@@ -43,6 +43,7 @@ ACC_CAR_MODEL_IDS = {
     "reiterengineeringrexgt32017": 13,
     "emilfreyjaguargt32012": 14,
     "lexusrfcgt32016": 15,
+    "lexusrcfgt32016": 15,
     "lamborghinihuracanevogt32019": 16,
     "hondansxgt32017": 17,
     "lamborghinihuracansupertrofeo2015": 18,
@@ -73,6 +74,7 @@ ACC_CAR_MODEL_IDS = {
     "porsche992gt3r": 34,
     "mclaren720sevogt32023": 35,
     "mclaren720sgt3evo2023": 35,
+    "fordmustanggt32024": 36,
     "alpinea1102018": 50,
     "amrv8vantage2018": 51,
     "astonmartinv8vantagegt42018": 51,
@@ -375,17 +377,28 @@ def short_driver_name(user: User, pilot_number: int | None = None) -> str:
     return (letters[:3] or f"P{pilot_number or user.pilot_number}")[:3]
 
 
-def acc_forced_car_model(car_model: str | None) -> int:
+def acc_forced_car_model(car_model: str | None, car_model_ids: dict[str, int] | None = None) -> int:
     raw = str(car_model or "").strip()
     try:
         return int(raw)
     except ValueError:
         normalized = "".join(char for char in raw.lower() if char.isalnum())
+        configured_ids = DEFAULT_ACC_CAR_MODEL_IDS if car_model_ids is None else car_model_ids
+        for configured_name, model_id in configured_ids.items():
+            configured_normalized = "".join(char for char in str(configured_name).lower() if char.isalnum())
+            if configured_normalized == normalized:
+                return int(model_id)
         return ACC_CAR_MODEL_IDS.get(normalized, -1)
 
 
-def acc_entrylist_entry(registration: RaceRegistration, user: User, car_model: str | None = None) -> dict:
+def acc_entrylist_entry(
+    registration: RaceRegistration,
+    user: User,
+    car_model: str | None = None,
+    car_model_ids: dict[str, int] | None = None,
+) -> dict:
     resolved_car_model = (car_model or registration.car_model or "").strip()
+    resolved_car_model_id = acc_forced_car_model(resolved_car_model, car_model_ids)
     return {
         "drivers": [
             {
@@ -413,10 +426,10 @@ def acc_entrylist_entry(registration: RaceRegistration, user: User, car_model: s
             }
         ],
         "customCar": "",
-        "carModel": resolved_car_model,
+        "carModel": resolved_car_model_id,
         "raceNumber": registration.pilot_number,
         "defaultGridPosition": -1,
-        "forcedCarModel": acc_forced_car_model(resolved_car_model),
+        "forcedCarModel": resolved_car_model_id,
         "overrideDriverInfo": 1,
         "isServerAdmin": 0,
         "overrideCarModelForCustomCar": 1,
@@ -424,8 +437,14 @@ def acc_entrylist_entry(registration: RaceRegistration, user: User, car_model: s
     }
 
 
-def acc_team_entrylist_entry(registration: TeamRaceRegistration, team: Team, drivers: list[dict]) -> dict:
+def acc_team_entrylist_entry(
+    registration: TeamRaceRegistration,
+    team: Team,
+    drivers: list[dict],
+    car_model_ids: dict[str, int] | None = None,
+) -> dict:
     resolved_car_model = (registration.car_model or "").strip()
+    resolved_car_model_id = acc_forced_car_model(resolved_car_model, car_model_ids)
     return {
         "teamName": f"{team.name} - {team.abbreviation}",
         "raceNumber": registration.race_number,
@@ -433,7 +452,7 @@ def acc_team_entrylist_entry(registration: TeamRaceRegistration, team: Team, dri
         "ballastKg": 0,
         "restrictor": 0,
         "isServerAdmin": 0,
-        "forcedCarModel": acc_forced_car_model(resolved_car_model),
+        "forcedCarModel": resolved_car_model_id,
         "overrideCarModelForCustomCar": 0,
         "overrideDriverInfo": 1,
         "customCar": "",
@@ -484,11 +503,13 @@ async def get_team_registration_rows(session: AsyncSession, race_id: int) -> lis
 
 async def build_acc_entrylist(session: AsyncSession, race_id: int) -> dict:
     race = await session.get(Race, race_id)
+    race_assets = await get_race_assets(session)
+    car_model_ids = race_assets.car_model_ids
     if race and race.is_team_event:
         rows = await get_team_registration_rows(session, race_id)
         return {
-            "entries": [acc_team_entrylist_entry(registration, team, registration.drivers or []) for registration, team in rows],
-            "forceEntryList": 0,
+            "entries": [acc_team_entrylist_entry(registration, team, registration.drivers or [], car_model_ids) for registration, team in rows],
+            "forceEntryList": 1,
         }
     rows = await get_registration_rows(session, race_id)
     championship_cars: dict[int, str] = {}
@@ -517,9 +538,9 @@ async def build_acc_entrylist(session: AsyncSession, race_id: int) -> dict:
         return default_car
 
     return {
-        "entries": [acc_entrylist_entry(registration, user, resolved_car(registration, user)) for registration, user in rows],
+        "entries": [acc_entrylist_entry(registration, user, resolved_car(registration, user), car_model_ids) for registration, user in rows],
         "configVersion": 1,
-        "forceEntryList": 0,
+        "forceEntryList": 1,
     }
 
 
