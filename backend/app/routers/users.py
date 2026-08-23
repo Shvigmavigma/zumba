@@ -9,11 +9,12 @@ from app.avatar_uploads import ensure_avatar_upload_allowed, mark_avatar_uploade
 from app.config import get_settings
 from app.db import get_session
 from app.deps import as_utc, clear_expired_timeout, require_admin, require_moder_plus, require_pilot_plus
-from app.models import RACE_GAMES, Appeal, Banner, Championship, Penalty, Race, RaceRegistration, Role, Setup, Team, TeamApplication, TeamCreationRequest, User, UserStatus, default_game_ratings
+from app.models import RACE_GAMES, Appeal, Banner, Championship, Penalty, Race, RaceRegistration, RaceStatus, Role, Setup, Team, TeamApplication, TeamCreationRequest, User, UserStatus, default_game_ratings
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
-from app.schemas import AdminDangerDeleteRequest, RoleUpdate, TimeoutRequest, UserAdminUpdate, UserPrivate, UserPublic, UserUpdate
+from app.schemas import AdminDangerDeleteRequest, ProfileAnalyticsRead, RoleUpdate, TimeoutRequest, UserAdminUpdate, UserPrivate, UserPublic, UserUpdate
 from app.security import verify_password
+from app.services import result_rows
 
 
 router = APIRouter()
@@ -291,6 +292,104 @@ async def get_user(user_id: int, request: Request, session: AsyncSession = Depen
     return user_response(user, team_name, team_abbreviation)
 
 
+@router.get("/{user_id}/analytics", response_model=ProfileAnalyticsRead)
+@limiter.limit("300/minute")
+async def get_user_analytics(user_id: int, request: Request, session: AsyncSession = Depends(get_session)):
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    races = list(
+        (
+            await session.scalars(
+                select(Race)
+                .where(Race.status == RaceStatus.finished, Race.results.is_not(None))
+                .order_by(Race.datetime_start.desc(), Race.id.desc())
+                .limit(500)
+            )
+        ).all()
+    )
+    best_by_track: dict[tuple[str, str], dict] = {}
+    recent_results: list[dict] = []
+    rating_history: list[dict] = []
+    for race in races:
+        game = race.game if race.game in RACE_GAMES else RACE_GAMES[0]
+        raw_track = (race.results or {}).get("track") if isinstance(race.results, dict) else None
+        track = str(raw_track).strip() if raw_track not in (None, "") else str(race.track or "Без названия")
+        rows = result_rows(race.results)
+        for row in rows:
+            try:
+                row_user_id = int(row.get("user_id"))
+            except (TypeError, ValueError):
+                continue
+            if row_user_id != user.id or row.get("status") == "missing":
+                continue
+            for session_name, value in (("qualification", row.get("qualification_best_lap_ms")), ("race", row.get("best_lap_ms"))):
+                if not isinstance(value, (int, float)) or value <= 0:
+                    continue
+                candidate = {
+                    "track": track,
+                    "track_id": race.track_id,
+                    "game": game,
+                    "best_lap_ms": int(value),
+                    "session": session_name,
+                    "car_model": str(row.get("car_model")) if row.get("car_model") is not None else None,
+                    "race_id": race.id,
+                    "race_name": race.name,
+                    "recorded_at": race.datetime_start,
+                }
+                key = (game, track)
+                current = best_by_track.get(key)
+                if current is None or candidate["best_lap_ms"] < current["best_lap_ms"]:
+                    best_by_track[key] = candidate
+
+            rating_new = row.get("rating_new")
+            if isinstance(rating_new, (int, float)):
+                old_rating = row.get("rating_old")
+                delta = row.get("rating_delta")
+                rating_history.append(
+                    {
+                        "race_id": race.id,
+                        "race_name": race.name,
+                        "game": game,
+                        "recorded_at": race.datetime_start,
+                        "rating": int(round(rating_new)),
+                        "change": int(round(delta)) if isinstance(delta, (int, float)) else int(round(rating_new - old_rating)) if isinstance(old_rating, (int, float)) else 0,
+                    }
+                )
+            recent_results.append(
+                {
+                    "race_id": race.id,
+                    "race_name": race.name,
+                    "game": game,
+                    "track": track,
+                    "recorded_at": race.datetime_start,
+                    "position": int(row.get("position")) if isinstance(row.get("position"), (int, float)) else int(row.get("raw_position")) if isinstance(row.get("raw_position"), (int, float)) else None,
+                    "finish_ms": int(row["finish_ms"]) if isinstance(row.get("finish_ms"), (int, float)) else None,
+                    "best_lap_ms": int(row["best_lap_ms"]) if isinstance(row.get("best_lap_ms"), (int, float)) else None,
+                    "car_model": str(row.get("car_model")) if row.get("car_model") is not None else None,
+                    "rating_before": int(round(row["rating_old"])) if isinstance(row.get("rating_old"), (int, float)) else None,
+                    "rating_after": int(round(row["rating_new"])) if isinstance(row.get("rating_new"), (int, float)) else None,
+                    "rating_change": int(round(row["rating_delta"])) if isinstance(row.get("rating_delta"), (int, float)) else None,
+                }
+            )
+            if len(recent_results) >= 50:
+                break
+        if len(recent_results) >= 50:
+            break
+
+    rating_history = sorted(rating_history, key=lambda item: (item["recorded_at"], item["race_id"]))[-60:]
+    if not rating_history:
+        current_rating = int(round(float((user.game_ratings or {}).get(RACE_GAMES[0], {}).get("rating", user.rating))))
+        rating_history = [{"race_id": 0, "race_name": "", "game": RACE_GAMES[0], "recorded_at": user.updated_at, "rating": current_rating, "change": 0}]
+    return {
+        "favorite_car": user.favorite_car,
+        "best_laps": sorted(best_by_track.values(), key=lambda item: (item["game"], item["track"].lower())),
+        "recent_results": recent_results,
+        "rating_history": rating_history,
+    }
+
+
 @router.patch("/me", response_model=UserPrivate)
 @limiter.limit("3/minute")
 async def update_me(
@@ -300,14 +399,23 @@ async def update_me(
     session: AsyncSession = Depends(get_session),
 ):
     data = payload.model_dump(exclude_unset=True)
+    if "favorite_car" in data and data["favorite_car"] is not None:
+        data["favorite_car"] = data["favorite_car"].strip() or None
     if any(field in data and data[field] is None for field in PROFILE_REQUIRED_FIELDS):
         raise HTTPException(status_code=400, detail="Required profile fields cannot be null")
     await ensure_unique_user_fields(session, data, user.id)
+    favorite_car_marker = object()
+    favorite_car = data.pop("favorite_car", favorite_car_marker)
     if user.role == Role.admin:
         for field, value in data.items():
             setattr(user, field, value)
-    elif data:
-        user.pending_profile_changes = data
+        if favorite_car is not favorite_car_marker:
+            user.favorite_car = favorite_car
+    else:
+        if favorite_car is not favorite_car_marker:
+            user.favorite_car = favorite_car
+        if data:
+            user.pending_profile_changes = data
     await session.commit()
     await session.refresh(user)
     team_name, team_abbreviation = await user_team_info(session, user)
@@ -339,6 +447,8 @@ async def update_user_profile(
         raise HTTPException(status_code=404, detail="User not found")
 
     data = payload.model_dump(exclude_unset=True)
+    if "favorite_car" in data and data["favorite_car"] is not None:
+        data["favorite_car"] = data["favorite_car"].strip() or None
     required_fields = PROFILE_REQUIRED_FIELDS | {"login", "pilot_number"}
     if any(field in data and data[field] is None for field in required_fields):
         raise HTTPException(status_code=400, detail="Required profile fields cannot be null")

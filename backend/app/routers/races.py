@@ -102,17 +102,22 @@ ACC_CAR_MODEL_IDS = {
 }
 
 
+def scheduled_race_status(registration_start: datetime, registration_end: datetime, race_time: datetime, now: datetime | None = None) -> RaceStatus:
+    current = now or datetime.now(timezone.utc)
+    if to_utc(race_time) <= current:
+        return RaceStatus.ongoing
+    if to_utc(registration_start) <= current < to_utc(registration_end):
+        return RaceStatus.registration_open
+    return RaceStatus.not_started
+
+
 def update_time_based_status(race: Race) -> None:
-    now = datetime.now(timezone.utc)
-    if race.game == "LMU" and race.status == RaceStatus.registration_open:
-        open_at = race.lmu_results_at or race.datetime_end
-        if open_at and to_utc(open_at) <= now:
-            race.status = RaceStatus.ongoing
+    if race.status == RaceStatus.finished:
         return
-    if race.status == RaceStatus.not_started and race.datetime_start <= now:
-        race.status = RaceStatus.ongoing
-    if race.status == RaceStatus.registration_open and race.datetime_end <= now:
-        race.status = RaceStatus.ongoing
+    if race.championship_id is not None:
+        race.status = RaceStatus.ongoing if to_utc(race.datetime_start) <= datetime.now(timezone.utc) else RaceStatus.not_started
+        return
+    race.status = scheduled_race_status(race.registration_start, race.datetime_end, race.datetime_start)
 
 
 async def ensure_race(session: AsyncSession, race_id: int) -> Race:
@@ -140,7 +145,7 @@ def normalize_external_race_data(data: dict, race: Race | None = None) -> dict:
     data["server_link"] = link
     lmu_results_at = data.get("lmu_results_at", race.lmu_results_at if race else None)
     if lmu_results_at is None:
-        lmu_results_at = data.get("datetime_end", race.datetime_end if race else None)
+        lmu_results_at = data.get("datetime_start", race.datetime_start if race else None)
     data["lmu_results_at"] = lmu_results_at
     track = str(data.get("track", race.track if race else "") or "").strip()
     car_class = str(data.get("car_class", race.car_class if race else "") or "").strip()
@@ -1299,6 +1304,7 @@ async def manage_races(
             "server_link": race.server_link,
             "lmu_results_at": race.lmu_results_at,
             "status": race.status,
+            "registration_start": race.registration_start,
             "datetime_start": race.datetime_start,
             "datetime_end": race.datetime_end,
             "max_pilots": race.max_pilots,
@@ -1306,6 +1312,8 @@ async def manage_races(
             "car_class": race.car_class,
             "track": race.track,
             "track_id": race.track_id,
+            "weather_chances": race.weather_chances or {},
+            "track_temperature": race.track_temperature,
             "game": race.game,
             "has_qualification": race.has_qualification,
             "scoring_system": race.scoring_system,
@@ -1326,17 +1334,18 @@ async def manage_races(
 @router.post("", response_model=RaceRead, status_code=status.HTTP_201_CREATED)
 @limiter.limit("3/minute")
 async def create_race(payload: RaceCreate, request: Request, user: User = Depends(require_moder_plus), session: AsyncSession = Depends(get_session)):
-    if payload.datetime_end <= payload.datetime_start:
-        raise HTTPException(status_code=400, detail="Registration end must be after start")
+    if not (payload.registration_start < payload.datetime_end < payload.datetime_start):
+        raise HTTPException(status_code=400, detail="Registration dates must end before the race date")
     data = await normalize_race_create_assets(session, payload.model_dump())
     data = normalize_external_race_data(data)
     race = Race(
         **data,
         creator_id=user.id,
-        status=RaceStatus.registration_open,
+        status=RaceStatus.not_started,
         is_passed=False,
         registered_pilots=[],
     )
+    update_time_based_status(race)
     session.add(race)
     await session.commit()
     await session.refresh(race)
@@ -1396,11 +1405,13 @@ async def update_race(
     requested_results = data.get("results")
     was_finished = race.status == RaceStatus.finished
     will_be_finished = data.get("status", race.status) == RaceStatus.finished
-    if "datetime_end" in data or "datetime_start" in data:
-        start = data.get("datetime_start", race.datetime_start)
-        end = data.get("datetime_end", race.datetime_end)
-        if end <= start:
-            raise HTTPException(status_code=400, detail="Registration end must be after start")
+    schedule_changed = any(field in data for field in ("registration_start", "datetime_start", "datetime_end"))
+    if schedule_changed and race.championship_id is None:
+        registration_start = data.get("registration_start", race.registration_start)
+        registration_end = data.get("datetime_end", race.datetime_end)
+        race_time = data.get("datetime_start", race.datetime_start)
+        if not (registration_start < registration_end < race_time):
+            raise HTTPException(status_code=400, detail="Registration dates must end before the race date")
     if requested_status == RaceStatus.finished:
         finish_game = data.get("game", race.game)
         finish_lmu_results_at = data.get("lmu_results_at", race.lmu_results_at)
@@ -1414,6 +1425,8 @@ async def update_race(
         await restore_race_sr_bonus(session, race)
     for field, value in data.items():
         setattr(race, field, value)
+    if schedule_changed and requested_status is None:
+        update_time_based_status(race)
     if race.status == RaceStatus.finished:
         race.is_passed = True
         await apply_sr_penalties(session, race)

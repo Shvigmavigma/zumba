@@ -198,7 +198,8 @@ watch(page, load)
             <td>
               <div class="race-admin-date">
                 <strong>{{ formatDate(race.datetime_start) }}</strong>
-                <span>{{ formatDate(race.datetime_end) }}</span>
+                <span>{{ t('fields.registrationStart') }}: {{ formatDate(race.registration_start) }}</span>
+                <span>{{ t('fields.registrationEnd') }}: {{ formatDate(race.datetime_end) }}</span>
               </div>
             </td>
             <td>

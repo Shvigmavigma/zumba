@@ -20,6 +20,15 @@ const races = ref([])
 const setups = ref([])
 const banners = ref([])
 const news = ref([])
+const newsSettings = ref({ auto_rotate_seconds: 30, manual_pause_seconds: 300 })
+const weatherSettings = ref({
+  clear_url: '',
+  partly_cloudy_url: '',
+  overcast_url: '',
+  light_rain_url: '',
+  heavy_rain_url: '',
+  storm_url: ''
+})
 const registrationChampionships = ref([])
 const donationSettings = ref({ donation_url: '', top_donations: [] })
 const newsTrack = ref(null)
@@ -56,6 +65,12 @@ const twitchWidgetPosition = ref({ x: 24, y: 120 })
 const twitchDragState = ref(null)
 const twitchWasDragged = ref(false)
 const twitchPreviewStartSecond = Math.floor(Math.random() * 900) + 15
+const weatherKeys = ['clear', 'partly_cloudy', 'overcast', 'light_rain', 'heavy_rain', 'storm']
+let newsAutoplayTimer = null
+let newsAutoplayPauseTimer = null
+let newsScrollResetTimer = null
+let newsProgrammaticScroll = false
+let newsManualPauseUntil = 0
 const currentNews = computed(() => news.value[activeNewsIndex.value] || null)
 const featuredChampionship = computed(() => registrationChampionships.value[0] || null)
 const featuredChampionshipStageCount = computed(() => featuredChampionship.value?.stage_count ?? featuredChampionship.value?.stages?.length ?? 0)
@@ -204,6 +219,19 @@ function fillPercent(race) {
   return Math.min(100, Math.round((registeredCount(race) / race.max_pilots) * 100))
 }
 
+function dominantWeatherKey(race) {
+  const chances = race?.weather_chances || {}
+  return weatherKeys.reduce((best, key) => Number(chances[key] || 0) > Number(chances[best] || 0) ? key : best, weatherKeys[0])
+}
+
+function weatherImageUrl(race) {
+  return weatherSettings.value[`${dominantWeatherKey(race)}_url`] || ''
+}
+
+function weatherLabel(key) {
+  return t(`weather.${key === 'partly_cloudy' ? 'partlyCloudy' : key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())}`)
+}
+
 function clampNewsIndex(index) {
   if (!news.value.length) return 0
   return Math.min(Math.max(index, 0), news.value.length - 1)
@@ -214,11 +242,48 @@ function wrapNewsIndex(index) {
   return ((index % news.value.length) + news.value.length) % news.value.length
 }
 
-function goToNews(index, behavior = 'smooth') {
+function clearNewsAutoplay() {
+  if (newsAutoplayTimer !== null) {
+    window.clearInterval(newsAutoplayTimer)
+    newsAutoplayTimer = null
+  }
+}
+
+function startNewsAutoplay() {
+  clearNewsAutoplay()
+  if (news.value.length < 2) return
+  const interval = Math.max(5, Number(newsSettings.value.auto_rotate_seconds) || 30) * 1000
+  newsAutoplayTimer = window.setInterval(() => {
+    if (isNewsViewerOpen.value || Date.now() < newsManualPauseUntil) return
+    goToNews(activeNewsIndex.value + 1, 'smooth', false)
+  }, interval)
+}
+
+function pauseNewsAutoplayAfterManualNavigation() {
+  const pause = Math.max(0, Number(newsSettings.value.manual_pause_seconds) || 0) * 1000
+  newsManualPauseUntil = Date.now() + pause
+  if (newsAutoplayPauseTimer !== null) window.clearTimeout(newsAutoplayPauseTimer)
+  if (!pause) {
+    startNewsAutoplay()
+    return
+  }
+  newsAutoplayPauseTimer = window.setTimeout(() => {
+    newsManualPauseUntil = 0
+    startNewsAutoplay()
+  }, pause)
+}
+
+function goToNews(index, behavior = 'smooth', manual = false) {
+  if (manual) pauseNewsAutoplayAfterManualNavigation()
   const nextIndex = wrapNewsIndex(index)
   activeNewsIndex.value = nextIndex
   const track = newsTrack.value
   if (!track) return
+  newsProgrammaticScroll = true
+  if (newsScrollResetTimer !== null) window.clearTimeout(newsScrollResetTimer)
+  newsScrollResetTimer = window.setTimeout(() => {
+    newsProgrammaticScroll = false
+  }, behavior === 'smooth' ? 700 : 80)
   track.scrollTo({
     left: nextIndex * track.clientWidth,
     behavior
@@ -226,13 +291,17 @@ function goToNews(index, behavior = 'smooth') {
 }
 
 function scrollNews(direction) {
-  goToNews(activeNewsIndex.value + direction)
+  goToNews(activeNewsIndex.value + direction, 'smooth', true)
 }
 
 function syncNewsIndex() {
   const track = newsTrack.value
   if (!track || !track.clientWidth) return
-  activeNewsIndex.value = clampNewsIndex(Math.round(track.scrollLeft / track.clientWidth))
+  const nextIndex = clampNewsIndex(Math.round(track.scrollLeft / track.clientWidth))
+  if (nextIndex !== activeNewsIndex.value && !newsProgrammaticScroll) {
+    pauseNewsAutoplayAfterManualNavigation()
+  }
+  activeNewsIndex.value = nextIndex
 }
 
 function openNews(index) {
@@ -247,7 +316,7 @@ function closeNewsViewer() {
 }
 
 function moveNewsFromViewer(direction) {
-  goToNews(activeNewsIndex.value + direction)
+  goToNews(activeNewsIndex.value + direction, 'smooth', true)
 }
 
 function openRace(race, event) {
@@ -406,13 +475,15 @@ onMounted(async () => {
   placeTwitchWidget()
   loadTwitchStatus()
   try {
-    const [statsData, setupsData, bannerData, newsData, championshipData, donationData] = await Promise.all([
+    const [statsData, setupsData, bannerData, newsData, championshipData, donationData, loadedNewsSettings, loadedWeatherSettings] = await Promise.all([
       api('/dashboard/stats'),
       api('/setups?limit=6'),
       api('/banners'),
       api('/news'),
       api('/championships?status_filter=registration_open&limit=3'),
-      api('/app-settings/donations')
+      api('/app-settings/donations'),
+      api('/app-settings/news').catch(() => ({ auto_rotate_seconds: 30, manual_pause_seconds: 300 })),
+      api('/app-settings/weather').catch(() => weatherSettings.value)
     ])
     stats.value = statsData
     setups.value = setupsData
@@ -420,8 +491,11 @@ onMounted(async () => {
     news.value = newsData
     registrationChampionships.value = championshipData
     donationSettings.value = donationData
+    newsSettings.value = loadedNewsSettings
+    weatherSettings.value = loadedWeatherSettings
     const pinnedIndex = newsData.findIndex((item) => item.is_pinned)
     activeNewsIndex.value = pinnedIndex >= 0 ? pinnedIndex : 0
+    startNewsAutoplay()
     await loadRaces()
   } catch (err) {
     error.value = err.message
@@ -445,6 +519,9 @@ watch([raceGameFilter, raceStatusFilter, myGamesOnly, raceTypeFilters], async ()
 })
 
 onBeforeUnmount(() => {
+  clearNewsAutoplay()
+  if (newsAutoplayPauseTimer !== null) window.clearTimeout(newsAutoplayPauseTimer)
+  if (newsScrollResetTimer !== null) window.clearTimeout(newsScrollResetTimer)
   window.removeEventListener('keydown', handleNewsKeydown)
   window.removeEventListener('resize', handleTwitchResize)
   window.removeEventListener('pointermove', dragTwitchWidget)
@@ -505,7 +582,7 @@ onBeforeUnmount(() => {
               :class="{ 'is-active': index === activeNewsIndex }"
               type="button"
               :title="t('news.goTo', { number: index + 1 })"
-              @click="goToNews(index)"
+              @click="goToNews(index, 'smooth', true)"
             >
               <span class="visually-hidden">{{ t('news.goTo', { number: index + 1 }) }}</span>
             </button>
@@ -598,32 +675,42 @@ onBeforeUnmount(() => {
               @keydown.space.prevent="openRace(race, $event)"
             >
               <div class="main-race-date-tile">
-                <strong>{{ formatRaceDay(race.datetime_start) }}</strong>
-                <span>{{ formatRaceMonth(race.datetime_start) }}</span>
-                <small>{{ formatRaceTime(race.datetime_start) }}</small>
+                <strong>{{ formatRaceDay(race.registration_start) }}</strong>
+                <span>{{ formatRaceMonth(race.registration_start) }}</span>
+                <small>{{ formatRaceTime(race.registration_start) }}</small>
               </div>
 
               <div class="main-race-card-main">
                 <div class="main-race-card-head">
                   <div class="main-race-title">
-                    <a v-if="isExternalRace(race)" :href="raceOpenHref(race)">{{ race.name }}</a>
-                    <RouterLink v-else :to="raceOpenHref(race)">{{ race.name }}</RouterLink>
-                    <p class="muted main-race-subtitle">
-                      <span>{{ gameLabel(t, race.game) }}</span>
-                      <span v-if="race.track">{{ race.track }}</span>
-                      <span v-if="race.car_class">{{ race.car_class }}</span>
-                    </p>
+                    <div class="main-race-name-row">
+                      <a v-if="isExternalRace(race)" :href="raceOpenHref(race)">{{ race.name }}</a>
+                      <RouterLink v-else :to="raceOpenHref(race)">{{ race.name }}</RouterLink>
+                      <img
+                        v-if="weatherImageUrl(race)"
+                        class="main-race-weather-indicator"
+                        :src="weatherImageUrl(race)"
+                        :alt="weatherLabel(dominantWeatherKey(race))"
+                        :title="weatherLabel(dominantWeatherKey(race))"
+                      />
+                    </div>
+                    <div class="muted main-race-subtitle">
+                      <div class="main-race-subtitle-top">
+                        <span>{{ gameLabel(t, race.game) }}</span>
+                        <span v-if="race.car_class">{{ race.car_class }}</span>
+                      </div>
+                      <span v-if="race.track" class="main-race-track">{{ race.track }}</span>
+                    </div>
                   </div>
-                  <span v-if="race.is_team_event" class="status-badge race-team-badge">{{ t('raceFilters.teamBadge') }}</span>
                 </div>
 
                 <div class="main-race-meta">
                   <span>
-                    <small>{{ t('fields.date') }}</small>
-                    <strong>{{ formatRaceDate(race.datetime_start) }}</strong>
+                    <small>{{ t('fields.registrationEnd') }}</small>
+                    <strong>{{ formatRaceDate(race.datetime_end) }}</strong>
                   </span>
                   <span v-if="race.game !== 'LMU'">
-                    <small>{{ race.is_team_event ? t('raceDetails.teams') : t('fields.participants') }}</small>
+                    <small>{{ t('fields.participants') }}</small>
                     <strong>{{ registeredCount(race) }} / {{ race.max_pilots }}</strong>
                   </span>
                 </div>
@@ -636,7 +723,10 @@ onBeforeUnmount(() => {
               <div class="main-race-action-panel">
                 <span v-if="isRaceRegistered(race)" class="status-badge main-registered-badge">{{ t('main.registeredForRace') }}</span>
                 <span class="status-badge race-status-badge" :class="`race-status-${race.status}`">{{ statusLabel(t, race.status) }}</span>
-                <span v-if="race.game !== 'LMU'" class="main-race-fill">{{ fillPercent(race) }}%</span>
+                <span class="main-race-fill">
+                  <small>{{ t('fields.raceTime') }}</small>
+                  <strong>{{ formatRaceDate(race.datetime_start) }}</strong>
+                </span>
                 <a v-if="isExternalRace(race)" class="button main-race-open" :href="raceOpenHref(race)">
                   <Eye :size="16" />
                   {{ t('common.open') }}
@@ -832,7 +922,7 @@ onBeforeUnmount(() => {
           :class="{ 'is-active': index === activeNewsIndex }"
           type="button"
           :title="t('news.goTo', { number: index + 1 })"
-          @click.stop="goToNews(index)"
+          @click.stop="goToNews(index, 'smooth', true)"
         >
           <span class="visually-hidden">{{ t('news.goTo', { number: index + 1 }) }}</span>
         </button>

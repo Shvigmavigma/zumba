@@ -107,6 +107,7 @@ class UserPublic(BaseModel):
     avatar_color: str
     avatar_url: str | None = None
     games: list[str] = Field(default_factory=list)
+    favorite_car: str | None = None
     team_id: int | None = None
     team_name: str | None = None
     team_abbreviation: str | None = None
@@ -133,6 +134,7 @@ class UserUpdate(BaseModel):
     discord: str | None = Field(default=None, max_length=100)
     avatar_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     games: list[GameCode] | None = Field(default=None, min_length=1, max_length=4)
+    favorite_car: str | None = Field(default=None, max_length=80)
 
 
 class UserAdminUpdate(UserUpdate):
@@ -151,6 +153,49 @@ class UserAdminUpdate(UserUpdate):
             if rating < MIN_RATING or rating > MAX_RATING:
                 raise ValueError(f"Ratings must be between {int(MIN_RATING)} and {int(MAX_RATING)}")
         return value
+
+
+class ProfileBestLapRead(BaseModel):
+    track: str
+    track_id: str | None = None
+    game: GameCode
+    best_lap_ms: int = Field(gt=0)
+    session: Literal["qualification", "race"]
+    car_model: str | None = None
+    race_id: int
+    race_name: str
+    recorded_at: datetime
+
+
+class ProfileRecentResultRead(BaseModel):
+    race_id: int
+    race_name: str
+    game: GameCode
+    track: str
+    recorded_at: datetime
+    position: int | None = None
+    finish_ms: int | None = None
+    best_lap_ms: int | None = None
+    car_model: str | None = None
+    rating_before: int | None = None
+    rating_after: int | None = None
+    rating_change: int | None = None
+
+
+class ProfileRatingPointRead(BaseModel):
+    race_id: int
+    race_name: str
+    game: GameCode
+    recorded_at: datetime
+    rating: int
+    change: int = 0
+
+
+class ProfileAnalyticsRead(BaseModel):
+    favorite_car: str | None = None
+    best_laps: list[ProfileBestLapRead] = Field(default_factory=list)
+    recent_results: list[ProfileRecentResultRead] = Field(default_factory=list)
+    rating_history: list[ProfileRatingPointRead] = Field(default_factory=list)
 
 
 class TeamBase(BaseModel):
@@ -294,11 +339,21 @@ class RegisteredPilot(BaseModel):
     registered_at: datetime
 
 
+class WeatherChances(BaseModel):
+    clear: int = Field(default=100, ge=0, le=100)
+    partly_cloudy: int = Field(default=0, ge=0, le=100)
+    overcast: int = Field(default=0, ge=0, le=100)
+    light_rain: int = Field(default=0, ge=0, le=100)
+    heavy_rain: int = Field(default=0, ge=0, le=100)
+    storm: int = Field(default=0, ge=0, le=100)
+
+
 class RaceBase(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str
     server_link: str = Field(max_length=255)
     lmu_results_at: datetime | None = None
+    registration_start: datetime
     datetime_start: datetime
     datetime_end: datetime
     max_pilots: int = Field(ge=1, le=500)
@@ -307,6 +362,8 @@ class RaceBase(BaseModel):
     track_id: str | None = Field(default=None, max_length=80)
     mods_pack: list[str] = Field(default_factory=list)
     allowed_cars: list[str] = Field(default_factory=list)
+    weather_chances: WeatherChances = Field(default_factory=WeatherChances)
+    track_temperature: float | None = Field(default=None, ge=-50, le=80)
     game: GameCode = "ACC"
     has_qualification: bool = True
     scoring_system: ChampionshipScoringSystem = ChampionshipScoringSystem.fia
@@ -412,6 +469,7 @@ class RaceUpdate(BaseModel):
     description: str | None = None
     server_link: str | None = Field(default=None, max_length=255)
     lmu_results_at: datetime | None = None
+    registration_start: datetime | None = None
     datetime_start: datetime | None = None
     datetime_end: datetime | None = None
     max_pilots: int | None = Field(default=None, ge=1, le=500)
@@ -420,6 +478,8 @@ class RaceUpdate(BaseModel):
     track_id: str | None = Field(default=None, max_length=80)
     mods_pack: list[str] | None = None
     allowed_cars: list[str] | None = None
+    weather_chances: WeatherChances | None = None
+    track_temperature: float | None = Field(default=None, ge=-50, le=80)
     status: RaceStatus | None = None
     results: dict | list | None = None
     game: GameCode | None = None
@@ -475,6 +535,7 @@ class RaceManageRead(BaseModel):
     server_link: str
     lmu_results_at: datetime | None = None
     status: RaceStatus
+    registration_start: datetime
     datetime_start: datetime
     datetime_end: datetime
     max_pilots: int
@@ -482,6 +543,8 @@ class RaceManageRead(BaseModel):
     car_class: str
     track: str
     track_id: str | None = None
+    weather_chances: WeatherChances = Field(default_factory=WeatherChances)
+    track_temperature: float | None = Field(default=None, ge=-50, le=80)
     game: str
     has_qualification: bool
     scoring_system: ChampionshipScoringSystem
@@ -906,6 +969,15 @@ class NewsItemUpdate(BaseModel):
     is_pinned: bool | None = None
 
 
+class NewsSettingsRead(BaseModel):
+    auto_rotate_seconds: int = Field(default=30, ge=5, le=3600)
+    manual_pause_seconds: int = Field(default=300, ge=0, le=3600)
+
+
+class NewsSettingsUpdate(NewsSettingsRead):
+    pass
+
+
 class AuditLogRead(BaseModel):
     id: int
     created_at: datetime
@@ -968,6 +1040,15 @@ class BrandingSettingsRead(BaseModel):
     light_logo_url: str
     dark_logo_url: str
     default_avatar_url: str
+
+
+class WeatherSettingsRead(BaseModel):
+    clear_url: str = ""
+    partly_cloudy_url: str = ""
+    overcast_url: str = ""
+    light_rain_url: str = ""
+    heavy_rain_url: str = ""
+    storm_url: str = ""
 
 
 class SystemSettingsRead(BaseModel):

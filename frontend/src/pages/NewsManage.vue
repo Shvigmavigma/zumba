@@ -11,6 +11,9 @@ const items = ref([])
 const error = ref('')
 const saving = ref(false)
 const busyItems = ref({})
+const newsSettings = ref({ auto_rotate_seconds: 30, manual_pause_minutes: 5 })
+const newsSettingsSaving = ref(false)
+const newsSettingsSaved = ref(false)
 const fileInput = ref(null)
 const form = ref({
   title: '',
@@ -29,7 +32,12 @@ function formatDate(value) {
 async function load() {
   error.value = ''
   try {
-    items.value = await api('/news/manage')
+    const [loadedItems, loadedSettings] = await Promise.all([api('/news/manage'), api('/app-settings/news')])
+    items.value = loadedItems
+    newsSettings.value = {
+      auto_rotate_seconds: loadedSettings.auto_rotate_seconds,
+      manual_pause_minutes: Math.round(Number(loadedSettings.manual_pause_seconds || 0) / 60)
+    }
   } catch (err) {
     error.value = err.message
   }
@@ -64,7 +72,7 @@ async function createNews() {
     body.append('is_pinned', String(form.value.is_pinned))
     body.append('file', form.value.file)
     const created = await api('/news', { method: 'POST', body })
-    items.value = [created, ...items.value]
+    items.value = [created, ...items.value.map((item) => (created.is_pinned ? { ...item, is_pinned: false } : item))]
     resetForm()
   } catch (err) {
     error.value = err.message
@@ -86,7 +94,10 @@ async function saveNews(item) {
         is_pinned: item.is_pinned
       }
     })
-    items.value = items.value.map((news) => (news.id === updated.id ? updated : news))
+    items.value = items.value.map((news) => {
+      if (news.id === updated.id) return updated
+      return updated.is_pinned ? { ...news, is_pinned: false } : news
+    })
   } catch (err) {
     error.value = err.message
   } finally {
@@ -97,6 +108,35 @@ async function saveNews(item) {
 async function togglePublished(item) {
   item.is_published = !item.is_published
   await saveNews(item)
+}
+
+async function togglePinned(item) {
+  item.is_pinned = !item.is_pinned
+  await saveNews(item)
+}
+
+async function saveNewsSettings() {
+  newsSettingsSaving.value = true
+  newsSettingsSaved.value = false
+  error.value = ''
+  try {
+    const saved = await api('/app-settings/news', {
+      method: 'PATCH',
+      body: {
+        auto_rotate_seconds: Number(newsSettings.value.auto_rotate_seconds),
+        manual_pause_seconds: Math.max(0, Number(newsSettings.value.manual_pause_minutes) || 0) * 60
+      }
+    })
+    newsSettings.value = {
+      auto_rotate_seconds: saved.auto_rotate_seconds,
+      manual_pause_minutes: Math.round(Number(saved.manual_pause_seconds || 0) / 60)
+    }
+    newsSettingsSaved.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    newsSettingsSaving.value = false
+  }
 }
 
 async function deleteNews(item) {
@@ -127,6 +167,26 @@ onMounted(load)
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
+
+    <form class="card news-settings-form" @submit.prevent="saveNewsSettings">
+      <div>
+        <h2>{{ t('news.autoSettingsTitle') }}</h2>
+        <p class="muted">{{ t('news.autoSettingsHint') }}</p>
+      </div>
+      <label class="field">
+        <span>{{ t('news.autoIntervalField') }}</span>
+        <input v-model.number="newsSettings.auto_rotate_seconds" type="number" min="5" max="3600" required />
+      </label>
+      <label class="field">
+        <span>{{ t('news.manualPauseField') }}</span>
+        <input v-model.number="newsSettings.manual_pause_minutes" type="number" min="0" max="60" required />
+      </label>
+      <button class="button primary" type="submit" :disabled="newsSettingsSaving">
+        <Save :size="16" />
+        {{ t('common.save') }}
+      </button>
+      <span v-if="newsSettingsSaved" class="pill">{{ t('common.saved') }}</span>
+    </form>
 
     <form class="card news-create-form" @submit.prevent="createNews">
       <h2>{{ t('news.addTitle') }}</h2>
@@ -178,7 +238,7 @@ onMounted(load)
                 <Eye v-else :size="16" />
                 {{ item.is_published ? t('news.hide') : t('news.publish') }}
               </button>
-              <button class="button news-publish-button" type="button" :disabled="busyItems[item.id]" @click="item.is_pinned = !item.is_pinned; saveNews(item)">
+              <button class="button news-publish-button" type="button" :disabled="busyItems[item.id]" @click="togglePinned(item)">
                 <PinOff v-if="item.is_pinned" :size="16" />
                 <Pin v-else :size="16" />
                 {{ item.is_pinned ? t('news.unpin') : t('news.pin') }}

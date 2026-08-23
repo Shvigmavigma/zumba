@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
+import ProfileAnalytics from '../components/ProfileAnalytics.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
 import { DEFAULT_LICENSE_TIERS, RATING_GAMES, formatPilotNumber, formatRating, licenseBadgeStyle, normalizeLicenseTiers, ratingForGame, ratingLicenseTier, ratingRaceCountForGame, teamShortName } from '../pilotDisplay'
@@ -128,8 +129,14 @@ onMounted(async () => {
             <span v-for="game in gameList(pilot)" :key="game" class="pill">{{ game }}</span>
           </div>
         </div>
+
+        <div class="pilot-games profile-favorite-car-row">
+          <span>{{ t('profile.favoriteCar') }}</span>
+          <strong>{{ pilot.favorite_car || t('common.none') }}</strong>
+        </div>
       </div>
     </section>
+    <ProfileAnalytics v-if="pilot" :user-id="pilot.id" :favorite-car="pilot.favorite_car" :user="pilot" />
     <AvatarViewer
       :open="avatarViewerOpen"
       :src="pilot?.avatar_url"

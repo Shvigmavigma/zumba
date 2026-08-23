@@ -112,6 +112,7 @@ async def create_news(
     path = NEWS_UPLOAD_DIR / f"news-{uuid4().hex}{extension}"
     path.write_bytes(data)
 
+    is_pinned = bool(is_pinned and is_published)
     if is_pinned:
         await session.execute(update(NewsItem).where(NewsItem.is_pinned.is_(True)).values(is_pinned=False))
     item = NewsItem(
@@ -142,6 +143,10 @@ async def update_news(
     if item is None:
         raise HTTPException(status_code=404, detail="News item not found")
     payload_updates = payload.model_dump(exclude_unset=True)
+    if payload_updates.get("is_published") is False:
+        payload_updates["is_pinned"] = False
+    if payload_updates.get("is_pinned") is True and not payload_updates.get("is_published", item.is_published):
+        payload_updates["is_pinned"] = False
     if payload_updates.get("is_pinned") is True:
         await session.execute(
             update(NewsItem)

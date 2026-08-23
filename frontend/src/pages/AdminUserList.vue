@@ -60,6 +60,17 @@ const defaultAvatarFile = ref(null)
 const defaultAvatarSaving = ref(false)
 const defaultAvatarSaved = ref(false)
 const defaultAvatarCropper = ref(null)
+const weatherImages = ref({
+  clear_url: '',
+  partly_cloudy_url: '',
+  overcast_url: '',
+  light_rain_url: '',
+  heavy_rain_url: '',
+  storm_url: ''
+})
+const weatherImageFiles = ref({})
+const weatherImageSaving = ref({})
+const weatherImageSaved = ref({})
 const dangerDialog = ref(null)
 const dangerForm = ref({ confirmation: '', confirmation_repeat: '', password: '' })
 const dangerSaving = ref(false)
@@ -72,6 +83,14 @@ const pageSize = 25
 const visibleUsers = computed(() => users.value)
 const hasNextPage = computed(() => users.value.length === pageSize)
 const editCountries = computed(() => countryOptionsWithCurrent(state.locale, editForm.value.country || ''))
+const weatherConditions = computed(() => [
+  { key: 'clear', label: t('weather.clear') },
+  { key: 'partly_cloudy', label: t('weather.partlyCloudy') },
+  { key: 'overcast', label: t('weather.overcast') },
+  { key: 'light_rain', label: t('weather.lightRain') },
+  { key: 'heavy_rain', label: t('weather.heavyRain') },
+  { key: 'storm', label: t('weather.storm') }
+])
 const dangerActions = {
   pilots: {
     endpoint: '/users/admin/delete-pilots',
@@ -147,7 +166,7 @@ async function load() {
       rating_game: userRatingGame.value
     })
     if (userSearch.value.trim()) params.set('search', userSearch.value.trim())
-    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedDonationSettings, loadedLicenseSettings, loadedBrandingSettings, loadedSystemSettings] = await Promise.all([
+    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedDonationSettings, loadedLicenseSettings, loadedBrandingSettings, loadedSystemSettings, loadedWeatherImages] = await Promise.all([
       api(`/users/admin?${params.toString()}`),
       api('/teams/config'),
       api('/races/fan-vote/config'),
@@ -155,7 +174,15 @@ async function load() {
       api('/app-settings/donations'),
       api('/app-settings/licenses'),
       api('/app-settings/branding'),
-      api('/app-settings/system')
+      api('/app-settings/system'),
+      api('/app-settings/weather').catch(() => ({
+        clear_url: '',
+        partly_cloudy_url: '',
+        overcast_url: '',
+        light_rain_url: '',
+        heavy_rain_url: '',
+        storm_url: ''
+      }))
     ])
     users.value = loadedUsers
     teamLimit.value = teamConfig.member_limit
@@ -172,6 +199,7 @@ async function load() {
       rating_change_coefficient: loadedSystemSettings.rating_change_coefficient,
       sr_per_race: loadedSystemSettings.sr_per_race
     }
+    weatherImages.value = loadedWeatherImages
   } catch (err) {
     error.value = err.message
   }
@@ -423,6 +451,35 @@ async function saveDefaultAvatar(file) {
 
 async function uploadDefaultAvatar() {
   if (defaultAvatarFile.value) await saveDefaultAvatar(defaultAvatarFile.value)
+}
+
+function setWeatherImageFile(condition, event) {
+  const file = event.target.files?.[0] || null
+  event.target.value = ''
+  weatherImageSaved.value = { ...weatherImageSaved.value, [condition]: false }
+  if (file) weatherImageFiles.value = { ...weatherImageFiles.value, [condition]: file }
+}
+
+async function uploadWeatherImage(condition) {
+  const file = weatherImageFiles.value[condition]
+  if (!file) return
+  weatherImageSaving.value = { ...weatherImageSaving.value, [condition]: true }
+  weatherImageSaved.value = { ...weatherImageSaved.value, [condition]: false }
+  error.value = ''
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    weatherImages.value = await api(`/app-settings/weather/${condition}/upload`, {
+      method: 'POST',
+      body: formData
+    })
+    weatherImageFiles.value = { ...weatherImageFiles.value, [condition]: null }
+    weatherImageSaved.value = { ...weatherImageSaved.value, [condition]: true }
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    weatherImageSaving.value = { ...weatherImageSaving.value, [condition]: false }
+  }
 }
 
 async function uploadCroppedDefaultAvatar(blob) {
@@ -752,6 +809,30 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       @close="closeDefaultAvatarCropper"
       @crop="uploadCroppedDefaultAvatar"
     />
+
+    <section class="admin-settings-card admin-weather-config-card card">
+      <div>
+        <h2>{{ t('adminUsers.weatherImagesTitle') }}</h2>
+        <p class="muted">{{ t('adminUsers.weatherImagesHint') }}</p>
+      </div>
+      <div class="admin-weather-image-grid">
+        <article v-for="condition in weatherConditions" :key="condition.key" class="admin-weather-image-option">
+          <div class="admin-weather-image-preview">
+            <img v-if="weatherImages[`${condition.key}_url`]" :src="weatherImages[`${condition.key}_url`]" alt="" />
+            <span v-else class="muted">{{ t('adminUsers.weatherImageEmpty') }}</span>
+          </div>
+          <label class="field">
+            <span>{{ condition.label }}</span>
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="setWeatherImageFile(condition.key, $event)" />
+          </label>
+          <button class="button primary" type="button" :disabled="weatherImageSaving[condition.key] || !weatherImageFiles[condition.key]" @click="uploadWeatherImage(condition.key)">
+            <Upload :size="16" />
+            {{ t('common.upload') }}
+          </button>
+          <span v-if="weatherImageSaved[condition.key]" class="pill">{{ t('common.saved') }}</span>
+        </article>
+      </div>
+    </section>
 
     <form class="admin-settings-card admin-system-config-card card" @submit.prevent="saveSystemSettings">
       <div>

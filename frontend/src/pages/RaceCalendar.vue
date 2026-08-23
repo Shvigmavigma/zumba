@@ -8,10 +8,11 @@ import RaceTypeFilters from '../components/RaceTypeFilters.vue'
 import { gameLabel, gameOptions, isExternalRace, raceCountLabel, raceOpenHref } from '../i18nLabels'
 import { appendRaceTypeFilters, defaultRaceTypeFilters } from '../raceFilters'
 import { state } from '../store'
-import { dateKeyInTimeZone, formatTimeOnly } from '../timezone'
+import { dateKeyInTimeZone, formatInTimeZone } from '../timezone'
 
 const { t } = useI18n()
 const races = ref([])
+const weatherImages = ref({})
 const championships = ref([])
 const cursor = ref(new Date())
 const selected = ref(dateKeyInTimeZone(new Date()))
@@ -111,8 +112,43 @@ function dayGameCounts(day) {
   return raceGameCounts(dayRaces(day))
 }
 
-function formatRaceTime(value) {
-  return formatTimeOnly(value)
+function formatRaceDate(value) {
+  return formatInTimeZone(value, {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  })
+}
+
+const weatherKeys = ['clear', 'partly_cloudy', 'overcast', 'light_rain', 'heavy_rain', 'storm']
+
+function mostLikelyWeather(race) {
+  return weatherKeys.reduce((best, key) => {
+    const chance = Number(race.weather_chances?.[key] || 0)
+    return chance > best.chance ? { key, chance } : best
+  }, { key: 'clear', chance: 0 })
+}
+
+function weatherImage(race) {
+  return weatherImages.value[`${mostLikelyWeather(race).key}_url`] || ''
+}
+
+function weatherGlyph(race) {
+  return {
+    clear: '☀️',
+    partly_cloudy: '⛅',
+    overcast: '☁️',
+    light_rain: '🌦️',
+    heavy_rain: '🌧️',
+    storm: '⛈️'
+  }[mostLikelyWeather(race).key]
+}
+
+function weatherLabel(race) {
+  const key = mostLikelyWeather(race).key
+  return t(`weather.${key === 'partly_cloudy' ? 'partlyCloudy' : key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())}`)
 }
 
 function shiftMonth(delta) {
@@ -139,9 +175,14 @@ async function loadChampionships() {
   }
 }
 
+async function loadWeatherImages() {
+  weatherImages.value = await api('/app-settings/weather').catch(() => ({}))
+}
+
 onMounted(() => {
   loadChampionships()
   loadRaces()
+  loadWeatherImages()
 })
 watch([gameFilter, statusFilter, myGamesOnly, raceSource, raceTypeFilters], loadRaces)
 watch([selected, gameFilter, statusFilter, myGamesOnly, raceSource, raceTypeFilters], () => {
@@ -281,8 +322,14 @@ watch(selectedRaces, () => {
             <p class="muted">
               {{ race.game === 'LMU'
                 ? gameLabel(t, race.game)
-                : `${gameLabel(t, race.game)} - ${race.track} - ${race.car_class} - ${formatRaceTime(race.datetime_start)}` }}
+                : `${gameLabel(t, race.game)} - ${race.track} - ${race.car_class}` }}
             </p>
+            <div class="race-item-schedule">
+              <span><small>{{ t('fields.registrationStart') }}</small><strong>{{ formatRaceDate(race.registration_start) }}</strong></span>
+              <span><small>{{ t('raceCard.registrationCloses') }}</small><strong>{{ formatRaceDate(race.datetime_end) }}</strong></span>
+              <span><small>{{ t('raceCard.raceTime') }}</small><strong>{{ formatRaceDate(race.datetime_start) }}</strong></span>
+              <span class="race-item-weather"><img v-if="weatherImage(race)" class="race-item-weather-icon" :src="weatherImage(race)" :alt="weatherLabel(race)" /><span v-else class="race-item-weather-icon race-item-weather-glyph" :aria-label="weatherLabel(race)" role="img">{{ weatherGlyph(race) }}</span></span>
+            </div>
           </div>
           <a v-if="isExternalRace(race)" class="button" :href="raceOpenHref(race)">{{ t('common.open') }}</a>
           <RouterLink v-else class="button" :to="raceOpenHref(race)">{{ t('common.open') }}</RouterLink>
