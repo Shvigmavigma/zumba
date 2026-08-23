@@ -61,12 +61,12 @@ const defaultAvatarSaving = ref(false)
 const defaultAvatarSaved = ref(false)
 const defaultAvatarCropper = ref(null)
 const weatherImages = ref({
-  clear_url: '',
-  partly_cloudy_url: '',
-  overcast_url: '',
-  light_rain_url: '',
-  heavy_rain_url: '',
-  storm_url: ''
+  clear_light_url: '', clear_dark_url: '',
+  partly_cloudy_light_url: '', partly_cloudy_dark_url: '',
+  overcast_light_url: '', overcast_dark_url: '',
+  light_rain_light_url: '', light_rain_dark_url: '',
+  heavy_rain_light_url: '', heavy_rain_dark_url: '',
+  storm_light_url: '', storm_dark_url: ''
 })
 const weatherImageFiles = ref({})
 const weatherImageSaving = ref({})
@@ -176,12 +176,12 @@ async function load() {
       api('/app-settings/branding'),
       api('/app-settings/system'),
       api('/app-settings/weather').catch(() => ({
-        clear_url: '',
-        partly_cloudy_url: '',
-        overcast_url: '',
-        light_rain_url: '',
-        heavy_rain_url: '',
-        storm_url: ''
+        clear_light_url: '', clear_dark_url: '',
+        partly_cloudy_light_url: '', partly_cloudy_dark_url: '',
+        overcast_light_url: '', overcast_dark_url: '',
+        light_rain_light_url: '', light_rain_dark_url: '',
+        heavy_rain_light_url: '', heavy_rain_dark_url: '',
+        storm_light_url: '', storm_dark_url: ''
       }))
     ])
     users.value = loadedUsers
@@ -453,32 +453,34 @@ async function uploadDefaultAvatar() {
   if (defaultAvatarFile.value) await saveDefaultAvatar(defaultAvatarFile.value)
 }
 
-function setWeatherImageFile(condition, event) {
+function setWeatherImageFile(condition, theme, event) {
+  const fileKey = `${condition}_${theme}`
   const file = event.target.files?.[0] || null
   event.target.value = ''
-  weatherImageSaved.value = { ...weatherImageSaved.value, [condition]: false }
-  if (file) weatherImageFiles.value = { ...weatherImageFiles.value, [condition]: file }
+  weatherImageSaved.value = { ...weatherImageSaved.value, [fileKey]: false }
+  if (file) weatherImageFiles.value = { ...weatherImageFiles.value, [fileKey]: file }
 }
 
-async function uploadWeatherImage(condition) {
-  const file = weatherImageFiles.value[condition]
+async function uploadWeatherImage(condition, theme) {
+  const fileKey = `${condition}_${theme}`
+  const file = weatherImageFiles.value[fileKey]
   if (!file) return
-  weatherImageSaving.value = { ...weatherImageSaving.value, [condition]: true }
-  weatherImageSaved.value = { ...weatherImageSaved.value, [condition]: false }
+  weatherImageSaving.value = { ...weatherImageSaving.value, [fileKey]: true }
+  weatherImageSaved.value = { ...weatherImageSaved.value, [fileKey]: false }
   error.value = ''
   try {
     const formData = new FormData()
     formData.append('file', file)
-    weatherImages.value = await api(`/app-settings/weather/${condition}/upload`, {
+    weatherImages.value = await api(`/app-settings/weather/${condition}/${theme}/upload`, {
       method: 'POST',
       body: formData
     })
-    weatherImageFiles.value = { ...weatherImageFiles.value, [condition]: null }
-    weatherImageSaved.value = { ...weatherImageSaved.value, [condition]: true }
+    weatherImageFiles.value = { ...weatherImageFiles.value, [fileKey]: null }
+    weatherImageSaved.value = { ...weatherImageSaved.value, [fileKey]: true }
   } catch (err) {
     error.value = err.message
   } finally {
-    weatherImageSaving.value = { ...weatherImageSaving.value, [condition]: false }
+    weatherImageSaving.value = { ...weatherImageSaving.value, [fileKey]: false }
   }
 }
 
@@ -817,19 +819,24 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       </div>
       <div class="admin-weather-image-grid">
         <article v-for="condition in weatherConditions" :key="condition.key" class="admin-weather-image-option">
-          <div class="admin-weather-image-preview">
-            <img v-if="weatherImages[`${condition.key}_url`]" :src="weatherImages[`${condition.key}_url`]" alt="" />
-            <span v-else class="muted">{{ t('adminUsers.weatherImageEmpty') }}</span>
+          <h3>{{ condition.label }}</h3>
+          <div class="admin-weather-theme-grid">
+            <div v-for="theme in ['light', 'dark']" :key="theme" class="admin-weather-theme-option">
+              <div class="admin-weather-image-preview">
+                <img v-if="weatherImages[`${condition.key}_${theme}_url`]" :src="weatherImages[`${condition.key}_${theme}_url`]" alt="" />
+                <span v-else class="muted">{{ t('adminUsers.weatherImageEmpty') }}</span>
+              </div>
+              <label class="field">
+                <span>{{ theme === 'light' ? t('common.lightTheme') : t('common.darkTheme') }}</span>
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="setWeatherImageFile(condition.key, theme, $event)" />
+              </label>
+              <button class="button primary" type="button" :disabled="weatherImageSaving[`${condition.key}_${theme}`] || !weatherImageFiles[`${condition.key}_${theme}`]" @click="uploadWeatherImage(condition.key, theme)">
+                <Upload :size="16" />
+                {{ t('common.upload') }}
+              </button>
+              <span v-if="weatherImageSaved[`${condition.key}_${theme}`]" class="pill">{{ t('common.saved') }}</span>
+            </div>
           </div>
-          <label class="field">
-            <span>{{ condition.label }}</span>
-            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="setWeatherImageFile(condition.key, $event)" />
-          </label>
-          <button class="button primary" type="button" :disabled="weatherImageSaving[condition.key] || !weatherImageFiles[condition.key]" @click="uploadWeatherImage(condition.key)">
-            <Upload :size="16" />
-            {{ t('common.upload') }}
-          </button>
-          <span v-if="weatherImageSaved[condition.key]" class="pill">{{ t('common.saved') }}</span>
         </article>
       </div>
     </section>
