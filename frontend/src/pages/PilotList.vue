@@ -158,7 +158,12 @@ function trackRaceEntry(race, row) {
   const registered = registrationForRow(race, row)
   const laps = numericValue(row.lap_count, row.laps)
   const finishMs = numericValue(row.adjusted_finish_ms, row.finish_ms, row.driver_total_time_ms)
-  const bestLapMs = numericValue(row.best_lap_ms, row.qualification_best_lap_ms)
+  const lapCandidates = [
+    { value: numericValue(row.best_lap_ms), session: 'race' },
+    { value: numericValue(row.qualification_best_lap_ms), session: 'qualification' }
+  ].filter((candidate) => candidate.value !== null)
+  const bestLap = lapCandidates.sort((left, right) => left.value - right.value)[0] || { value: null, session: null }
+  const bestLapMs = bestLap.value
   const averageLapMs = finishMs !== null && laps && laps > 0 ? finishMs / laps : bestLapMs
   const driverName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim()
   const fallbackName = row.driver_name || row.nickname || row.login || registered?.nickname || registered?.login || t('common.none')
@@ -173,6 +178,7 @@ function trackRaceEntry(race, row) {
     game_ratings: row.game_ratings ?? registered?.game_ratings,
     carModel: registered?.car_model || (typeof row.car_model === 'string' ? row.car_model : '') || t('common.none'),
     bestLapMs,
+    bestLapSession: bestLap.session,
     finishMs,
     averageLapMs,
     laps: laps || 0,
@@ -469,7 +475,10 @@ async function deleteTrackImage() {
                     <small>#{{ formatPilotNumber(row.pilotNumber) }}</small>
                   </span>
                 </td>
-                <td><strong>{{ formatDuration(row.bestLapMs) }}</strong></td>
+                <td class="track-best-lap-cell">
+                  <strong>{{ formatDuration(row.bestLapMs) }}</strong>
+                  <span v-if="row.bestLapSession" class="track-lap-source">{{ row.bestLapSession === 'qualification' ? t('tracks.lapSourceQualification') : t('tracks.lapSourceRace') }}</span>
+                </td>
                 <td>{{ row.carModel }}</td>
                 <td>{{ trackRaceTime(row) }}</td>
                 <td><RouterLink class="track-race-link" :to="`/races/${row.raceId}`">{{ row.raceName }}</RouterLink></td>

@@ -4,6 +4,7 @@ import { Edit3, RefreshCw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
+import ProfileAnalytics from '../components/ProfileAnalytics.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
 import { DEFAULT_LICENSE_TIERS, RATING_GAMES, formatPilotNumber, formatRating, licenseBadgeStyle, normalizeLicenseTiers, pilotName, ratingForGame, ratingLicenseTier, ratingRaceCountForGame, teamShortName } from '../pilotDisplay'
@@ -47,6 +48,7 @@ const profileFields = computed(() => {
     { label: t('fields.steam'), value: user.value.steam_id },
     { label: t('fields.discord'), value: user.value.discord },
     { label: t('fields.games'), value: gameList.value },
+    { label: t('profile.favoriteCar'), value: user.value.favorite_car },
     { label: t('common.role'), value: roleLabel(t, user.value.role) },
     { label: t('common.status'), value: statusLabel(t, user.value.status) },
     { label: 'ACC RER', value: formatRating(ratingForGame(user.value, 'ACC')) },
@@ -82,7 +84,8 @@ function profileFieldLabel(key) {
     nickname: t('fields.nickname'),
     country: t('fields.country'),
     discord: t('fields.discord'),
-    games: t('fields.games')
+    games: t('fields.games'),
+    favorite_car: t('profile.favoriteCar')
   }
   return labels[key] || key.replaceAll('_', ' ')
 }
@@ -184,6 +187,8 @@ onMounted(() => {
         </div>
       </div>
     </article>
+
+    <ProfileAnalytics v-if="user" :user-id="user.id" :favorite-car="user.favorite_car" :user="user" />
 
     <RouterLink v-else class="button" to="/login">{{ t('nav.login') }}</RouterLink>
     <AvatarViewer

@@ -30,6 +30,7 @@ MAX_RATING = 10000.0
 RACE_GAMES = ("ACC", "AC", "iRacing", "LMU")
 DEFAULT_USER_GAMES = list(RACE_GAMES)
 DEFAULT_GAME_RATINGS_SQL = "jsonb_build_object('ACC', jsonb_build_object('rating', 1000, 'race_count', 0), 'AC', jsonb_build_object('rating', 1000, 'race_count', 0), 'iRacing', jsonb_build_object('rating', 1000, 'race_count', 0), 'LMU', jsonb_build_object('rating', 1000, 'race_count', 0))"
+DEFAULT_WEATHER_CHANCES_SQL = "jsonb_build_object('clear', 100, 'partly_cloudy', 0, 'overcast', 0, 'light_rain', 0, 'heavy_rain', 0, 'storm', 0)"
 
 
 def utc_now() -> datetime:
@@ -146,6 +147,7 @@ class User(Base):
     avatar_upload_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     avatar_upload_window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     games: Mapped[list[str]] = mapped_column(JSONB, default=lambda: list(DEFAULT_USER_GAMES), server_default=text("""'["ACC", "AC", "iRacing", "LMU"]'::jsonb"""))
+    favorite_car: Mapped[str | None] = mapped_column(String(80), index=True)
     team_id: Mapped[int | None] = mapped_column(
         ForeignKey("teams.id", ondelete="SET NULL", use_alter=True, name="fk_users_team_id"),
         index=True,
@@ -287,6 +289,7 @@ class Race(Base):
     description: Mapped[str] = mapped_column(Text)
     server_link: Mapped[str] = mapped_column(String(255))
     lmu_results_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    registration_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, default=utc_now, server_default=text("CURRENT_TIMESTAMP"))
     datetime_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     datetime_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     max_pilots: Mapped[int] = mapped_column(Integer)
@@ -295,6 +298,8 @@ class Race(Base):
     track_id: Mapped[str | None] = mapped_column(String(80), index=True)
     mods_pack: Mapped[list[str]] = mapped_column(JSONB, default=list)
     allowed_cars: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    weather_chances: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text(DEFAULT_WEATHER_CHANCES_SQL))
+    track_temperature: Mapped[float | None] = mapped_column(Numeric(5, 1))
     status: Mapped[RaceStatus] = enum_column(RaceStatus)
     is_passed: Mapped[bool] = mapped_column(Boolean, default=False)
     results: Mapped[dict | list | None] = mapped_column(JSONB)

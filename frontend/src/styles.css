@@ -1593,6 +1593,34 @@ textarea {
   gap: 12px;
 }
 
+.news-settings-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px) minmax(180px, 260px) auto auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.news-settings-form h2,
+.news-settings-form p {
+  margin: 0;
+}
+
+.news-settings-form p {
+  margin-top: 5px;
+}
+
+@media (max-width: 900px) {
+  .news-settings-form {
+    grid-template-columns: minmax(0, 1fr) repeat(2, minmax(140px, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .news-settings-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .news-create-form h2 {
   margin: 0;
 }
@@ -1941,6 +1969,259 @@ textarea {
 .profile-pending-changes {
   display: grid;
   gap: 8px;
+}
+
+.profile-favorite-car-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-analytics {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.profile-analytics .eyebrow {
+  margin-bottom: 5px;
+  color: var(--primary-strong);
+  font-size: var(--tiny-text-size);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.profile-analytics-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.profile-analytics-head h2,
+.profile-analytics-head p {
+  margin: 0;
+}
+
+.profile-analytics-head h2 {
+  font-size: clamp(1.15rem, 2vw, 1.5rem);
+}
+
+.profile-analytics-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-game-filter select {
+  min-width: 150px;
+}
+
+.profile-analytics-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+}
+
+.profile-stat-panel {
+  min-height: 128px;
+}
+
+.profile-lap-list,
+.profile-results-list {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-lap-row,
+.profile-result-row {
+  display: grid;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel-muted) 48%, transparent);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
+}
+
+.profile-lap-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.profile-lap-row:hover,
+.profile-result-row:hover {
+  border-color: color-mix(in srgb, var(--primary) 50%, var(--border));
+  background: color-mix(in srgb, var(--primary) 7%, var(--panel-muted));
+  transform: translateY(-1px);
+}
+
+.profile-lap-row > div:first-child,
+.profile-result-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.profile-lap-row span,
+.profile-result-row span {
+  font-size: var(--tiny-text-size);
+}
+
+.profile-lap-value {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.profile-lap-value strong {
+  color: var(--primary-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-result-row {
+  grid-template-columns: minmax(0, 1fr) 56px minmax(180px, auto);
+}
+
+.profile-result-position {
+  color: var(--primary-strong);
+  font-weight: 900;
+  text-align: center;
+}
+
+.profile-result-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  text-align: right;
+}
+
+.profile-rating-change {
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-rating-change.is-positive,
+.profile-rating-history em.is-positive {
+  color: var(--success);
+}
+
+.profile-rating-change.is-negative,
+.profile-rating-history em.is-negative {
+  color: var(--danger);
+}
+
+.profile-rating-chart-wrap {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 180px;
+}
+
+.profile-rating-chart-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2px 0;
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.profile-rating-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 560 / 180;
+  overflow: visible;
+}
+
+.profile-rating-chart line {
+  stroke: color-mix(in srgb, var(--border) 66%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+}
+
+.profile-rating-chart-area {
+  fill: url(#profile-rating-fill);
+  stroke: none;
+}
+
+.profile-rating-chart-line {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.profile-rating-chart circle {
+  fill: var(--panel);
+  stroke: var(--primary);
+  stroke-width: 2.25;
+  vector-effect: non-scaling-stroke;
+}
+
+.profile-rating-history {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.profile-rating-history div {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel-muted) 55%, transparent);
+}
+
+.profile-rating-history span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-rating-history strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-rating-history em {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-style: normal;
+  font-weight: 900;
 }
 
 .pagination-controls {
@@ -3190,6 +3471,46 @@ textarea {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+.admin-weather-config-card {
+  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 2fr);
+  align-items: start;
+}
+
+.admin-weather-image-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-weather-image-option {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--brand-blue) 18%, var(--border));
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel-muted) 74%, var(--panel));
+}
+
+.admin-weather-image-preview {
+  display: grid;
+  height: 82px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  text-align: center;
+}
+
+.admin-weather-image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .admin-race-assets-card {
@@ -6268,6 +6589,27 @@ select,
     justify-self: start;
   }
 
+  .profile-analytics-head,
+  .profile-analytics-controls {
+    align-items: flex-start;
+    justify-content: flex-start;
+    flex-direction: column;
+  }
+
+  .profile-result-row {
+    grid-template-columns: minmax(0, 1fr) 56px;
+  }
+
+  .profile-result-meta {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .profile-rating-history {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .team-detail-actions {
     justify-content: flex-start;
   }
@@ -8346,12 +8688,57 @@ body {
 
 .main-race-fill {
   display: grid;
+  gap: 3px;
   place-items: center;
+  text-align: center;
   color: color-mix(in srgb, var(--primary-strong) 82%, var(--text));
   font-size: 26px;
   font-weight: 950;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+
+.main-race-fill small {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.main-race-fill strong {
+  font-size: var(--small-text-size);
+  line-height: 1.15;
+}
+
+.main-race-meta {
+  grid-template-columns: minmax(190px, 1.6fr) minmax(112px, 0.65fr);
+}
+
+.main-race-meta small {
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.1;
+  white-space: normal;
+}
+
+.main-race-subtitle {
+  max-height: none;
+  overflow: visible;
+}
+
+.main-race-subtitle span {
+  max-width: 100%;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .main-race-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .main-race-open {
@@ -12546,13 +12933,42 @@ body,
   .admin-logo-config-card,
   .admin-logo-option,
   .admin-system-config-card,
-  .admin-avatar-config-card {
+  .admin-avatar-config-card,
+  .admin-weather-config-card {
     grid-template-columns: 1fr;
+  }
+
+  .admin-weather-image-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .admin-profile-ratings-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+.track-best-lap-cell {
+  display: grid;
+  gap: 4px;
+  min-width: 142px;
+}
+
+.track-best-lap-cell strong {
+  color: var(--primary-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.track-lap-source {
+  display: inline-flex;
+  width: fit-content;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary-strong);
+  font-size: var(--tiny-text-size);
+  font-weight: 800;
+  line-height: 1;
 }
 
 @media (max-width: 680px) {
@@ -12725,6 +13141,121 @@ body,
   font-size: clamp(22px, 2vw, 28px);
 }
 
+.race-item-weather-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  overflow: hidden;
+  border: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--brand-blue) 12%, var(--panel));
+  font-size: 20px;
+}
+
+.main-race-time-panel {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 4px 0;
+}
+
+.main-race-time-panel span,
+.race-item-schedule span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.main-race-time-panel small,
+.race-item-schedule small {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+}
+
+.main-race-time-panel strong {
+  font-size: var(--small-text-size);
+}
+
+.race-item-schedule {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 9px;
+}
+
+.race-item-schedule span {
+  flex: 1 1 145px;
+}
+
+.race-item-schedule strong {
+  font-size: var(--small-text-size);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.race-item-weather {
+  display: grid;
+  place-items: center;
+}
+
+.race-weather-editor {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--brand-blue) 25%, var(--border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 92%, var(--brand-blue) 8%);
+}
+
+.race-registration-deadline-editor {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%);
+}
+
+.race-registration-deadline-editor .section-header {
+  margin: 0;
+}
+
+.race-registration-deadline-editor .section-header h3 {
+  margin: 0;
+}
+
+.race-weather-editor .section-header {
+  margin: 0;
+}
+
+.race-weather-editor .section-header h3 {
+  margin: 0;
+}
+
+.race-weather-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .race-weather-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .race-weather-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-weather-image-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1060px) {
   .main-race-card {
     grid-template-columns: 78px minmax(0, 1fr);
@@ -12742,6 +13273,7 @@ body,
   .main-race-open {
     align-self: center;
   }
+
 }
 
 @media (max-width: 680px) {
@@ -13521,4 +14053,105 @@ body,
     align-items: flex-start;
     flex-direction: column;
   }
+}
+
+/* Keep the compact card readable when a track name or date caption is long. */
+.main-race-card-main {
+  grid-template-rows: auto auto auto;
+  overflow: visible;
+}
+
+.main-race-subtitle {
+  max-height: none;
+  overflow: visible;
+  white-space: normal;
+}
+
+.main-race-subtitle span {
+  max-width: 100%;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.main-race-meta {
+  grid-template-columns: minmax(190px, 1.6fr) minmax(112px, 0.65fr);
+}
+
+.main-race-meta small {
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.1;
+  white-space: normal;
+}
+
+@media (max-width: 760px) {
+  .main-race-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.main-race-subtitle {
+  display: grid;
+  grid-template-rows: auto auto;
+  row-gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.main-race-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.main-race-name-row > a {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.main-race-weather-indicator {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--panel-muted);
+}
+
+.main-race-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.main-race-subtitle-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.main-race-subtitle-top > span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.main-race-subtitle span.main-race-track {
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  align-self: center;
+  justify-self: start;
+  min-width: 0;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
 }

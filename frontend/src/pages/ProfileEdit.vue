@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { Upload } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
@@ -24,6 +24,21 @@ const avatarSaving = ref(false)
 const avatarViewerOpen = ref(false)
 const countries = computed(() => countryOptionsWithCurrent(state.locale, form.value.country))
 const displayName = computed(() => state.user?.nickname || state.user?.login || t('nav.profile'))
+const raceAssets = ref({ games: {} })
+const favoriteCarOptions = computed(() => {
+  const games = raceAssets.value.games || {}
+  const sources = Object.values(games).flatMap((game) => (game?.classes || []).flatMap((item) => item.cars || []))
+  const current = form.value.favorite_car ? [form.value.favorite_car] : []
+  return [...new Set([...current, ...sources])].sort((a, b) => a.localeCompare(b))
+})
+
+onMounted(async () => {
+  try {
+    raceAssets.value = await api('/race-assets')
+  } catch {
+    raceAssets.value = { games: {} }
+  }
+})
 
 function setAvatarFile(event) {
   avatarFile.value = event.target.files?.[0] || null
@@ -43,7 +58,8 @@ async function submit() {
         nickname: form.value.nickname,
         country: form.value.country || null,
         discord: form.value.discord || null,
-        games: form.value.games
+        games: form.value.games,
+        favorite_car: form.value.favorite_car || null
       }
     })
     setSession(state.token, user)
@@ -120,6 +136,13 @@ async function uploadAvatar() {
         <span>{{ t('fields.games') }}</span>
         <GameCheckboxGroup v-model="form.games" />
       </div>
+      <label class="field">
+        <span>{{ t('profile.favoriteCar') }}</span>
+        <select v-model="form.favorite_car">
+          <option value="">{{ t('common.none') }}</option>
+          <option v-for="car in favoriteCarOptions" :key="car" :value="car">{{ car }}</option>
+        </select>
+      </label>
       <p v-if="error" class="error">{{ error }}</p>
       <p v-if="saved" class="pill">{{ t('common.saved') }}</p>
       <p v-if="saved && savedKind === 'profile' && state.user?.role !== 'admin'" class="muted">{{ t('profile.changesAfterModeration') }}</p>

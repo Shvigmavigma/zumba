@@ -7,10 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import get_session
-from app.deps import require_admin
+from app.deps import require_admin, require_news_editor
 from app.models import AppSetting, User
 from app.rate_limit import limiter, set_requests_per_user_per_minute
-from app.schemas import BrandingSettingsRead, DonationSettingsRead, DonationSettingsUpdate, LicenseSettingsRead, LicenseSettingsUpdate, SystemSettingsRead, SystemSettingsUpdate
+from app.schemas import BrandingSettingsRead, DonationSettingsRead, DonationSettingsUpdate, LicenseSettingsRead, LicenseSettingsUpdate, NewsSettingsRead, NewsSettingsUpdate, SystemSettingsRead, SystemSettingsUpdate, WeatherSettingsRead
 
 
 router = APIRouter()
@@ -20,7 +20,10 @@ DONATION_SETTINGS_KEY = "donation_settings"
 LICENSE_SETTINGS_KEY = "license_settings"
 BRANDING_SETTINGS_KEY = "branding_settings"
 SYSTEM_SETTINGS_KEY = "system_settings"
+NEWS_SETTINGS_KEY = "news_settings"
+WEATHER_SETTINGS_KEY = "weather_settings"
 LOGO_UPLOAD_DIR = Path(settings.upload_dir) / "logos"
+WEATHER_UPLOAD_DIR = Path(settings.upload_dir) / "weather"
 DEFAULT_LOGOS = {
     "light_logo_url": "/assets/bmrl-logo-light-cutout.png",
     "dark_logo_url": "/assets/bmrl-logo-dark-cutout.png",
@@ -31,12 +34,15 @@ DEFAULT_RATING_CHANGE_COEFFICIENT = 1.5
 DEFAULT_SR_PER_RACE = 0.3
 # Kept as an import-compatible alias for older callers.
 DEFAULT_SR_CHANGE_COEFFICIENT = DEFAULT_RATING_CHANGE_COEFFICIENT
+DEFAULT_NEWS_AUTO_ROTATE_SECONDS = 30
+DEFAULT_NEWS_MANUAL_PAUSE_SECONDS = 300
 ALLOWED_LOGO_MEDIA_TYPES = {
     "image/gif": ".gif",
     "image/jpeg": ".jpg",
     "image/png": ".png",
     "image/webp": ".webp",
 }
+WEATHER_CONDITIONS = ("clear", "partly_cloudy", "overcast", "light_rain", "heavy_rain", "storm")
 DEFAULT_LICENSE_TIERS = [
     {"min_rating": 0, "max_rating": 1499, "name": "Rookie", "color": "#64748b"},
     {"min_rating": 1500, "max_rating": 2499, "name": "Bronze", "color": "#b45309"},
@@ -46,6 +52,19 @@ DEFAULT_LICENSE_TIERS = [
     {"min_rating": 7000, "max_rating": 8499, "name": "Diamond", "color": "#2563eb"},
     {"min_rating": 8500, "max_rating": 10000, "name": "Champ", "color": "#7c3aed"},
 ]
+
+
+def weather_settings_from_value(value: dict | None) -> WeatherSettingsRead:
+    value = value if isinstance(value, dict) else {}
+    return WeatherSettingsRead(**{
+        f"{condition}_url": str(value.get(f"{condition}_url") or "").strip()
+        for condition in WEATHER_CONDITIONS
+    })
+
+
+async def get_weather_settings_value(session: AsyncSession) -> WeatherSettingsRead:
+    setting = await session.get(AppSetting, WEATHER_SETTINGS_KEY)
+    return weather_settings_from_value(setting.value if setting is not None else None)
 
 
 def donation_settings_from_value(value: dict | None) -> DonationSettingsRead:
@@ -129,6 +148,27 @@ async def get_system_settings_value(session: AsyncSession) -> SystemSettingsRead
     return system_settings_from_value(setting.value if setting is not None else None)
 
 
+def news_settings_from_value(value: dict | None) -> NewsSettingsRead:
+    value = value if isinstance(value, dict) else {}
+    try:
+        auto_rotate_seconds = int(value.get("auto_rotate_seconds", DEFAULT_NEWS_AUTO_ROTATE_SECONDS))
+    except (TypeError, ValueError):
+        auto_rotate_seconds = DEFAULT_NEWS_AUTO_ROTATE_SECONDS
+    try:
+        manual_pause_seconds = int(value.get("manual_pause_seconds", DEFAULT_NEWS_MANUAL_PAUSE_SECONDS))
+    except (TypeError, ValueError):
+        manual_pause_seconds = DEFAULT_NEWS_MANUAL_PAUSE_SECONDS
+    return NewsSettingsRead(
+        auto_rotate_seconds=max(5, min(3600, auto_rotate_seconds)),
+        manual_pause_seconds=max(0, min(3600, manual_pause_seconds)),
+    )
+
+
+async def get_news_settings_value(session: AsyncSession) -> NewsSettingsRead:
+    setting = await session.get(AppSetting, NEWS_SETTINGS_KEY)
+    return news_settings_from_value(setting.value if setting is not None else None)
+
+
 async def load_runtime_settings(session: AsyncSession) -> SystemSettingsRead:
     setting = await session.get(AppSetting, SYSTEM_SETTINGS_KEY)
     value = system_settings_from_value(setting.value if setting is not None else None)
@@ -195,6 +235,45 @@ async def get_branding_settings(request: Request, session: AsyncSession = Depend
     return await get_branding_settings_value(session)
 
 
+@router.get("/weather", response_model=WeatherSettingsRead)
+@limiter.limit("600/minute")
+async def get_weather_settings(request: Request, session: AsyncSession = Depends(get_session)):
+    return await get_weather_settings_value(session)
+
+
+@router.post("/weather/{condition}/upload", response_model=WeatherSettingsRead)
+@limiter.limit("30/minute")
+async def upload_weather_image(
+    condition: Literal["clear", "partly_cloudy", "overcast", "light_rain", "heavy_rain", "storm"],
+    request: Request,
+    file: UploadFile = File(...),
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    extension = ALLOWED_LOGO_MEDIA_TYPES.get(file.content_type or "")
+    if extension is None:
+        raise HTTPException(status_code=415, detail="Only PNG, JPG, WEBP and GIF files are allowed")
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    if len(data) > settings.max_logo_upload_mb * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"File is larger than {settings.max_logo_upload_mb} MB")
+
+    WEATHER_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    path = WEATHER_UPLOAD_DIR / f"{condition}-{uuid4().hex}{extension}"
+    path.write_bytes(data)
+    current = await get_weather_settings_value(session)
+    value = current.model_dump()
+    value[f"{condition}_url"] = f"/api/uploads/weather/{path.name}"
+    setting = await session.get(AppSetting, WEATHER_SETTINGS_KEY)
+    if setting is None:
+        session.add(AppSetting(key=WEATHER_SETTINGS_KEY, value=value))
+    else:
+        setting.value = value
+    await session.commit()
+    return weather_settings_from_value(value)
+
+
 @router.post("/branding/{theme}/upload", response_model=BrandingSettingsRead)
 @limiter.limit("10/minute")
 async def upload_branding_logo(
@@ -235,6 +314,30 @@ async def upload_branding_logo(
 @limiter.limit("600/minute")
 async def get_system_settings(request: Request, session: AsyncSession = Depends(get_session)):
     return await get_system_settings_value(session)
+
+
+@router.get("/news", response_model=NewsSettingsRead)
+@limiter.limit("600/minute")
+async def get_news_settings(request: Request, session: AsyncSession = Depends(get_session)):
+    return await get_news_settings_value(session)
+
+
+@router.patch("/news", response_model=NewsSettingsRead)
+@limiter.limit("20/minute")
+async def update_news_settings(
+    payload: NewsSettingsUpdate,
+    request: Request,
+    _: User = Depends(require_news_editor),
+    session: AsyncSession = Depends(get_session),
+):
+    value = payload.model_dump()
+    setting = await session.get(AppSetting, NEWS_SETTINGS_KEY)
+    if setting is None:
+        session.add(AppSetting(key=NEWS_SETTINGS_KEY, value=value))
+    else:
+        setting.value = value
+    await session.commit()
+    return news_settings_from_value(value)
 
 
 @router.patch("/system", response_model=SystemSettingsRead)

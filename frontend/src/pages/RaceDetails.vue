@@ -197,6 +197,23 @@ function formatDate(value) {
   return formatDateTime(value)
 }
 
+const weatherKeys = ['clear', 'partly_cloudy', 'overcast', 'light_rain', 'heavy_rain', 'storm']
+
+function weatherLabel(key) {
+  return t(`weather.${key === 'partly_cloudy' ? 'partlyCloudy' : key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())}`)
+}
+
+function weatherSummary(currentRace) {
+  return weatherKeys
+    .map((key) => `${weatherLabel(key)} ${Math.round(Number(currentRace?.weather_chances?.[key] || 0))}%`)
+    .join(' · ')
+}
+
+function weatherTemperature(currentRace) {
+  const temperature = Number(currentRace?.track_temperature)
+  return Number.isFinite(temperature) ? `${temperature.toFixed(1)} °C` : t('common.none')
+}
+
 function formatFanVoteDate(value) {
   return value ? formatDate(value) : '-'
 }
@@ -832,12 +849,15 @@ watch(visibleParticipants, () => {
         <div class="race-details-meta">
           <span class="status-badge race-status-badge" :class="`race-status-${race.status}`">{{ statusLabel(t, race.status) }}</span>
           <span v-if="race.is_team_event" class="status-badge race-team-badge">{{ t('raceFilters.teamBadge') }}</span>
-          <span>{{ formatDate(race.datetime_start) }}</span>
-          <span>{{ formatDate(race.datetime_end) }}</span>
+          <span>{{ t('fields.registrationStart') }}: {{ formatDate(race.registration_start) }}</span>
+          <span>{{ t('fields.registrationEnd') }}: {{ formatDate(race.datetime_end) }}</span>
+          <span>{{ t('fields.raceTime') }}: {{ formatDate(race.datetime_start) }}</span>
           <span v-if="!isLmuRace && race.is_team_event">{{ t('raceDetails.registeredTeamsLimit', { count: teamRegistrations.length, max: race.max_pilots }) }}</span>
           <span v-else-if="!isLmuRace">{{ participants.length }} / {{ race.max_pilots }}</span>
           <span>{{ race.has_qualification ? t('raceDetails.withQualification') : t('raceDetails.withoutQualification') }}</span>
+          <span>{{ race.is_official ? t('raceDetails.ratingCounted') : t('raceDetails.ratingNotCounted') }}</span>
         </div>
+        <p class="race-details-weather-summary"><strong>{{ t('raceCard.weather') }}:</strong> {{ weatherSummary(race) }} · {{ t('weather.trackTemperature') }}: {{ weatherTemperature(race) }}</p>
         <p>{{ t('fields.server') }}: <a :href="race.server_link">{{ race.server_link }}</a></p>
         <p>{{ t('fields.mods') }}: {{ race.mods_pack?.join(', ') || t('common.none') }}</p>
         <form v-if="canManageRace && race.track" class="race-track-image-control" @submit.prevent="uploadTrackImage">

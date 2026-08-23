@@ -341,6 +341,7 @@ def create_stage(
         description=championship.description,
         server_link=server_link,
         lmu_results_at=lmu_results_at,
+        registration_start=start,
         datetime_start=start,
         datetime_end=start + timedelta(hours=2),
         max_pilots=500,
@@ -385,7 +386,7 @@ async def sync_championship_settings_to_stages(session: AsyncSession, championsh
             stage.car_class = primary_class
             stage.allowed_cars = allowed_cars
         if championship.game == "LMU":
-            stage.lmu_results_at = stage.lmu_results_at or stage.datetime_end
+            stage.lmu_results_at = stage.lmu_results_at or stage.datetime_start
         else:
             stage.lmu_results_at = None
     registrations = (
@@ -679,6 +680,7 @@ async def update_championship_stage(
         raise HTTPException(status_code=404, detail="Championship stage not found")
     data = payload.model_dump(exclude_unset=True)
     if "datetime_start" in data:
+        stage.registration_start = data["datetime_start"]
         stage.datetime_start = data["datetime_start"]
         stage.datetime_end = data["datetime_start"] + timedelta(hours=2)
     if "name" in data:

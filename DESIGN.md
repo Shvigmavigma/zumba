@@ -27,16 +27,30 @@
 - 2026-08-23 — audit and news controls: staff changes are shown in a compact admin audit card, while news uses a single pinned item as the main-menu default and wraps navigation at both ends.
 - 2026-08-23 — race navigation: main-menu race cards keep their existing nested controls but expose the whole card as a keyboard-accessible link target with hover/focus affordances.
 - 2026-08-23 — moderator registration control: pilot rows expose a compact destructive action only to admins/moderators and only before a race starts; team rows remain owner-managed.
+- 2026-08-23 — news autoplay: the main-menu carousel advances on a configurable interval (30 seconds by default), pauses after manual navigation (5 minutes by default), and keeps the pinned published item first.
+- 2026-08-23 — pilot analytics: profiles share one switchable statistics card for best laps, recent results, and a rating chart; the controls use existing card, pill, select, and chart tokens and show the qualifying/race source beside each lap.
+- 2026-08-23 — chart polish: the rating trend uses a crisp, aspect-ratio-preserving SVG with a smoothed path, non-scaling stroke, and subtle gradient fill; track records show the session source beside each best lap.
+- 2026-08-23 — race weather and schedule: races use separate registration-start, registration-end, and race-time values; the main card centres race time, keeps the green registration badge in the information area, and exposes the selected weather image there with a native tooltip containing all probabilities and track temperature.
+- 2026-08-23 — weather imagery: admins choose one image per weather condition; calendar and main-card weather indicators reuse those assets without a framed weather section.
+- 2026-08-24 — main-card geometry: restored the legacy date tile and three-column race-card proportions; schedule data remains available in the race details instead of changing the compact card layout.
+- 2026-08-24 — main-card registration dates: the left date tile shows the registration-start value without a label, while the central end-registration tile uses a wider grid track and wraps its caption; simulator/class badges sit above a vertically centred, content-sized single-line track chip with ellipsis, while the main card shows only a small leading-weather image and race format details remain on the race-information page.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, default-avatar, system-setting, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
 - `frontend/src/App.vue` — existing application shell, navigation, and theme-specific brand logo.
 - `frontend/src/components/ImageCropper.vue` — reusable fixed-ratio crop dialog for selected raster images.
-- `frontend/src/pages/MainMenu.vue` — main race filter bar with a compact native dropdown for qualification, format, and official-status options.
+- `frontend/src/pages/MainMenu.vue` — main race filter bar with a compact native dropdown plus centred race time, in-card registration badge, and weather tooltip.
 - `frontend/src/components/RaceAssetsEditor.vue` — admin ACC car-model mapping rows with editable IDs, add/remove controls, and responsive collapse.
 - `frontend/src/components/AuditLogPanel.vue` — compact, refreshable staff audit history panel with explicit empty and error states.
 - `frontend/src/pages/NewsManage.vue` — news editor with single-item pin controls and pinned-first management ordering.
 - `frontend/src/pages/RaceDetails.vue` — moderator-only pilot removal action in the individual registration list, with confirmation and refreshed pagination.
+- `frontend/src/pages/NewsManage.vue` — autoplay interval/pause settings plus single-pinned-news state reconciliation after saves.
+- `frontend/src/components/ProfileAnalytics.vue` — reusable profile statistics block with simulator filter, best-lap source labels, recent result links, and an SVG rating trend.
+- `frontend/src/pages/PilotList.vue` — track records table with the qualifying/race source for each selected best lap.
+- `frontend/src/pages/ProfileEdit.vue` — favorite-car selector populated from the admin race-assets catalog.
+- `frontend/src/pages/RaceEdit.vue` — separate registration-start, registration-end, and race-time controls plus weather probability and track-temperature inputs.
+- `frontend/src/pages/RaceCalendar.vue` — selected race cards with schedule and leading-weather imagery.
+- `frontend/src/pages/AdminUserList.vue` — admin weather-condition image uploads and previews.
 
 ## Non-Goals
 - No Figma sync

@@ -14,11 +14,20 @@ const gameChoices = computed(() => gameOptions(t))
 const error = ref('')
 const raceAssets = ref({ tracks: [], classes: [], games: {} })
 const assetGames = ['ACC', 'AC', 'iRacing', 'LMU']
+const defaultWeatherChances = () => ({
+  clear: 100,
+  partly_cloudy: 0,
+  overcast: 0,
+  light_rain: 0,
+  heavy_rain: 0,
+  storm: 0
+})
 const form = ref({
   name: '',
   description: '',
   server_link: '',
   lmu_results_at: '',
+  registration_start: '',
   datetime_start: '',
   datetime_end: '',
   max_pilots: 32,
@@ -26,6 +35,8 @@ const form = ref({
   track: '',
   mods_pack: [],
   allowed_cars: [],
+  weather_chances: defaultWeatherChances(),
+  track_temperature: 25,
   game: 'ACC',
   has_qualification: true,
   is_team_event: false,
@@ -49,6 +60,14 @@ const classChoices = computed(() => {
 const selectedClass = computed(() => classChoices.value.find((item) => item.name === form.value.car_class) || null)
 const selectedClassCars = computed(() => selectedClass.value?.cars || [])
 const allClassCarsSelected = computed(() => selectedClassCars.value.length > 0 && selectedClassCars.value.every((car) => form.value.allowed_cars.includes(car)))
+const weatherConditions = computed(() => [
+  { key: 'clear', label: t('weather.clear') },
+  { key: 'partly_cloudy', label: t('weather.partlyCloudy') },
+  { key: 'overcast', label: t('weather.overcast') },
+  { key: 'light_rain', label: t('weather.lightRain') },
+  { key: 'heavy_rain', label: t('weather.heavyRain') },
+  { key: 'storm', label: t('weather.storm') }
+])
 
 function withCurrent(items, current) {
   if (!current || items.includes(current)) return items
@@ -94,7 +113,7 @@ function handleGameChange() {
   form.value.car_class = ''
   form.value.allowed_cars = []
   if (isLmuRace.value && !form.value.lmu_results_at) {
-    form.value.lmu_results_at = form.value.datetime_end
+    form.value.lmu_results_at = form.value.datetime_start
   }
   if (!isLmuRace.value) form.value.lmu_results_at = ''
   applyAssetDefaults({ forceCars: true })
@@ -120,9 +139,10 @@ async function submit() {
     const body = {
       ...form.value,
       description: isLmuRace.value ? (form.value.description || '') : form.value.description,
+      registration_start: toIso(form.value.registration_start),
       datetime_start: toIso(form.value.datetime_start),
       datetime_end: toIso(form.value.datetime_end),
-      lmu_results_at: isLmuRace.value ? optionalIso(form.value.lmu_results_at || form.value.datetime_end) : null,
+      lmu_results_at: isLmuRace.value ? optionalIso(form.value.lmu_results_at || form.value.datetime_start) : null,
       max_pilots: isLmuRace.value ? 1 : form.value.max_pilots,
       track: form.value.track,
       car_class: form.value.car_class,
@@ -148,6 +168,9 @@ onMounted(async () => {
   const race = await api(`/races/${route.params.id}`)
   form.value = {
     ...race,
+    weather_chances: { ...defaultWeatherChances(), ...(race.weather_chances || {}) },
+    track_temperature: race.track_temperature ?? 25,
+    registration_start: race.registration_start.slice(0, 16),
     datetime_start: race.datetime_start.slice(0, 16),
     datetime_end: race.datetime_end.slice(0, 16),
     lmu_results_at: race.lmu_results_at ? race.lmu_results_at.slice(0, 16) : ''
@@ -183,10 +206,38 @@ onMounted(async () => {
           <input v-else v-model="form.car_class" required />
         </label>
       </div>
-      <div class="form-row">
-        <label class="field"><span>{{ t('fields.registrationStart') }}</span><input v-model="form.datetime_start" type="datetime-local" required /></label>
-        <label class="field"><span>{{ t('fields.registrationEnd') }}</span><input v-model="form.datetime_end" type="datetime-local" required /></label>
-      </div>
+      <label class="field"><span>{{ t('fields.registrationStart') }}</span><input v-model="form.registration_start" type="datetime-local" required /></label>
+      <section class="race-registration-deadline-editor">
+        <div class="section-header compact">
+          <div>
+            <h3>{{ t('raceCard.registrationCloses') }}</h3>
+            <p class="muted">{{ t('fields.registrationEnd') }}</p>
+          </div>
+        </div>
+        <label class="field">
+          <span>{{ t('raceCard.registrationCloses') }}</span>
+          <input v-model="form.datetime_end" type="datetime-local" required />
+        </label>
+      </section>
+      <label class="field"><span>{{ t('fields.raceTime') }}</span><input v-model="form.datetime_start" type="datetime-local" required /></label>
+      <section class="race-weather-editor">
+        <div class="section-header compact">
+          <div>
+            <h3>{{ t('weather.title') }}</h3>
+            <p class="muted">{{ t('weather.hint') }}</p>
+          </div>
+        </div>
+        <div class="race-weather-grid">
+          <label v-for="condition in weatherConditions" :key="condition.key" class="field">
+            <span>{{ condition.label }}</span>
+            <input v-model.number="form.weather_chances[condition.key]" type="number" min="0" max="100" step="1" />
+          </label>
+          <label class="field">
+            <span>{{ t('weather.trackTemperature') }}</span>
+            <input v-model.number="form.track_temperature" type="number" min="-50" max="80" step="0.1" />
+          </label>
+        </div>
+      </section>
       <label v-if="isLmuRace" class="field">
         <span>{{ t('fields.lmuResultsAt') }}</span>
         <input v-model="form.lmu_results_at" type="datetime-local" required />
