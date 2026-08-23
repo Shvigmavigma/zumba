@@ -1043,12 +1043,18 @@ class BrandingSettingsRead(BaseModel):
 
 
 class WeatherSettingsRead(BaseModel):
-    clear_url: str = ""
-    partly_cloudy_url: str = ""
-    overcast_url: str = ""
-    light_rain_url: str = ""
-    heavy_rain_url: str = ""
-    storm_url: str = ""
+    clear_light_url: str = ""
+    clear_dark_url: str = ""
+    partly_cloudy_light_url: str = ""
+    partly_cloudy_dark_url: str = ""
+    overcast_light_url: str = ""
+    overcast_dark_url: str = ""
+    light_rain_light_url: str = ""
+    light_rain_dark_url: str = ""
+    heavy_rain_light_url: str = ""
+    heavy_rain_dark_url: str = ""
+    storm_light_url: str = ""
+    storm_dark_url: str = ""
 
 
 class SystemSettingsRead(BaseModel):

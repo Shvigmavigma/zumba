@@ -22,12 +22,12 @@ const banners = ref([])
 const news = ref([])
 const newsSettings = ref({ auto_rotate_seconds: 30, manual_pause_seconds: 300 })
 const weatherSettings = ref({
-  clear_url: '',
-  partly_cloudy_url: '',
-  overcast_url: '',
-  light_rain_url: '',
-  heavy_rain_url: '',
-  storm_url: ''
+  clear_light_url: '', clear_dark_url: '',
+  partly_cloudy_light_url: '', partly_cloudy_dark_url: '',
+  overcast_light_url: '', overcast_dark_url: '',
+  light_rain_light_url: '', light_rain_dark_url: '',
+  heavy_rain_light_url: '', heavy_rain_dark_url: '',
+  storm_light_url: '', storm_dark_url: ''
 })
 const registrationChampionships = ref([])
 const donationSettings = ref({ donation_url: '', top_donations: [] })
@@ -225,7 +225,11 @@ function dominantWeatherKey(race) {
 }
 
 function weatherImageUrl(race) {
-  return weatherSettings.value[`${dominantWeatherKey(race)}_url`] || ''
+  const theme = state.theme === 'dark' ? 'dark' : 'light'
+  const condition = dominantWeatherKey(race)
+  return weatherSettings.value[`${condition}_${theme}_url`]
+    || weatherSettings.value[`${condition}_${theme === 'dark' ? 'light' : 'dark'}_url`]
+    || ''
 }
 
 function weatherLabel(key) {

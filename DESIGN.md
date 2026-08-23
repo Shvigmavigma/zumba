@@ -31,7 +31,7 @@
 - 2026-08-23 — pilot analytics: profiles share one switchable statistics card for best laps, recent results, and a rating chart; the controls use existing card, pill, select, and chart tokens and show the qualifying/race source beside each lap.
 - 2026-08-23 — chart polish: the rating trend uses a crisp, aspect-ratio-preserving SVG with a smoothed path, non-scaling stroke, and subtle gradient fill; track records show the session source beside each best lap.
 - 2026-08-23 — race weather and schedule: races use separate registration-start, registration-end, and race-time values; the main card centres race time, keeps the green registration badge in the information area, and exposes the selected weather image there with a native tooltip containing all probabilities and track temperature.
-- 2026-08-23 — weather imagery: admins choose one image per weather condition; calendar and main-card weather indicators reuse those assets without a framed weather section.
+- 2026-08-23 — weather imagery: admins choose separate light/dark images per weather condition; calendar and main-card weather indicators reuse the asset for the active theme without a framed weather section.
 - 2026-08-24 — main-card geometry: restored the legacy date tile and three-column race-card proportions; schedule data remains available in the race details instead of changing the compact card layout.
 - 2026-08-24 — main-card registration dates: the left date tile shows the registration-start value without a label, while the central end-registration tile uses a wider grid track and wraps its caption; simulator/class badges sit above a vertically centred, content-sized single-line track chip with ellipsis, while the main card shows only a small leading-weather image and race format details remain on the race-information page.
 
@@ -50,7 +50,7 @@
 - `frontend/src/pages/ProfileEdit.vue` — favorite-car selector populated from the admin race-assets catalog.
 - `frontend/src/pages/RaceEdit.vue` — separate registration-start, registration-end, and race-time controls plus weather probability and track-temperature inputs.
 - `frontend/src/pages/RaceCalendar.vue` — selected race cards with schedule and leading-weather imagery.
-- `frontend/src/pages/AdminUserList.vue` — admin weather-condition image uploads and previews.
+- `frontend/src/pages/AdminUserList.vue` — admin weather-condition light/dark image uploads and previews.
 
 ## Non-Goals
 - No Figma sync

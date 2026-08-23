@@ -56,10 +56,14 @@ DEFAULT_LICENSE_TIERS = [
 
 def weather_settings_from_value(value: dict | None) -> WeatherSettingsRead:
     value = value if isinstance(value, dict) else {}
-    return WeatherSettingsRead(**{
-        f"{condition}_url": str(value.get(f"{condition}_url") or "").strip()
-        for condition in WEATHER_CONDITIONS
-    })
+    normalized = {}
+    for condition in WEATHER_CONDITIONS:
+        legacy_url = str(value.get(f"{condition}_url") or "").strip()
+        for theme in ("light", "dark"):
+            normalized[f"{condition}_{theme}_url"] = str(
+                value.get(f"{condition}_{theme}_url") or legacy_url
+            ).strip()
+    return WeatherSettingsRead(**normalized)
 
 
 async def get_weather_settings_value(session: AsyncSession) -> WeatherSettingsRead:
@@ -241,10 +245,11 @@ async def get_weather_settings(request: Request, session: AsyncSession = Depends
     return await get_weather_settings_value(session)
 
 
-@router.post("/weather/{condition}/upload", response_model=WeatherSettingsRead)
+@router.post("/weather/{condition}/{theme}/upload", response_model=WeatherSettingsRead)
 @limiter.limit("30/minute")
 async def upload_weather_image(
     condition: Literal["clear", "partly_cloudy", "overcast", "light_rain", "heavy_rain", "storm"],
+    theme: Literal["light", "dark"],
     request: Request,
     file: UploadFile = File(...),
     _: User = Depends(require_admin),
@@ -260,11 +265,11 @@ async def upload_weather_image(
         raise HTTPException(status_code=413, detail=f"File is larger than {settings.max_logo_upload_mb} MB")
 
     WEATHER_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    path = WEATHER_UPLOAD_DIR / f"{condition}-{uuid4().hex}{extension}"
+    path = WEATHER_UPLOAD_DIR / f"{condition}-{theme}-{uuid4().hex}{extension}"
     path.write_bytes(data)
     current = await get_weather_settings_value(session)
     value = current.model_dump()
-    value[f"{condition}_url"] = f"/api/uploads/weather/{path.name}"
+    value[f"{condition}_{theme}_url"] = f"/api/uploads/weather/{path.name}"
     setting = await session.get(AppSetting, WEATHER_SETTINGS_KEY)
     if setting is None:
         session.add(AppSetting(key=WEATHER_SETTINGS_KEY, value=value))
