@@ -3,9 +3,9 @@
 ## Требования
 
 - Docker Desktop или Docker Engine с Compose plugin.
-- Открытые входящие порты `80` и `443` на ПК, где будет хоститься сервис.
+- Открытый входящий порт `8080` на ПК, где будет хоститься сервис.
 - DNS A-запись домена должна указывать на внешний IP этого ПК/роутера.
-- На роутере нужно пробросить порты `80` и `443` на локальный IP ПК.
+- На роутере нужно пробросить порт `8080` на локальный IP ПК.
 
 ## Подготовка
 
@@ -17,9 +17,8 @@ cp .env.example .env
 
 ```env
 APP_DOMAIN=bmrl.example.com
-PUBLIC_BASE_URL=https://bmrl.example.com
-CORS_ORIGINS=https://bmrl.example.com
-CADDY_SITE_ADDRESS=bmrl.example.com
+PUBLIC_BASE_URL=http://bmrl.example.com:8080
+CORS_ORIGINS=http://bmrl.example.com:8080
 POSTGRES_PASSWORD=long-random-password
 JWT_SECRET=another-long-random-secret
 ADMIN_PASSWORD=strong-admin-password
@@ -42,9 +41,9 @@ docker compose logs -f backend
 
 Адреса:
 
-- сайт: `https://APP_DOMAIN`
-- API: `https://APP_DOMAIN/api/docs`
-- healthcheck: `https://APP_DOMAIN/health`
+- сайт: `http://APP_DOMAIN:8080`
+- API: `http://APP_DOMAIN:8080/api/docs`
+- healthcheck: `http://APP_DOMAIN:8080/health`
 
 ## Резервная копия PostgreSQL
 
@@ -82,15 +81,4 @@ powershell -ExecutionPolicy Bypass -File .\scripts\weekly-backup.ps1 -InstallWee
 
 ## HTTPS
 
-HTTPS уже подключен через контейнер `caddy` в `docker-compose.yml`. Caddy автоматически получает и продлевает сертификат Let's Encrypt, если:
-
-- `CADDY_SITE_ADDRESS` содержит домен без `http://` и `https://`;
-- DNS A-запись домена указывает на белый IP этого ПК/роутера;
-- порты `80` и `443` проброшены на ПК и не заняты другой программой;
-- файрвол Windows разрешает входящие подключения на `80` и `443`.
-
-Для локального запуска без сертификата оставьте:
-
-```env
-CADDY_SITE_ADDRESS=http://localhost
-```
+В этой конфигурации HTTPS не завершается на сервере: приложение работает по HTTP через порт `8080`. Для HTTPS позже понадобится внешний прокси или Cloudflare Tunnel, который будет направлять домен на `http://сервер:8080`.

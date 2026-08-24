@@ -9,7 +9,7 @@
 - Redis storage для SlowAPI, чтобы лимиты были общими для всех Gunicorn workers.
 - SlowAPI rate limiting: по умолчанию `3/minute` для каждого endpoint, админский токен освобожден от лимита.
 - Vue 3 SPA с `vue-i18n`, светлой/темной темой через CSS variables и сохранением выбора в `localStorage`.
-- Docker Compose для переноса на другой ПК: PostgreSQL, backend, Nginx со статикой SPA, Caddy для внешнего HTTP/HTTPS и reverse proxy на `/api`.
+- Docker Compose для переноса на другой ПК: PostgreSQL, backend и Nginx со статикой SPA и reverse proxy на `/api`.
 
 ## Быстрый запуск
 
@@ -23,9 +23,8 @@ cp .env.example .env
 
 ```env
 APP_DOMAIN=your-domain.example
-PUBLIC_BASE_URL=https://your-domain.example
-CORS_ORIGINS=https://your-domain.example
-CADDY_SITE_ADDRESS=your-domain.example
+PUBLIC_BASE_URL=http://your-domain.example:8080
+CORS_ORIGINS=http://your-domain.example:8080
 ```
 
 3. Запустите сервис:
@@ -36,24 +35,23 @@ docker compose up --build -d
 
 4. Откройте:
 
-- Web локально: `http://localhost`
-- Web на домене: `https://APP_DOMAIN`
+- Web локально: `http://localhost:8080`
+- Web на домене: `http://APP_DOMAIN:8080`
 - API healthcheck: `/health`
 - API docs: `/api/docs`
 
-Для локального запуска без домена оставьте `APP_DOMAIN=localhost`, `PUBLIC_BASE_URL=http://localhost`, `CORS_ORIGINS=http://localhost,http://127.0.0.1`, `CADDY_SITE_ADDRESS=http://localhost` и откройте `http://localhost`.
+Для локального запуска без домена оставьте `APP_DOMAIN=localhost`, `PUBLIC_BASE_URL=http://localhost:8080`, `CORS_ORIGINS=http://localhost:8080,http://127.0.0.1:8080` и откройте `http://localhost:8080`.
 
 Подробная памятка по переносу на другой ПК и домену лежит в `DEPLOY.md`.
 
-## Выгрузка на ПК с белым IP и HTTPS
+## Выгрузка на ПК с белым IP и портом 8080
 
 1. На ПК, где будет работать сайт, установите Docker Desktop или Docker Engine с Compose plugin.
 
-2. Пробросьте на роутере порты на локальный IP этого ПК:
+2. Пробросьте на роутере порт на локальный IP этого ПК:
 
 ```text
-80  -> ПК:80
-443 -> ПК:443
+8080 -> ПК:8080
 ```
 
 3. В DNS домена создайте A-запись на белый IP:
@@ -68,13 +66,12 @@ your-domain.example -> ваш белый IP
 cp .env.example .env
 ```
 
-5. В `.env` для HTTPS укажите домен без `http://` в `CADDY_SITE_ADDRESS`, а публичные URL уже с `https://`:
+5. В `.env` укажите домен и публичный HTTP-адрес:
 
 ```env
 APP_DOMAIN=your-domain.example
-PUBLIC_BASE_URL=https://your-domain.example
-CORS_ORIGINS=https://your-domain.example
-CADDY_SITE_ADDRESS=your-domain.example
+PUBLIC_BASE_URL=http://your-domain.example:8080
+CORS_ORIGINS=http://your-domain.example:8080
 ```
 
 Также обязательно замените `POSTGRES_PASSWORD`, `DATABASE_URL`, `JWT_SECRET` и `ADMIN_PASSWORD` на свои значения. Пароль в `DATABASE_URL` должен совпадать с `POSTGRES_PASSWORD`.
@@ -85,21 +82,18 @@ CADDY_SITE_ADDRESS=your-domain.example
 docker compose up --build -d
 ```
 
-Caddy сам получит и будет продлевать HTTPS-сертификат Let's Encrypt, если домен уже указывает на этот ПК, а порты `80` и `443` открыты снаружи.
-
 Проверка после запуска:
 
 ```bash
 docker compose ps
-docker compose logs -f caddy
 docker compose logs -f backend
 ```
 
 Адреса после успешного запуска:
 
-- сайт: `https://your-domain.example`
-- healthcheck: `https://your-domain.example/health`
-- API docs: `https://your-domain.example/api/docs`
+- сайт: `http://your-domain.example:8080`
+- healthcheck: `http://your-domain.example:8080/health`
+- API docs: `http://your-domain.example:8080/api/docs`
 
 ## Производительность
 
