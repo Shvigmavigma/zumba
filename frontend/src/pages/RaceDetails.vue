@@ -102,7 +102,7 @@ const resultParticipants = computed(() => {
         rating: row.rating ?? participant?.rating,
         game_ratings: row.game_ratings || participant?.game_ratings,
         sr: row.sr ?? participant?.sr,
-        car_model: row.car_model || participant?.car_model,
+        car_model: row.car_model ?? participant?.car_model,
         team_id: row.team_id || participant?.team_id,
         team_name: row.team_name || participant?.team_name,
         team_abbreviation: row.team_abbreviation || participant?.team_abbreviation,
@@ -296,6 +296,15 @@ function trackImageFromConfig(config, track, trackId = '') {
   if (!currentTrackName) return ''
   const images = config?.track_images || {}
   return images[currentTrackName] || Object.entries(images).find(([key]) => key.toLowerCase() === currentTrackName.toLowerCase())?.[1] || ''
+}
+
+function carModelLabel(value) {
+  if (value === null || value === undefined || value === '') return t('common.none')
+  if (race.value?.game !== 'ACC') return String(value)
+  const numericId = Number(value)
+  if (!Number.isInteger(numericId)) return String(value)
+  const mapping = raceAssets.value.car_model_ids || {}
+  return Object.entries(mapping).find(([, id]) => Number(id) === numericId)?.[0] || String(value)
 }
 
 function openTrackImage() {
@@ -1432,7 +1441,7 @@ watch(visibleParticipants, () => {
                     </div>
                   </td>
                   <td v-if="resultsTab === 'race'">{{ row.lap_count ?? '-' }}</td>
-                  <td v-else>{{ row.race_number ? `#${row.race_number}` : '-' }}</td>
+                  <td v-else>{{ carModelLabel(row.car_model) }}</td>
                   <td>{{ formatDuration(row.best_lap_ms) }}</td>
                   <td v-if="resultsTab === 'race'">{{ formatDuration(row.finish_ms) }}</td>
                   <td v-if="resultsTab === 'race'">
