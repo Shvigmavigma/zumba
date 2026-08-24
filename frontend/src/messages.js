@@ -435,7 +435,8 @@ export const messages = {
     },
     appeals: {
       proof: 'Доказательство',
-      empty: 'Апелляций нет'
+      empty: 'Апелляций нет',
+      confirmDelete: 'Удалить эту апелляцию навсегда?'
     },
     banners: {
       subtitle: 'Загрузка баннеров по позициям. GIF загружается напрямую и сохраняет анимацию.',
@@ -519,6 +520,7 @@ export const messages = {
       penalties: 'Штрафы гонки',
       penaltiesCount: 'Штрафов: {count}',
       noPenalties: 'Штрафов пока нет',
+      confirmDeletePenalty: 'Удалить этот штраф навсегда?',
       openPenalties: 'Открыть штрафы',
       issuePenalty: 'Выдать штраф',
       selectPenaltyPilot: 'Выберите пилота',
@@ -601,7 +603,9 @@ export const messages = {
       chooseCars: 'Выберите хотя бы одну машину'
     },
     moderation: {
-      pendingProfileChanges: 'Ожидающие изменения профиля: {changes}'
+      pendingProfileChanges: 'Ожидающие изменения профиля: {changes}',
+      deleteRequest: 'Удалить заявку навсегда',
+      confirmDelete: 'Удалить эту заявку модерации навсегда?'
     },
     news: {
       title: 'Новости',
@@ -1172,7 +1176,8 @@ export const messages = {
     },
     appeals: {
       proof: 'Proof',
-      empty: 'No appeals'
+      empty: 'No appeals',
+      confirmDelete: 'Delete this appeal permanently?'
     },
     banners: {
       subtitle: 'Upload banners by placement. GIF files upload directly and keep animation.',
@@ -1256,6 +1261,7 @@ export const messages = {
       penalties: 'Race penalties',
       penaltiesCount: '{count} penalties',
       noPenalties: 'No penalties yet',
+      confirmDeletePenalty: 'Delete this penalty permanently?',
       openPenalties: 'Open penalties',
       issuePenalty: 'Issue penalty',
       selectPenaltyPilot: 'Select pilot',
@@ -1338,7 +1344,9 @@ export const messages = {
       chooseCars: 'Choose at least one car'
     },
     moderation: {
-      pendingProfileChanges: 'Pending profile changes: {changes}'
+      pendingProfileChanges: 'Pending profile changes: {changes}',
+      deleteRequest: 'Delete request permanently',
+      confirmDelete: 'Delete this moderation request permanently?'
     },
     news: {
       title: 'News',

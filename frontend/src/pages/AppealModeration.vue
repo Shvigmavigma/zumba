@@ -1,9 +1,11 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Trash2 } from 'lucide-vue-next'
 import { api } from '../api'
 import PenaltyDetailsModal from '../components/PenaltyDetailsModal.vue'
 import { statusLabel } from '../i18nLabels'
+import { state } from '../store'
 
 const { t } = useI18n()
 const appeals = ref([])
@@ -12,6 +14,7 @@ const reasons = ref({})
 const selectedPenalty = ref(null)
 const penaltyError = ref('')
 const penaltyLoading = ref(false)
+const isAdmin = computed(() => state.user?.role === 'admin')
 
 async function load() {
   try {
@@ -31,6 +34,16 @@ async function moderate(appeal, status) {
     }
   })
   await load()
+}
+
+async function deleteAppeal(appeal) {
+  if (!window.confirm(t('appeals.confirmDelete'))) return
+  try {
+    await api(`/appeals/${appeal.id}`, { method: 'DELETE' })
+    appeals.value = appeals.value.filter((item) => item.id !== appeal.id)
+  } catch (err) {
+    error.value = err.message
+  }
 }
 
 function isPending(appeal) {
@@ -98,6 +111,16 @@ onMounted(load)
             </div>
           </template>
           <span v-else class="status-badge" :class="`status-${appeal.status}`">{{ statusLabel(t, appeal.status) }}</span>
+          <button
+            v-if="isAdmin"
+            class="icon-button danger-icon"
+            type="button"
+            :title="t('common.delete')"
+            :aria-label="t('common.delete')"
+            @click="deleteAppeal(appeal)"
+          >
+            <Trash2 :size="16" />
+          </button>
         </div>
       </article>
 

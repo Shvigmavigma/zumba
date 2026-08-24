@@ -1,11 +1,13 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Trash2 } from 'lucide-vue-next'
 import { api } from '../api'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
+import { state } from '../store'
 
 const { t } = useI18n()
 const users = ref([])
@@ -14,6 +16,7 @@ const page = ref(1)
 const pageSize = 8
 const totalPages = computed(() => Math.max(1, Math.ceil(users.value.length / pageSize)))
 const pagedUsers = computed(() => users.value.slice((page.value - 1) * pageSize, page.value * pageSize))
+const isAdmin = computed(() => state.user?.role === 'admin')
 
 async function load() {
   users.value = await api('/users/moderation/pending')
@@ -31,6 +34,16 @@ async function approve(user) {
 async function reject(user) {
   try {
     await api(`/users/${user.id}/reject`, { method: 'DELETE' })
+    users.value = users.value.filter((item) => item.id !== user.id)
+  } catch (err) {
+    error.value = err.message
+  }
+}
+
+async function deleteRequest(user) {
+  if (!window.confirm(t('moderation.confirmDelete'))) return
+  try {
+    await api(`/users/${user.id}/moderation`, { method: 'DELETE' })
     users.value = users.value.filter((item) => item.id !== user.id)
   } catch (err) {
     error.value = err.message
@@ -75,6 +88,16 @@ watch(users, () => {
         <div class="toolbar">
           <button class="button primary" @click="approve(user)">{{ t('common.approve') }}</button>
           <button class="button danger" @click="reject(user)">{{ t('common.reject') }}</button>
+          <button
+            v-if="isAdmin"
+            class="icon-button danger-icon"
+            type="button"
+            :title="t('moderation.deleteRequest')"
+            :aria-label="t('moderation.deleteRequest')"
+            @click="deleteRequest(user)"
+          >
+            <Trash2 :size="16" />
+          </button>
         </div>
       </article>
     </div>

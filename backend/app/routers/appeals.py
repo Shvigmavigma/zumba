@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.deps import MARSHALL_PLUS, require_marshall_plus, require_pilot_plus
+from app.deps import MARSHALL_PLUS, require_admin, require_marshall_plus, require_pilot_plus
 from app.models import Appeal, AppealStatus, Penalty, PenaltyStatus, Race, RaceStatus, User
 from app.rate_limit import limiter
 from app.schemas import AppealCreate, AppealModerationRequest, AppealRead
@@ -109,3 +109,27 @@ async def moderate_appeal(
     await session.commit()
     await session.refresh(appeal)
     return appeal
+
+
+@router.delete("/{appeal_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("3/minute")
+async def delete_appeal(
+    appeal_id: int,
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    appeal = await session.get(Appeal, appeal_id)
+    if appeal is None:
+        raise HTTPException(status_code=404, detail="Appeal not found")
+    penalty = await session.get(Penalty, appeal.penalty_id)
+    race = await session.get(Race, appeal.race_id)
+    if penalty is not None and penalty.status == PenaltyStatus.appealed:
+        penalty.status = PenaltyStatus.active
+    await session.delete(appeal)
+    await session.flush()
+    if race is not None:
+        await recalculate_race_results(session, race)
+        if race.status == RaceStatus.finished:
+            await recalculate_all_ratings(session)
+    await session.commit()
