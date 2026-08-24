@@ -23,9 +23,9 @@ cp .env.example .env
 
 ```env
 APP_DOMAIN=your-domain.example
-WEB_PORT=80
-PUBLIC_BASE_URL=http://your-domain.example
-CORS_ORIGINS=http://your-domain.example
+WEB_PORT=8080
+PUBLIC_BASE_URL=http://your-domain.example:8080
+CORS_ORIGINS=http://your-domain.example:8080
 ```
 
 3. Запустите сервис:
@@ -36,12 +36,12 @@ docker compose up --build -d
 
 4. Откройте:
 
-- Web локально: `http://localhost`
-- Web на домене: `http://APP_DOMAIN` (или `:8080`, если `WEB_PORT=8080`)
+- Web локально: `http://localhost:8080`
+- Web на домене: `http://APP_DOMAIN:8080`
 - API healthcheck: `/health`
 - API docs: `/api/docs`
 
-Для локального запуска без домена оставьте `APP_DOMAIN=localhost`, `WEB_PORT=80`, `PUBLIC_BASE_URL=http://localhost`, `CORS_ORIGINS=http://localhost,http://127.0.0.1` и откройте `http://localhost`.
+Для локального запуска без домена оставьте `APP_DOMAIN=localhost`, `WEB_PORT=8080`, `PUBLIC_BASE_URL=http://localhost:8080`, `CORS_ORIGINS=http://localhost:8080,http://127.0.0.1:8080` и откройте `http://localhost:8080`.
 
 Подробная памятка по переносу на другой ПК и домену лежит в `DEPLOY.md`.
 
