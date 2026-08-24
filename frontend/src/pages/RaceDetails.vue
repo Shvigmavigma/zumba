@@ -811,6 +811,20 @@ async function createPenalty(form) {
   }
 }
 
+async function deletePenalty(penalty) {
+  if (!window.confirm(t('raceDetails.confirmDeletePenalty'))) return
+  error.value = ''
+  actionPending.value = true
+  try {
+    await api(`/penalties/${penalty.id}/permanent`, { method: 'DELETE' })
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    actionPending.value = false
+  }
+}
+
 onMounted(load)
 watch([participantSearch, participantSort], () => {
   participantPage.value = 1
@@ -1348,11 +1362,13 @@ watch(visibleParticipants, () => {
         :participants="penaltyParticipants"
         :game="raceRatingGame"
         :can-create="canIssuePenalty"
+        :can-delete="state.user?.role === 'admin'"
         v-model:create-open="penaltyCreateOpen"
         :busy="actionPending"
         @close="closePenaltiesModal"
         @create-penalty="createPenalty"
         @create-appeal="createAppeal"
+        @delete-penalty="deletePenalty"
       />
     </template>
   </section>

@@ -1,11 +1,11 @@
 ﻿from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db import get_session
-from app.deps import MARSHALL_PLUS, get_current_user, require_marshall_plus
-from app.models import Penalty, PenaltyStatus, Race, RaceStatus, User
+from app.deps import MARSHALL_PLUS, get_current_user, require_admin, require_marshall_plus
+from app.models import Appeal, Penalty, PenaltyStatus, Race, RaceStatus, User
 from app.rate_limit import limiter
 from app.schemas import PenaltyCreate, PenaltyDetailRead, PenaltyRead
 from app.services import apply_sr_penalties, recalculate_all_ratings, recalculate_race_results, restore_sr_penalty
@@ -123,3 +123,26 @@ async def cancel_penalty(
     await session.commit()
     await session.refresh(penalty)
     return penalty
+
+
+@router.delete("/{penalty_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("3/minute")
+async def delete_penalty_permanently(
+    penalty_id: int,
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    penalty = await session.get(Penalty, penalty_id)
+    if penalty is None:
+        raise HTTPException(status_code=404, detail="Penalty not found")
+    race = await session.get(Race, penalty.race_id)
+    await restore_sr_penalty(session, penalty)
+    await session.execute(delete(Appeal).where(Appeal.penalty_id == penalty.id))
+    await session.delete(penalty)
+    await session.flush()
+    if race is not None:
+        await recalculate_race_results(session, race)
+        if race.status == RaceStatus.finished:
+            await recalculate_all_ratings(session)
+    await session.commit()

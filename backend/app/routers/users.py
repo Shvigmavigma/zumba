@@ -539,6 +539,30 @@ async def reject_user(user_id: int, request: Request, _: User = Depends(require_
         remove_avatar_file(avatar_url)
 
 
+@router.delete("/{user_id}/moderation", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("3/minute")
+async def delete_moderation_request(
+    user_id: int,
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    avatar_url = user.avatar_url
+    delete_user = user.status == UserStatus.unapproved
+    if delete_user:
+        await session.delete(user)
+    elif user.pending_profile_changes is not None:
+        user.pending_profile_changes = None
+    else:
+        raise HTTPException(status_code=400, detail="No registration or profile change to delete")
+    await session.commit()
+    if avatar_url and delete_user:
+        remove_avatar_file(avatar_url)
+
+
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("10/minute")
 async def delete_user_account(

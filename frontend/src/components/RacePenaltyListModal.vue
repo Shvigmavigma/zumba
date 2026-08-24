@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { X } from 'lucide-vue-next'
+import { Trash2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import LicenseBadge from './LicenseBadge.vue'
 import UserAvatar from './UserAvatar.vue'
@@ -34,6 +34,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  canDelete: {
+    type: Boolean,
+    default: false
+  },
   createOpen: {
     type: Boolean,
     default: false
@@ -44,7 +48,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'create-appeal', 'create-penalty', 'update:createOpen'])
+const emit = defineEmits(['close', 'create-appeal', 'create-penalty', 'delete-penalty', 'update:createOpen'])
 const { t } = useI18n()
 const appealDrafts = ref({})
 const penaltyDraft = ref({
@@ -242,6 +246,16 @@ function submitPenalty() {
             <div class="race-penalty-badges">
               <span v-if="isOwnPenalty(penalty)" class="pill">{{ t('raceDetails.yourPenalty') }}</span>
               <span class="status-badge" :class="`status-${penalty.status}`">{{ statusLabel(t, penalty.status) }}</span>
+              <button
+                v-if="canDelete"
+                class="icon-button danger-icon"
+                type="button"
+                :title="t('common.delete')"
+                :aria-label="t('common.delete')"
+                @click="$emit('delete-penalty', penalty)"
+              >
+                <Trash2 :size="16" />
+              </button>
             </div>
           </div>
 
