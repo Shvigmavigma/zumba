@@ -176,7 +176,7 @@ function trackRaceEntry(race, row) {
     pilotNumber: row.race_number ?? row.pilot_number ?? registered?.pilot_number,
     rating: row.rating ?? registered?.rating,
     game_ratings: row.game_ratings ?? registered?.game_ratings,
-    carModel: registered?.car_model || (typeof row.car_model === 'string' ? row.car_model : '') || t('common.none'),
+    carModel: row.car_model ?? registered?.car_model ?? t('common.none'),
     bestLapMs,
     bestLapSession: bestLap.session,
     finishMs,

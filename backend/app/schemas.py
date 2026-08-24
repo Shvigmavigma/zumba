@@ -614,7 +614,7 @@ class FanVoteCast(BaseModel):
 
 class RaceRegisterRequest(BaseModel):
     car_model: str = Field(min_length=1, max_length=80)
-    pilot_number: int | None = Field(default=None, ge=0, le=999)
+    pilot_number: int | None = Field(default=None, ge=1, le=999)
 
 
 class TeamRaceDriverInput(BaseModel):
@@ -623,7 +623,7 @@ class TeamRaceDriverInput(BaseModel):
 
 class TeamRaceRegisterRequest(BaseModel):
     car_model: str = Field(min_length=1, max_length=80)
-    race_number: int = Field(ge=0, le=999)
+    race_number: int = Field(ge=1, le=999)
     drivers: list[TeamRaceDriverInput] = Field(min_length=1, max_length=6)
 
     @field_validator("drivers")
@@ -649,6 +649,7 @@ class ManualResultRow(BaseModel):
     finish_ms: int = Field(ge=0)
     lap_count: int = Field(default=0, ge=0)
     best_lap_ms: int | None = Field(default=None, ge=0)
+    qualification_best_lap_ms: int | None = Field(default=None, ge=0)
 
 
 class ManualResultsUpload(BaseModel):

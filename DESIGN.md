@@ -34,6 +34,10 @@
 - 2026-08-23 — weather imagery: admins choose separate light/dark images per weather condition; calendar and main-card weather indicators reuse the asset for the active theme without a framed weather section.
 - 2026-08-24 — main-card geometry: restored the legacy date tile and three-column race-card proportions; schedule data remains available in the race details instead of changing the compact card layout.
 - 2026-08-24 — main-card registration dates: the left date tile shows the registration-start value without a label, while the central end-registration tile uses a wider grid track and wraps its caption; simulator/class badges sit above a vertically centred, content-sized single-line track chip with ellipsis, while the main card shows only a small leading-weather image and race format details remain on the race-information page.
+- 2026-08-24 — main-card weather and registration actions: the weather image is unframed and its native tooltip shows the dominant condition probability plus track temperature; registration cancellation and admin/moderator pilot removal stay on the race-information page rather than the compact card.
+- 2026-08-24 — ACC manual results: the existing manual result table is available alongside ACC JSON upload, while the shared results endpoint accepts either input before the race is finished.
+- 2026-08-24 — ACC manual qualification: the ACC manual form captures a qualifying lap beside race time/laps/best lap; the stored result exposes both race and qualification tabs using the existing results table.
+- 2026-08-24 — ACC result car IDs and race numbers: result parsing normalizes numeric `carModel` values from nested or flat ACC payloads, while race and team registration reject number 000 in the API and form.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, default-avatar, system-setting, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).

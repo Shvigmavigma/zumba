@@ -75,7 +75,7 @@ const isChampionshipStage = computed(() => Boolean(race.value?.championship_id))
 const isLmuRace = computed(() => race.value?.game === 'LMU')
 const lmuResultsOpen = computed(() => !isLmuRace.value || race.value?.status === 'finished' || Boolean(race.value?.results) || !race.value?.lmu_results_at || new Date(race.value.lmu_results_at).getTime() <= Date.now())
 const usesSimulatorJsonResults = computed(() => race.value?.game === 'ACC')
-const canEditManualResults = computed(() => canManageRace.value && !usesSimulatorJsonResults.value && (race.value?.status !== 'finished' || isLmuRace.value))
+const canEditManualResults = computed(() => canManageRace.value && (race.value?.status !== 'finished' || isLmuRace.value))
 const canShowRegistrationPanel = computed(() => Boolean(state.user) && (race.value?.status === 'registration_open' || (isChampionshipStage.value && race.value?.status === 'not_started')))
 const resultRows = computed(() => {
   if (Array.isArray(race.value?.results)) return race.value.results
@@ -126,7 +126,14 @@ const participantsBySteam = computed(() => {
 })
 const qualificationRows = computed(() => {
   const lines = race.value?.results?.qualification?.raw?.sessionResult?.leaderBoardLines
-  if (!Array.isArray(lines)) return []
+  if (!Array.isArray(lines)) {
+    const manualRows = resultRows.value
+      .filter((row) => Number.isFinite(Number(row.qualification_best_lap_ms)))
+      .sort((left, right) => Number(left.qualification_position || 9999) - Number(right.qualification_position || 9999))
+      .map((row, index) => ({ ...row, position: row.qualification_position || index + 1, best_lap_ms: row.qualification_best_lap_ms, source: 'qualification' }))
+    const leaderLap = manualRows[0]?.best_lap_ms
+    return manualRows.map((row) => ({ ...row, gap_ms: Number(row.best_lap_ms) - Number(leaderLap) }))
+  }
   const mapped = lines.map((line, index) => {
     const driver = accLineDriver(line)
     const playerId = accPlayerId(driver.playerId || driver.playerID)
@@ -149,7 +156,7 @@ const qualificationRows = computed(() => {
       driver_name: accDriverName(driver),
       player_id: playerId,
       race_number: line.car?.raceNumber ?? raceRow?.race_number ?? null,
-      car_model: line.car?.carModel ?? raceRow?.car_model ?? null,
+      car_model: line.car?.carModel ?? line.carModel ?? line.forcedCarModel ?? raceRow?.car_model ?? null,
       lap_count: timing.lapCount ?? null,
       best_lap_ms: timing.bestLap,
       source: 'qualification'
@@ -266,7 +273,7 @@ function fanVotePilotSubtitle(item) {
 
 function pilotNumberDraft(value) {
   const number = Number(value)
-  return Number.isInteger(number) && number >= 0 ? formatPilotNumber(number) : ''
+  return Number.isInteger(number) && number > 0 ? formatPilotNumber(number) : ''
 }
 
 function trackImageFromConfig(config, track, trackId = '') {
@@ -279,7 +286,7 @@ function trackImageFromConfig(config, track, trackId = '') {
 
 function parsePilotNumber(value) {
   const raw = String(value ?? '').trim()
-  if (!/^\d{3}$/.test(raw)) throw new Error(t('championships.invalidPilotNumber'))
+  if (!/^[0-9]{3}$/.test(raw) || raw === '000') throw new Error(t('raceDetails.invalidRacePilotNumber'))
   return Number(raw)
 }
 
@@ -415,6 +422,7 @@ function manualRowFromPilot(item, existing = {}) {
     label: participantName(pilot),
     rating: pilot.rating,
     game_ratings: pilot.game_ratings,
+    qualification_best_lap_time: existing.qualification_best_lap_ms ? formatDuration(existing.qualification_best_lap_ms) : '',
     finish_time: existing.finish_ms ? formatDuration(existing.finish_ms) : '',
     lap_count: existing.lap_count || 0,
     best_lap_time: existing.best_lap_ms ? formatDuration(existing.best_lap_ms) : ''
@@ -654,6 +662,7 @@ async function uploadManualResults() {
       .filter((row) => String(row.finish_time || '').trim())
       .map((row) => ({
         user_id: row.user_id,
+        qualification_best_lap_ms: usesSimulatorJsonResults.value && race.value.has_qualification ? parseDuration(row.qualification_best_lap_time, false) : null,
         finish_ms: parseDuration(row.finish_time, true),
         lap_count: Number(row.lap_count || 0),
         best_lap_ms: parseDuration(row.best_lap_time, false)
@@ -904,7 +913,7 @@ watch(visibleParticipants, () => {
             </label>
             <label class="field">
               <span>Номер машины</span>
-              <input v-model="teamRaceNumber" inputmode="numeric" pattern="[0-9]{3}" minlength="3" maxlength="3" placeholder="000" required />
+              <input v-model="teamRaceNumber" inputmode="numeric" pattern="[0-9]{3}" minlength="3" maxlength="3" placeholder="001" required />
             </label>
             <div class="manual-results-table">
               <div class="manual-results-head">
@@ -953,7 +962,7 @@ watch(visibleParticipants, () => {
           </label>
           <label v-if="!isChampionshipStage" class="field">
             <span>{{ t('fields.pilotNumber') }}</span>
-            <input v-model="pilotNumber" inputmode="numeric" pattern="[0-9]{3}" minlength="3" maxlength="3" placeholder="000" required />
+            <input v-model="pilotNumber" inputmode="numeric" pattern="[0-9]{3}" minlength="3" maxlength="3" placeholder="001" required />
           </label>
           <p v-if="isChampionshipStage" class="muted">{{ t('raceDetails.championshipStageRegistrationHint') }}</p>
           <button class="button primary" type="submit">{{ isChampionshipStage ? t('raceDetails.championshipStageRegister') : t('common.register') }}</button>
@@ -1187,7 +1196,7 @@ watch(visibleParticipants, () => {
         <div class="section-header">
           <div>
             <h2>{{ t('raceDetails.results') }}</h2>
-            <p v-if="!usesSimulatorJsonResults" class="muted">{{ t('raceDetails.manualResultsHint') }}</p>
+            <p v-if="canEditManualResults" class="muted">{{ usesSimulatorJsonResults && race.has_qualification ? t('raceDetails.manualAccResultsHint') : t('raceDetails.manualResultsHint') }}</p>
           </div>
           <span class="pill">{{ resultRows.length }}</span>
         </div>
@@ -1206,7 +1215,7 @@ watch(visibleParticipants, () => {
           <button class="button primary" type="submit" :disabled="actionPending">{{ race.game === 'LMU' ? t('raceDetails.uploadSimulatorResults') : t('raceDetails.uploadAccResults') }}</button>
         </form>
 
-        <form v-else-if="canEditManualResults" class="form race-results-upload" @submit.prevent="uploadManualResults">
+        <form v-if="canEditManualResults" class="form race-results-upload" @submit.prevent="uploadManualResults">
           <div v-if="isLmuRace" class="pilot-inline-controls">
             <input v-model="manualPilotSearch" type="search" :placeholder="t('championships.pilotSearchPlaceholder')" />
             <span class="pill">{{ manualPilotLoading ? t('common.loading') : manualPilotResults.length }}</span>
@@ -1229,18 +1238,20 @@ watch(visibleParticipants, () => {
             </button>
           </div>
           <div class="manual-results-table">
-            <div class="manual-results-head" :class="{ 'has-actions': isLmuRace }">
+            <div class="manual-results-head" :class="{ 'has-actions': isLmuRace, 'has-qualification': usesSimulatorJsonResults && race.has_qualification }">
               <span>{{ t('roles.pilot') }}</span>
+              <span v-if="usesSimulatorJsonResults && race.has_qualification">{{ t('raceDetails.qualificationBestLap') }}</span>
               <span>{{ t('raceDetails.resultTime') }}</span>
               <span>{{ t('raceDetails.laps') }}</span>
               <span>{{ t('raceDetails.bestLap') }}</span>
               <span v-if="isLmuRace"></span>
             </div>
-            <div v-for="row in manualRows" :key="row.user_id" class="manual-results-row" :class="{ 'has-actions': isLmuRace }">
+            <div v-for="row in manualRows" :key="row.user_id" class="manual-results-row" :class="{ 'has-actions': isLmuRace, 'has-qualification': usesSimulatorJsonResults && race.has_qualification }">
               <span class="user-name-line">
                 <strong>{{ row.label }}</strong>
                 <LicenseBadge :user="row" :game="raceRatingGame" />
               </span>
+              <input v-if="usesSimulatorJsonResults && race.has_qualification" v-model="row.qualification_best_lap_time" placeholder="1:48.250" required />
               <input v-model="row.finish_time" required placeholder="45:12.345" />
               <input v-model.number="row.lap_count" type="number" min="0" />
               <input v-model="row.best_lap_time" placeholder="1:48.250" />

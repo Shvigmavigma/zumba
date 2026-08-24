@@ -4990,6 +4990,18 @@ textarea {
   min-width: 672px;
 }
 
+.manual-results-head.has-qualification,
+.manual-results-row.has-qualification {
+  grid-template-columns: minmax(180px, 1fr) 140px 140px 84px 140px;
+  min-width: 760px;
+}
+
+.manual-results-head.has-qualification.has-actions,
+.manual-results-row.has-qualification.has-actions {
+  grid-template-columns: minmax(180px, 1fr) 140px 140px 84px 140px 44px;
+  min-width: 812px;
+}
+
 .manual-pilot-results {
   max-height: 220px;
 }
@@ -14144,11 +14156,11 @@ body,
   flex: 0 0 auto;
   width: 28px;
   height: 28px;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
-  border-radius: 50%;
-  object-fit: cover;
-  background: var(--panel-muted);
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  object-fit: contain;
+  background: transparent;
 }
 
 .main-race-title {
