@@ -279,6 +279,15 @@ function trackRaceTime(row) {
   const laps = row.laps ? `${row.laps} ${t('tracks.lapsShort')}` : t('tracks.noLaps')
   return `${formatDuration(row.finishMs)} · ${laps}`
 }
+
+function carModelLabel(value) {
+  if (value === null || value === undefined || value === '') return t('common.none')
+  if (trackGame.value !== 'ACC') return String(value)
+  const numericId = Number(value)
+  if (!Number.isInteger(numericId)) return String(value)
+  const mapping = raceAssets.value.car_model_ids || {}
+  return Object.entries(mapping).find(([, id]) => Number(id) === numericId)?.[0] || String(value)
+}
 async function chooseTrackImage(event) {
   const file = event.target.files?.[0]
   event.target.value = ''
@@ -488,7 +497,7 @@ async function deleteTrackImage() {
                   <strong>{{ formatDuration(row.bestLapMs) }}</strong>
                   <span v-if="row.bestLapSession" class="track-lap-source">{{ row.bestLapSession === 'qualification' ? t('tracks.lapSourceQualification') : t('tracks.lapSourceRace') }}</span>
                 </td>
-                <td>{{ row.carModel }}</td>
+                <td>{{ carModelLabel(row.carModel) }}</td>
                 <td>{{ trackRaceTime(row) }}</td>
                 <td><RouterLink class="track-race-link" :to="`/races/${row.raceId}`">{{ row.raceName }}</RouterLink></td>
               </tr>

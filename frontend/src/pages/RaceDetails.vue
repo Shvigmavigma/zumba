@@ -1,8 +1,8 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, ChevronUp, Film, Heart, ImageUp, Scale, Trash2, Upload, UserMinus } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, Film, Heart, ImageUp, Scale, Trash2, Upload, UserMinus, X } from 'lucide-vue-next'
 import { api } from '../api'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
@@ -30,6 +30,7 @@ const raceVideoInput = ref(null)
 const raceAssets = ref({ tracks: [], classes: [], games: {} })
 const trackImageFile = ref(null)
 const trackImageInput = ref(null)
+const trackImageOpen = ref(false)
 const trackAverageLapMs = ref(null)
 const manualRows = ref([])
 const participantsExpanded = ref(false)
@@ -176,7 +177,18 @@ const resultTabItems = computed(() => [
   ...(qualificationRows.value.length ? [{ id: 'qualification', label: t('raceDetails.qualificationResultsTab'), count: qualificationRows.value.length }] : [])
 ])
 const fanVoteOptions = computed(() => fanVote.value?.options || [])
-const fanVoteCandidates = computed(() => resultParticipants.value.length ? resultParticipants.value : participants.value)
+const fanVoteCandidates = computed(() => {
+  const candidates = new Map()
+  for (const item of participants.value) {
+    const id = Number(item.user_id)
+    if (Number.isInteger(id) && id > 0) candidates.set(id, item)
+  }
+  for (const item of resultParticipants.value) {
+    const id = Number(item.user_id)
+    if (Number.isInteger(id) && id > 0 && !candidates.has(id)) candidates.set(id, item)
+  }
+  return [...candidates.values()]
+})
 const fanVoteCanSetup = computed(() => canManageRace.value && race.value?.status === 'finished' && fanVoteCandidates.value.length >= 3)
 const fanVoteCanSaveSetup = computed(() => fanVoteCanSetup.value && fanVoteSelection.value.length === 3 && !fanVoteSaving.value)
 const fanVoteResultVisible = computed(() => Boolean(fanVote.value?.show_results))
@@ -284,6 +296,18 @@ function trackImageFromConfig(config, track, trackId = '') {
   if (!currentTrackName) return ''
   const images = config?.track_images || {}
   return images[currentTrackName] || Object.entries(images).find(([key]) => key.toLowerCase() === currentTrackName.toLowerCase())?.[1] || ''
+}
+
+function openTrackImage() {
+  if (raceTrackImage.value) trackImageOpen.value = true
+}
+
+function closeTrackImage() {
+  trackImageOpen.value = false
+}
+
+function handleKeydown(event) {
+  if (event.key === 'Escape') closeTrackImage()
 }
 
 function parsePilotNumber(value) {
@@ -863,7 +887,11 @@ async function deletePenalty(penalty) {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+  load()
+})
+onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
 watch([participantSearch, participantSort], () => {
   participantPage.value = 1
 })
@@ -926,9 +954,9 @@ watch(visibleParticipants, () => {
         <p class="race-details-weather-summary"><strong>{{ t('raceCard.weather') }}:</strong> {{ weatherSummary(race) }} · {{ t('weather.trackTemperature') }}: {{ weatherTemperature(race) }}</p>
         <p>{{ t('fields.server') }}: <a :href="race.server_link">{{ race.server_link }}</a></p>
         <p>{{ t('fields.mods') }}: {{ race.mods_pack?.join(', ') || t('common.none') }}</p>
-        <div v-if="raceTrackImage" class="race-track-image-display">
+        <button v-if="raceTrackImage" class="race-track-image-display race-track-image-trigger" type="button" :aria-label="race.track" @click="openTrackImage">
           <img class="race-track-image" :src="raceTrackImage" :alt="race.track" />
-        </div>
+        </button>
         <form v-if="canManageRace && race.track" class="race-track-image-control" @submit.prevent="uploadTrackImage">
           <div class="race-track-image-copy">
             <strong>{{ t('adminUsers.trackImages') }}</strong>
@@ -944,6 +972,23 @@ watch(visibleParticipants, () => {
           </button>
         </form>
       </section>
+
+      <div v-if="trackImageOpen && raceTrackImage" class="banner-image-lightbox" @click.self="closeTrackImage">
+        <section class="banner-image-dialog" role="dialog" aria-modal="true" :aria-label="race.track">
+          <div class="banner-image-head">
+            <div>
+              <span class="banner-position-badge">{{ gameLabel(t, race.game) }}</span>
+              <h2>{{ race.track }}</h2>
+            </div>
+            <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="closeTrackImage">
+              <X :size="18" />
+            </button>
+          </div>
+          <div class="banner-image-view race-track-image-viewer">
+            <img :src="raceTrackImage" :alt="race.track" />
+          </div>
+        </section>
+      </div>
 
       <section v-if="canShowRegistrationPanel" class="card race-registration-panel">
         <div v-if="race.is_team_event && teamRegistered" class="section-header">
