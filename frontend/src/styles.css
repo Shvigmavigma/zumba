@@ -4537,6 +4537,24 @@ textarea {
   margin-top: 12px;
 }
 
+.race-track-image-trigger {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.race-track-image-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.race-track-image-trigger:hover .race-track-image {
+  border-color: color-mix(in srgb, var(--brand-blue) 58%, var(--border));
+  transform: translateY(-1px);
+}
+
 .race-track-image {
   display: block;
   width: 312px;
@@ -4547,6 +4565,13 @@ textarea {
   border-radius: var(--control-radius);
   background: color-mix(in srgb, var(--brand-blue) 10%, var(--panel));
   object-fit: cover;
+  transition: border-color 150ms ease, transform 150ms ease;
+}
+
+.race-track-image-viewer img {
+  max-width: 100%;
+  max-height: calc(100vh - 190px);
+  object-fit: contain;
 }
 
 .race-track-image-copy {
@@ -14290,6 +14315,21 @@ body,
 
 .race-results-podium .result-podium-card .result-position-badge {
   align-self: start;
+  width: 40px;
+  height: 40px;
+  font-size: 1.15rem;
+}
+
+.race-results-podium .result-podium-card .user-name-line {
+  font-size: clamp(1rem, 1.35vw, 1.25rem);
+}
+
+.race-results-podium .result-podium-card .result-podium-time {
+  font-size: clamp(1rem, 1.2vw, 1.2rem);
+}
+
+.race-results-podium .result-podium-card .result-podium-rating-line {
+  font-size: var(--small-text-size);
 }
 
 .race-results-podium .result-podium-rating-line {
