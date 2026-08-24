@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { Trash2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import LicenseBadge from './LicenseBadge.vue'
@@ -26,6 +26,10 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  focusPenaltyId: {
+    type: [Number, String],
+    default: null
+  },
   game: {
     type: String,
     default: 'ACC'
@@ -50,6 +54,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'create-appeal', 'create-penalty', 'delete-penalty', 'update:createOpen'])
 const { t } = useI18n()
+const modalRoot = ref(null)
 const appealDrafts = ref({})
 const penaltyDraft = ref({
   target_id: '',
@@ -181,11 +186,20 @@ function submitPenalty() {
     description: penaltyDraft.value.description.trim()
   })
 }
+
+async function focusPenaltyCard() {
+  if (!props.open || props.focusPenaltyId === null || props.focusPenaltyId === undefined) return
+  await nextTick()
+  const card = modalRoot.value?.querySelector(`[data-penalty-id="${props.focusPenaltyId}"]`)
+  card?.scrollIntoView({ block: 'center', behavior: 'auto' })
+}
+
+watch(() => [props.open, props.focusPenaltyId, props.penalties.length], focusPenaltyCard)
 </script>
 
 <template>
   <div v-if="open" class="penalty-modal-backdrop" @click.self="$emit('close')">
-    <article class="card penalty-modal race-penalties-modal">
+    <article ref="modalRoot" class="card penalty-modal race-penalties-modal">
       <div class="section-header penalty-modal-head">
         <div>
           <h2>{{ t('raceDetails.penalties') }}</h2>
@@ -231,7 +245,13 @@ function submitPenalty() {
       </form>
 
       <div v-if="penalties.length" class="race-penalty-list">
-        <article v-for="penalty in penalties" :key="penalty.id" class="card race-penalty-card" :class="{ 'is-own': isOwnPenalty(penalty) }">
+        <article
+          v-for="penalty in penalties"
+          :key="penalty.id"
+          class="card race-penalty-card"
+          :class="{ 'is-own': isOwnPenalty(penalty), 'is-focused': Number(focusPenaltyId) === Number(penalty.id) }"
+          :data-penalty-id="penalty.id"
+        >
           <div class="race-penalty-head">
             <div class="user-list-cell">
               <UserAvatar mini :src="penaltyTargetAvatar(penalty)" :color="penaltyTargetColor(penalty)" :label="penaltyTargetName(penalty)" />

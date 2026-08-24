@@ -65,7 +65,7 @@ services:
     volumes:
       - backend_uploads:/app/uploads:ro
     ports:
-      - "8080:80"
+      - "${WEB_PORT:-80}:80"
 
 volumes:
   postgres_data:

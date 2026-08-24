@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ImagePlus, MapPinned, Search, SlidersHorizontal, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
@@ -11,6 +12,7 @@ import { formatPilotNumber, formatRating, pilotName, ratingForGame, ratingRaceCo
 import { state } from '../store'
 
 const { t } = useI18n()
+const route = useRoute()
 const activeTab = ref('pilots')
 const pilots = ref([])
 const search = ref('')
@@ -135,15 +137,6 @@ function numericValue(...values) {
   return null
 }
 
-const TRACK_TIME_FIELDS = ['adjusted_finish_ms', 'finish_ms', 'driver_total_time_ms', 'best_lap_ms', 'qualification_best_lap_ms', 'totalTime', 'bestLap']
-
-function hasZeroTrackTime(row) {
-  return TRACK_TIME_FIELDS.some((field) => {
-    const number = Number(row?.[field])
-    return Number.isFinite(number) && number === 0
-  })
-}
-
 function registrationForRow(race, row) {
   const userId = Number(row.user_id)
   const raceNumber = Number(row.race_number ?? row.pilot_number)
@@ -154,7 +147,7 @@ function registrationForRow(race, row) {
 }
 
 function trackRaceEntry(race, row) {
-  if (row.status === 'missing' || hasZeroTrackTime(row)) return null
+  if (row.status === 'missing') return null
   const registered = registrationForRow(race, row)
   const laps = numericValue(row.lap_count, row.laps)
   const finishMs = numericValue(row.adjusted_finish_ms, row.finish_ms, row.driver_total_time_ms)
@@ -164,6 +157,7 @@ function trackRaceEntry(race, row) {
   ].filter((candidate) => candidate.value !== null)
   const bestLap = lapCandidates.sort((left, right) => left.value - right.value)[0] || { value: null, session: null }
   const bestLapMs = bestLap.value
+  if (finishMs === null && bestLapMs === null) return null
   const averageLapMs = finishMs !== null && laps && laps > 0 ? finishMs / laps : bestLapMs
   const driverName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim()
   const fallbackName = row.driver_name || row.nickname || row.login || registered?.nickname || registered?.login || t('common.none')
@@ -218,13 +212,21 @@ const trackSummaries = computed(() => {
   }
 
   for (const race of trackRacesByGame.value[trackGame.value] || []) {
-    const raceTrackId = race.track_id || trackIdFor(gameAssets, race.track || race.results?.track || '')
-    if (!map.has(raceTrackId)) continue
-    const summary = map.get(raceTrackId)
+    const raceTrack = String(race.track || race.results?.track || '').trim()
+    const raceTrackId = race.track_id || trackIdFor(gameAssets, raceTrack)
+    let summary = map.get(raceTrackId)
+    if (!summary && raceTrack) {
+      summary = [...map.values()].find((item) => item.track.toLowerCase() === raceTrack.toLowerCase())
+    }
+    if (!summary && raceTrack) {
+      summary = { track_id: raceTrackId, track: raceTrack, image_url: trackImageFor(gameAssets, raceTrack, raceTrackId), race_count: 0, averageSamples: [], topByPilot: new Map() }
+      map.set(raceTrackId, summary)
+    }
+    if (!summary) continue
+    const entries = resultRows(race).map((row) => trackRaceEntry(race, row)).filter(Boolean)
+    if (!entries.length) continue
     summary.race_count += 1
-    for (const row of resultRows(race)) {
-      const entry = trackRaceEntry(race, row)
-      if (!entry) continue
+    for (const entry of entries) {
       if (entry.averageLapMs !== null) summary.averageSamples.push(entry.averageLapMs)
       if (entry.bestLapMs === null) continue
       const current = summary.topByPilot.get(entry.pilotKey)
@@ -261,6 +263,13 @@ watch(filteredTrackSummaries, (summaries) => {
   if (summaries.some((summary) => summary.track === selectedTrack.value)) return
   selectedTrack.value = summaries[0]?.track || ''
 })
+
+watch(() => route.query.track, (track) => {
+  if (track) {
+    activeTab.value = 'tracks'
+    selectedTrack.value = String(track)
+  }
+}, { immediate: true })
 
 const selectedTrackSummary = computed(() => trackSummaries.value.find((summary) => summary.track === selectedTrack.value))
 const selectedTrackRows = computed(() => selectedTrackSummary.value?.topRows || [])
