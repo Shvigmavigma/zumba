@@ -4503,6 +4503,13 @@ textarea {
   white-space: nowrap;
 }
 
+.race-track-link {
+  color: var(--brand-blue);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
 .race-details-meta {
   display: flex;
   align-items: center;
@@ -4515,7 +4522,7 @@ textarea {
 
 .race-track-image-control {
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   padding: 10px;
@@ -4524,20 +4531,22 @@ textarea {
   background: color-mix(in srgb, var(--brand-blue) 7%, var(--panel));
 }
 
-.race-track-image-preview {
-  width: 104px;
-  height: 58px;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--brand-blue) 26%, var(--border));
-  border-radius: calc(var(--control-radius) - 4px);
-  background: color-mix(in srgb, var(--brand-blue) 10%, var(--panel));
-  object-fit: cover;
+.race-track-image-display {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 12px;
 }
 
-.race-track-image-preview.empty {
-  display: grid;
-  place-items: center;
-  color: var(--brand-blue);
+.race-track-image {
+  display: block;
+  width: 312px;
+  height: 174px;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--brand-blue) 26%, var(--border));
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--brand-blue) 10%, var(--panel));
+  object-fit: cover;
 }
 
 .race-track-image-copy {
@@ -14194,4 +14203,155 @@ body,
   text-overflow: ellipsis;
   white-space: nowrap;
   overflow-wrap: normal;
+}
+
+.result-penalty-link,
+.result-penalty-value {
+  color: var(--danger);
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-penalty-link {
+  margin: -2px -4px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  font: inherit;
+  color: var(--danger);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.result-penalty-link:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.result-penalty-link:active {
+  transform: scale(0.97);
+}
+
+.result-penalty-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.result-penalty-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.race-penalty-card.is-focused {
+  border-color: color-mix(in srgb, var(--danger) 66%, var(--border));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--danger) 22%, transparent),
+    var(--shadow);
+}
+
+/* Race podium: three information columns, with first place centered and tallest. */
+.race-results-podium {
+  align-items: end;
+}
+
+.race-results-podium .result-podium-card {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  justify-items: center;
+  align-content: stretch;
+  min-height: 190px;
+  text-align: center;
+}
+
+.race-results-podium .result-podium-card > div {
+  width: 100%;
+  align-content: center;
+  justify-items: center;
+}
+
+.race-results-podium .result-podium-card.is-gold {
+  order: 2;
+  min-height: 260px;
+}
+
+.race-results-podium .result-podium-card.is-silver {
+  order: 1;
+  min-height: 220px;
+}
+
+.race-results-podium .result-podium-card.is-bronze {
+  order: 3;
+  min-height: 200px;
+}
+
+.race-results-podium .result-podium-card .result-position-badge {
+  align-self: start;
+}
+
+.race-results-podium .result-podium-rating-line {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.race-results-podium .result-podium-rating-label {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 680px) {
+  .race-results-podium {
+    gap: 6px;
+  }
+
+  .race-results-podium .result-podium-card {
+    min-height: 170px;
+    padding: 10px 8px;
+  }
+
+  .race-results-podium .result-podium-card.is-gold {
+    min-height: 220px;
+  }
+
+  .race-results-podium .result-podium-card.is-silver {
+    min-height: 190px;
+  }
+
+  .race-results-podium .result-podium-card.is-bronze {
+    min-height: 180px;
+  }
+}
+
+.race-results-podium .result-podium-card.is-gold,
+.race-results-podium .result-podium-card.is-silver,
+.race-results-podium .result-podium-card.is-bronze {
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--podium-color) 28%, transparent) 0%,
+      color-mix(in srgb, var(--podium-color) 12%, transparent) 62%,
+      transparent 100%
+    ),
+    var(--panel);
+}
+
+:root[data-theme='dark'] .race-results-podium .result-podium-card.is-gold,
+:root[data-theme='dark'] .race-results-podium .result-podium-card.is-silver,
+:root[data-theme='dark'] .race-results-podium .result-podium-card.is-bronze {
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--podium-color) 24%, transparent) 0%,
+      color-mix(in srgb, var(--podium-color) 10%, transparent) 62%,
+      transparent 100%
+    ),
+    var(--race-surface);
 }

@@ -17,6 +17,7 @@ cp .env.example .env
 
 ```env
 APP_DOMAIN=bmrl.example.com
+WEB_PORT=8080
 PUBLIC_BASE_URL=http://bmrl.example.com:8080
 CORS_ORIGINS=http://bmrl.example.com:8080
 POSTGRES_PASSWORD=long-random-password

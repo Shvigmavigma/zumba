@@ -30,9 +30,11 @@ const raceVideoInput = ref(null)
 const raceAssets = ref({ tracks: [], classes: [], games: {} })
 const trackImageFile = ref(null)
 const trackImageInput = ref(null)
+const trackAverageLapMs = ref(null)
 const manualRows = ref([])
 const participantsExpanded = ref(false)
 const penaltiesOpen = ref(false)
+const focusedPenaltyId = ref(null)
 const penaltyCreateOpen = ref(false)
 const resultsTab = ref('race')
 const participantSearch = ref('')
@@ -371,6 +373,27 @@ function resultSrPenalty(row) {
   return penalty > 0 ? `-${penalty.toFixed(1)} SR` : '-'
 }
 
+function resultPenaltyId(row) {
+  const targetId = Number(row.user_id)
+  if (!Number.isFinite(targetId)) return null
+  return penalties.value.find((penalty) => Number(penalty.target_id) === targetId && penalty.status !== 'canceled')?.id || null
+}
+
+async function openResultPenalty(row) {
+  if (!state.user || !race.value) return
+  if (!penalties.value.length) {
+    try {
+      penalties.value = await api(`/penalties?race_id=${race.value.id}`)
+    } catch (err) {
+      error.value = err.message
+      return
+    }
+  }
+  focusedPenaltyId.value = resultPenaltyId(row)
+  penaltiesOpen.value = true
+  penaltyCreateOpen.value = false
+}
+
 function resultRatingDelta(row) {
   const delta = Number(row.rating_delta ?? 0)
   if (!Number.isFinite(delta)) return '-'
@@ -411,6 +434,7 @@ function openPenaltyCreator() {
 
 function closePenaltiesModal() {
   penaltiesOpen.value = false
+  focusedPenaltyId.value = null
   penaltyCreateOpen.value = false
 }
 
@@ -461,6 +485,19 @@ function removeManualRow(userId) {
   manualRows.value = manualRows.value.filter((row) => row.user_id !== userId)
 }
 
+async function loadTrackAverageLap(currentRace) {
+  trackAverageLapMs.value = null
+  if (!currentRace?.track) return
+  try {
+    const params = new URLSearchParams({ game: currentRace.game || 'ACC', track: currentRace.track })
+    if (currentRace.track_id) params.set('track_id', currentRace.track_id)
+    const stats = await api(`/races/track-stats?${params.toString()}`)
+    trackAverageLapMs.value = stats.average_lap_ms
+  } catch {
+    trackAverageLapMs.value = null
+  }
+}
+
 function teamMemberName(member) {
   return participantName({ ...member, user_id: member.id })
 }
@@ -507,6 +544,7 @@ async function load() {
     race.value = loadedRace
     fanVote.value = loadedFanVote
     raceAssets.value = loadedRaceAssets
+    await loadTrackAverageLap(loadedRace)
     if (state.user?.team_id && loadedRace.is_team_event) {
       try {
         myTeam.value = await api(`/teams/${state.user.team_id}`)
@@ -849,7 +887,12 @@ watch(visibleParticipants, () => {
         <div class="section-header">
           <div class="race-details-title">
             <h1>{{ race.name }}</h1>
-            <p class="muted">{{ gameLabel(t, race.game) }} - {{ race.track }} - {{ race.car_class }}</p>
+            <p class="muted">
+              {{ gameLabel(t, race.game) }} -
+              <RouterLink class="race-track-link" :to="{ path: '/pilots', query: { tab: 'tracks', track: race.track } }">{{ race.track }}</RouterLink>
+              <span v-if="trackAverageLapMs"> · {{ t('tracks.averageLap') }}: {{ formatDuration(trackAverageLapMs) }}</span>
+              - {{ race.car_class }}
+            </p>
           </div>
           <div class="toolbar race-details-actions">
             <button class="button primary" type="button" @click="penaltiesOpen = true">
@@ -883,9 +926,10 @@ watch(visibleParticipants, () => {
         <p class="race-details-weather-summary"><strong>{{ t('raceCard.weather') }}:</strong> {{ weatherSummary(race) }} · {{ t('weather.trackTemperature') }}: {{ weatherTemperature(race) }}</p>
         <p>{{ t('fields.server') }}: <a :href="race.server_link">{{ race.server_link }}</a></p>
         <p>{{ t('fields.mods') }}: {{ race.mods_pack?.join(', ') || t('common.none') }}</p>
+        <div v-if="raceTrackImage" class="race-track-image-display">
+          <img class="race-track-image" :src="raceTrackImage" :alt="race.track" />
+        </div>
         <form v-if="canManageRace && race.track" class="race-track-image-control" @submit.prevent="uploadTrackImage">
-          <img v-if="raceTrackImage" class="race-track-image-preview" :src="raceTrackImage" alt="" />
-          <div v-else class="race-track-image-preview empty"><ImageUp :size="18" /></div>
           <div class="race-track-image-copy">
             <strong>{{ t('adminUsers.trackImages') }}</strong>
             <span>{{ race.track }}</span>
@@ -1296,10 +1340,14 @@ watch(visibleParticipants, () => {
                 <span>{{ resultPilotSubtitle(row) }}</span>
               </div>
               <strong class="result-podium-time">{{ resultsTab === 'qualification' ? formatDuration(row.best_lap_ms) : formatDuration(row.adjusted_finish_ms ?? row.finish_ms) }}</strong>
+              <span v-if="resultsTab === 'race'" class="result-podium-rating-line">
+                <span class="result-podium-rating-label">{{ t('raceDetails.ratingDelta') }}</span>
+                <span class="rating-delta" :class="resultRatingDeltaClass(row)">{{ resultRatingDelta(row) }}</span>
+              </span>
             </article>
           </div>
 
-          <div v-if="activeResultRows.length" class="race-results-table-wrap">
+          <div v-if="activeResultRows.length > 3" class="race-results-table-wrap">
             <table class="race-results-table">
               <thead>
                 <tr>
@@ -1317,7 +1365,7 @@ watch(visibleParticipants, () => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="row in activeResultRows" :key="`${resultsTab}-${row.user_id || row.player_id || row.raw_position}-${row.position}`" :class="resultPodiumClass(row)">
+                <tr v-for="row in activeResultRows.slice(3)" :key="`${resultsTab}-${row.user_id || row.player_id || row.raw_position}-${row.position}`" :class="resultPodiumClass(row)">
                   <td><span class="result-position-badge" :class="resultPodiumClass(row)">{{ row.position || '-' }}</span></td>
                   <td>
                     <div class="result-driver-cell">
@@ -1342,8 +1390,32 @@ watch(visibleParticipants, () => {
                   <td v-else>{{ row.race_number ? `#${row.race_number}` : '-' }}</td>
                   <td>{{ formatDuration(row.best_lap_ms) }}</td>
                   <td v-if="resultsTab === 'race'">{{ formatDuration(row.finish_ms) }}</td>
-                  <td v-if="resultsTab === 'race'">{{ resultPenalty(row) }}</td>
-                  <td v-if="resultsTab === 'race'">{{ resultSrPenalty(row) }}</td>
+                  <td v-if="resultsTab === 'race'">
+                    <button
+                      v-if="Number(row.time_penalty_ms || 0) > 0 && state.user"
+                      class="result-penalty-link"
+                      type="button"
+                      :aria-label="`${t('raceDetails.timePenalty')}: ${resultPenalty(row)}`"
+                      @click="openResultPenalty(row)"
+                    >
+                      {{ resultPenalty(row) }}
+                    </button>
+                    <strong v-else-if="Number(row.time_penalty_ms || 0) > 0" class="result-penalty-value">{{ resultPenalty(row) }}</strong>
+                    <span v-else>-</span>
+                  </td>
+                  <td v-if="resultsTab === 'race'">
+                    <button
+                      v-if="Number(row.sr_penalty || 0) > 0 && state.user"
+                      class="result-penalty-link"
+                      type="button"
+                      :aria-label="`${t('raceDetails.srPenalty')}: ${resultSrPenalty(row)}`"
+                      @click="openResultPenalty(row)"
+                    >
+                      {{ resultSrPenalty(row) }}
+                    </button>
+                    <strong v-else-if="Number(row.sr_penalty || 0) > 0" class="result-penalty-value">{{ resultSrPenalty(row) }}</strong>
+                    <span v-else>-</span>
+                  </td>
                   <td v-if="resultsTab === 'race'">{{ formatDuration(row.adjusted_finish_ms ?? row.finish_ms) }}</td>
                   <td v-if="resultsTab === 'race'"><span class="rating-delta" :class="resultRatingDeltaClass(row)">{{ resultRatingDelta(row) }}</span></td>
                   <td>{{ resultGap(row) }}</td>
@@ -1360,6 +1432,7 @@ watch(visibleParticipants, () => {
         :penalties="penalties"
         :appeals="appeals"
         :participants="penaltyParticipants"
+        :focus-penalty-id="focusedPenaltyId"
         :game="raceRatingGame"
         :can-create="canIssuePenalty"
         :can-delete="state.user?.role === 'admin'"

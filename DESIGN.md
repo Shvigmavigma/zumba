@@ -38,6 +38,10 @@
 - 2026-08-24 — ACC manual results: the existing manual result table is available alongside ACC JSON upload, while the shared results endpoint accepts either input before the race is finished.
 - 2026-08-24 — ACC manual qualification: the ACC manual form captures a qualifying lap beside race time/laps/best lap; the stored result exposes both race and qualification tabs using the existing results table.
 - 2026-08-24 — ACC result car IDs and race numbers: result parsing normalizes numeric `carModel` values from nested or flat ACC payloads, while race and team registration reject number 000 in the API and form.
+- 2026-08-24 — race-result penalties: applied time/SR penalties are bold danger-colour controls in the results table; selecting one opens and focuses the matching penalty in the existing penalty list modal.
+- 2026-08-24 — race-result podium: the first three finishers use three ordered information columns (P1 centered/tallest), preserving the existing gold/silver/bronze surfaces; the detailed table starts at position 4.
+- 2026-08-24 — race-result podium rating: each race-result podium column also shows the existing positive/negative RER change badge; qualification columns omit it because rating is applied to the race result.
+- 2026-08-24 — race-result podium gradient: increased the existing medal-colour gradient opacity and spread only inside the three race-result columns for clearer separation without changing their palette.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, default-avatar, system-setting, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).

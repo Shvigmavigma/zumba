@@ -11,6 +11,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 from app.db import get_session
 from app.deps import require_admin
 from app.deps import get_optional_user, require_moder_plus, require_pilot_plus
+from app.routers.app_settings import get_license_settings_value
 from app.models import AppSetting, RaceFanVote
 from app.models import Championship, ChampionshipRegistration, RACE_GAMES, Penalty, Race, RaceRegistration, RaceStatus, Role, Setup, Team, TeamApplicationStatus, TeamRaceRegistration, User, UserStatus
 from app.race_assets import DEFAULT_ACC_CAR_MODEL_IDS, get_race_assets, normalize_race_create_assets, normalize_race_update_assets
@@ -100,6 +101,44 @@ ACC_CAR_MODEL_IDS = {
     "porsche911gt2rscsevokit": 85,
     "porsche9352019": 86,
 }
+
+ACC_DRIVER_CATEGORY_BY_TIER_INDEX = (0, 0, 1, 2, 3, 3, 3)
+ACC_DRIVER_CATEGORY_BY_LICENSE = {
+    "rookie": 0,
+    "bronze": 0,
+    "silver": 1,
+    "gold": 2,
+    "platinum": 3,
+    "diamond": 3,
+    "champ": 3,
+}
+
+
+def acc_driver_category_for_user(user: User | dict, game: str, license_tiers: list) -> int:
+    ratings = user.get("game_ratings") if isinstance(user, dict) else user.game_ratings
+    ratings = ratings if isinstance(ratings, dict) else {}
+    game_rating = ratings.get(game)
+    if isinstance(game_rating, dict):
+        raw_rating = game_rating.get("rating")
+    else:
+        raw_rating = None
+    if raw_rating is None:
+        raw_rating = user.get("rating") if isinstance(user, dict) else user.rating
+    try:
+        rating = float(raw_rating or 0)
+    except (TypeError, ValueError):
+        rating = 0
+
+    for index, tier in enumerate(license_tiers or []):
+        minimum = tier.get("min_rating") if isinstance(tier, dict) else tier.min_rating
+        maximum = tier.get("max_rating") if isinstance(tier, dict) else tier.max_rating
+        if minimum <= rating <= maximum:
+            name = tier.get("name") if isinstance(tier, dict) else tier.name
+            return ACC_DRIVER_CATEGORY_BY_LICENSE.get(
+                str(name or "").strip().lower(),
+                ACC_DRIVER_CATEGORY_BY_TIER_INDEX[min(index, len(ACC_DRIVER_CATEGORY_BY_TIER_INDEX) - 1)],
+            )
+    return 0
 
 
 def scheduled_race_status(registration_start: datetime, registration_end: datetime, race_time: datetime, now: datetime | None = None) -> RaceStatus:
@@ -401,6 +440,7 @@ def acc_entrylist_entry(
     user: User,
     car_model: str | None = None,
     car_model_ids: dict[str, int] | None = None,
+    driver_category: int = 0,
 ) -> dict:
     resolved_car_model = (car_model or registration.car_model or "").strip()
     resolved_car_model_id = acc_forced_car_model(resolved_car_model, car_model_ids)
@@ -412,7 +452,7 @@ def acc_entrylist_entry(
                 "nickName": user.nickname,
                 "shortName": short_driver_name(user, registration.pilot_number),
                 "nationality": 0,
-                "driverCategory": 1,
+                "driverCategory": driver_category,
                 "helmetTemplateKey": 500,
                 "helmetBaseColor": 0,
                 "helmetDetailColor": 0,
@@ -447,6 +487,7 @@ def acc_team_entrylist_entry(
     team: Team,
     drivers: list[dict],
     car_model_ids: dict[str, int] | None = None,
+    driver_categories: list[int] | None = None,
 ) -> dict:
     resolved_car_model = (registration.car_model or "").strip()
     resolved_car_model_id = acc_forced_car_model(resolved_car_model, car_model_ids)
@@ -463,14 +504,14 @@ def acc_team_entrylist_entry(
         "customCar": "",
         "drivers": [
             {
-                "driverCategory": 0,
+                "driverCategory": (driver_categories or [0] * len(drivers))[index],
                 "firstName": driver.get("first_name"),
                 "lastName": driver.get("last_name"),
                 "playerID": acc_player_id(driver.get("steam_id")),
                 "shortName": driver.get("short_name") or short_driver_name_from_text(driver.get("nickname") or driver.get("login"), registration.race_number),
                 "nationality": 0,
             }
-            for driver in drivers
+            for index, driver in enumerate(drivers)
         ],
     }
 
@@ -510,10 +551,21 @@ async def build_acc_entrylist(session: AsyncSession, race_id: int) -> dict:
     race = await session.get(Race, race_id)
     race_assets = await get_race_assets(session)
     car_model_ids = race_assets.car_model_ids
+    game = race.game if race else "ACC"
+    license_tiers = (await get_license_settings_value(session)).tiers
     if race and race.is_team_event:
         rows = await get_team_registration_rows(session, race_id)
         return {
-            "entries": [acc_team_entrylist_entry(registration, team, registration.drivers or [], car_model_ids) for registration, team in rows],
+            "entries": [
+                acc_team_entrylist_entry(
+                    registration,
+                    team,
+                    registration.drivers or [],
+                    car_model_ids,
+                    [acc_driver_category_for_user(driver, game, license_tiers) for driver in registration.drivers or []],
+                )
+                for registration, team in rows
+            ],
             "forceEntryList": 1,
         }
     rows = await get_registration_rows(session, race_id)
@@ -543,7 +595,16 @@ async def build_acc_entrylist(session: AsyncSession, race_id: int) -> dict:
         return default_car
 
     return {
-        "entries": [acc_entrylist_entry(registration, user, resolved_car(registration, user), car_model_ids) for registration, user in rows],
+        "entries": [
+            acc_entrylist_entry(
+                registration,
+                user,
+                resolved_car(registration, user),
+                car_model_ids,
+                acc_driver_category_for_user(user, game, license_tiers),
+            )
+            for registration, user in rows
+        ],
         "configVersion": 1,
         "forceEntryList": 1,
     }
@@ -1412,6 +1473,93 @@ async def update_fan_vote_config(
     session: AsyncSession = Depends(get_session),
 ):
     return FanVoteConfigRead(duration_hours=await save_fan_vote_duration_hours(session, payload.duration_hours))
+
+
+def race_average_lap_ms(results: dict | list | None) -> int | None:
+    samples: list[float] = []
+    for row in result_rows(results):
+        if row.get("status") == "missing":
+            continue
+        finish_ms = next(
+            (
+                float(row.get(field))
+                for field in ("adjusted_finish_ms", "finish_ms", "driver_total_time_ms")
+                if isinstance(row.get(field), (int, float)) and float(row.get(field)) > 0
+            ),
+            None,
+        )
+        laps = next(
+            (
+                float(row.get(field))
+                for field in ("lap_count", "laps")
+                if isinstance(row.get(field), (int, float)) and float(row.get(field)) > 0
+            ),
+            0,
+        )
+        best_lap_ms = next(
+            (
+                float(row.get(field))
+                for field in ("best_lap_ms", "qualification_best_lap_ms")
+                if isinstance(row.get(field), (int, float)) and float(row.get(field)) > 0
+            ),
+            None,
+        )
+        average_lap = finish_ms / laps if finish_ms is not None and laps else best_lap_ms
+        if average_lap is not None and average_lap > 0:
+            samples.append(average_lap)
+    return round(sum(samples) / len(samples)) if samples else None
+
+
+@router.get("/track-stats")
+@limiter.limit("600/minute")
+async def get_track_stats(
+    request: Request,
+    game: str = "ACC",
+    track: str | None = None,
+    track_id: str | None = None,
+    _: User = Depends(require_pilot_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    if game not in RACE_GAMES:
+        raise HTTPException(status_code=400, detail="Unknown simulator")
+    normalized_track = str(track or "").strip().casefold()
+    normalized_track_id = str(track_id or "").strip()
+    if not normalized_track and not normalized_track_id:
+        raise HTTPException(status_code=400, detail="Track is required")
+
+    races = list(
+        (
+            await session.scalars(
+                select(Race)
+                .where(Race.status == RaceStatus.finished, Race.game == game, Race.results.is_not(None))
+                .order_by(Race.datetime_start.desc(), Race.id.desc())
+                .limit(1000)
+            )
+        ).all()
+    )
+    samples: list[int] = []
+    race_count = 0
+    for race in races:
+        result_track = race.results.get("track") if isinstance(race.results, dict) else None
+        names = {str(value).strip().casefold() for value in (race.track, result_track) if value}
+        matches_id = bool(normalized_track_id and race.track_id == normalized_track_id)
+        matches_name = bool(normalized_track and normalized_track in names)
+        if not (matches_id or matches_name):
+            continue
+        average_lap = race_average_lap_ms(race.results)
+        if average_lap is None:
+            continue
+        race_count += 1
+        samples.append(average_lap)
+
+    return {
+        "game": game,
+        "track": track,
+        "track_id": track_id,
+        "average_lap_ms": round(sum(samples) / len(samples)) if samples else None,
+        "race_count": race_count,
+        "sample_count": len(samples),
+    }
 
 
 @router.get("/{race_id}", response_model=RaceRead)
