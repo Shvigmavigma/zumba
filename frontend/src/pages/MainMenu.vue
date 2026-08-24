@@ -236,6 +236,16 @@ function weatherLabel(key) {
   return t(`weather.${key === 'partly_cloudy' ? 'partlyCloudy' : key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())}`)
 }
 
+function weatherTooltip(race) {
+  const key = dominantWeatherKey(race)
+  const chance = Math.round(Number(race?.weather_chances?.[key] || 0))
+  const temperature = race?.track_temperature === null || race?.track_temperature === undefined
+    ? Number.NaN
+    : Number(race.track_temperature)
+  const temperatureLabel = Number.isFinite(temperature) ? `${temperature.toFixed(1)} °C` : t('common.none')
+  return `${weatherLabel(key)}: ${chance}% · ${t('weather.trackTemperature')}: ${temperatureLabel}`
+}
+
 function clampNewsIndex(index) {
   if (!news.value.length) return 0
   return Math.min(Math.max(index, 0), news.value.length - 1)
@@ -695,7 +705,7 @@ onBeforeUnmount(() => {
                         class="main-race-weather-indicator"
                         :src="weatherImageUrl(race)"
                         :alt="weatherLabel(dominantWeatherKey(race))"
-                        :title="weatherLabel(dominantWeatherKey(race))"
+                        :title="weatherTooltip(race)"
                       />
                     </div>
                     <div class="muted main-race-subtitle">
