@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.avatar_uploads import ensure_avatar_upload_allowed, mark_avatar_uploaded, remove_avatar_file, save_avatar_file
 from app.config import get_settings
 from app.db import get_session
-from app.deps import as_utc, clear_expired_timeout, require_admin, require_moder_plus, require_pilot_plus
+from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, is_system_admin, require_admin, require_moder_plus, require_pilot_plus, require_system_admin
 from app.models import RACE_GAMES, Appeal, Banner, Championship, Penalty, Race, RaceRegistration, RaceStatus, Role, Setup, Team, TeamApplication, TeamCreationRequest, User, UserStatus, default_game_ratings
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
@@ -26,6 +26,7 @@ def user_response(user: User, team_name: str | None = None, team_abbreviation: s
     data = schema.model_validate(user).model_dump()
     data["team_name"] = team_name
     data["team_abbreviation"] = team_abbreviation
+    data["is_system_admin"] = is_system_admin(user)
     return data
 
 
@@ -57,8 +58,11 @@ async def set_user_avatar(session: AsyncSession, user: User, file: UploadFile) -
 def ensure_danger_request(payload: AdminDangerDeleteRequest, admin: User, expected_confirmation: str) -> None:
     if payload.confirmation.strip() != expected_confirmation or payload.confirmation_repeat.strip() != expected_confirmation:
         raise HTTPException(status_code=400, detail="Confirmation phrase is invalid")
-    if not verify_password(payload.password, admin.password_hash):
-        raise HTTPException(status_code=403, detail="Admin password is invalid")
+    danger_hash = settings.admin_danger_password_hash.strip()
+    if not danger_hash:
+        raise HTTPException(status_code=503, detail="Danger password is not configured")
+    if not verify_password(payload.password, danger_hash):
+        raise HTTPException(status_code=403, detail="Danger password is invalid")
 
 
 async def reassign_restricted_user_references(
@@ -202,7 +206,7 @@ async def admin_user_list(
 async def delete_all_pilots(
     request: Request,
     payload: AdminDangerDeleteRequest,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_system_admin),
     session: AsyncSession = Depends(get_session),
 ):
     ensure_danger_request(payload, admin, "DELETE PILOTS")
@@ -264,7 +268,7 @@ async def delete_all_pilots(
 async def delete_all_races(
     request: Request,
     payload: AdminDangerDeleteRequest,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_system_admin),
     session: AsyncSession = Depends(get_session),
 ):
     ensure_danger_request(payload, admin, "DELETE RACES")
@@ -445,6 +449,7 @@ async def update_user_profile(
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    ensure_not_system_admin(user)
 
     data = payload.model_dump(exclude_unset=True)
     if "favorite_car" in data and data["favorite_car"] is not None:
@@ -494,6 +499,7 @@ async def upload_user_avatar(
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    ensure_not_system_admin(user)
     return await set_user_avatar(session, user, file)
 
 
@@ -527,6 +533,7 @@ async def reject_user(user_id: int, request: Request, _: User = Depends(require_
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    ensure_not_system_admin(user)
     avatar_url = user.avatar_url
     if user.status == UserStatus.unapproved:
         await session.delete(user)
@@ -550,6 +557,7 @@ async def delete_moderation_request(
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    ensure_not_system_admin(user)
     avatar_url = user.avatar_url
     delete_user = user.status == UserStatus.unapproved
     if delete_user:
@@ -574,6 +582,7 @@ async def delete_user_account(
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    ensure_not_system_admin(user)
     if user.id == admin.id:
         raise HTTPException(status_code=400, detail="You cannot delete your own account")
     if user.role == Role.admin:
@@ -638,6 +647,8 @@ async def update_role(
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    if is_system_admin(user) and payload.role != Role.admin:
+        raise HTTPException(status_code=403, detail="The system administrator role cannot be changed")
     user.role = payload.role
     await session.commit()
     await session.refresh(user)
@@ -650,6 +661,7 @@ async def ban_user(user_id: int, request: Request, _: User = Depends(require_adm
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    ensure_not_system_admin(user)
     if user.role == Role.admin:
         raise HTTPException(status_code=403, detail="Admins cannot be banned")
     user.status = UserStatus.banned
@@ -665,6 +677,7 @@ async def unban_user(user_id: int, request: Request, _: User = Depends(require_a
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    ensure_not_system_admin(user)
     user.status = UserStatus.active
     user.ban_end = None
     user.timeout_start = None
@@ -689,6 +702,7 @@ async def timeout_user(
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    ensure_not_system_admin(user)
     if user.role == Role.admin:
         raise HTTPException(status_code=403, detail="Admins cannot be timed out")
     user.status = UserStatus.timeout
@@ -711,6 +725,7 @@ async def end_timeout_user(
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    ensure_not_system_admin(user)
     if user.status == UserStatus.timeout:
         user.status = UserStatus.active
     user.timeout_start = None

@@ -5,6 +5,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db import get_session
 from app.models import Role, User, UserStatus
 from app.security import decode_access_token
@@ -71,6 +72,15 @@ def require_active(user: User) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Account status is {user.status.value}")
 
 
+def is_system_admin(user: User) -> bool:
+    return user.login == get_settings().admin_login
+
+
+def ensure_not_system_admin(user: User) -> None:
+    if is_system_admin(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="The system administrator is protected")
+
+
 def require_roles(allowed: set[Role]) -> Callable[[User], User]:
     async def dependency(user: User = Depends(get_current_user)) -> User:
         require_active(user)
@@ -82,6 +92,15 @@ def require_roles(allowed: set[Role]) -> Callable[[User], User]:
 
 
 require_admin = require_roles({Role.admin})
+
+
+async def require_system_admin(user: User = Depends(get_current_user)) -> User:
+    require_active(user)
+    if user.role != Role.admin or not is_system_admin(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="System administrator access required")
+    return user
+
+
 require_pilot_plus = require_roles(PILOT_PLUS)
 require_moder_plus = require_roles(MODER_PLUS)
 require_marshall_plus = require_roles(MARSHALL_PLUS)

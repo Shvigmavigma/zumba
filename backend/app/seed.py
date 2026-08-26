@@ -575,6 +575,11 @@ async def seed_defaults(session: AsyncSession) -> None:
             )
         )
     else:
+        admin.role = Role.admin
+        admin.status = UserStatus.active
+        admin.ban_end = None
+        admin.timeout_start = None
+        admin.timeout_end = None
         admin.sr = DEFAULT_SR
         admin.games = list(DEFAULT_USER_GAMES)
 
