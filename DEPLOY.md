@@ -26,13 +26,19 @@ ADMIN_PASSWORD=strong-admin-password
 ADMIN_DANGER_PASSWORD_HASH=bcrypt-hash-for-a-separate-danger-password
 ```
 
-`ADMIN_DANGER_PASSWORD_HASH` is used only for the system-admin bulk deletion actions. Store a bcrypt hash, never the plaintext password. Generate one on a machine with the backend dependencies:
+`ADMIN_DANGER_PASSWORD_HASH` is used only for the system-admin danger-zone actions. Store a bcrypt hash, never the plaintext password. Because bcrypt hashes contain `$`, put the value in single quotes in `.env`:
+
+```env
+ADMIN_DANGER_PASSWORD_HASH='$2b$12$replace-with-the-generated-hash'
+```
+
+Generate one on a machine with the backend dependencies:
 
 ```bash
 python -c "from getpass import getpass; from passlib.hash import bcrypt; print(bcrypt.hash(getpass('Danger password: ')))"
 ```
 
-Put the printed hash into `.env`, then recreate the backend:
+Put the printed hash into `.env` with single quotes around it, then recreate the backend:
 
 ```bash
 docker compose up -d --force-recreate backend web

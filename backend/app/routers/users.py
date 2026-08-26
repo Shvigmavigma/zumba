@@ -62,7 +62,11 @@ def ensure_danger_request(payload: AdminDangerDeleteRequest, admin: User, expect
     danger_hash = settings.admin_danger_password_hash.strip()
     if not danger_hash:
         raise HTTPException(status_code=503, detail="Danger password is not configured")
-    if not verify_password(payload.password, danger_hash):
+    try:
+        password_matches = verify_password(payload.password, danger_hash)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="Danger password hash is invalid") from exc
+    if not password_matches:
         raise HTTPException(status_code=403, detail="Danger password is invalid")
 
 
