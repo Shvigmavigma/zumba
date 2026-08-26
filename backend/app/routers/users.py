@@ -7,9 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.avatar_uploads import ensure_avatar_upload_allowed, mark_avatar_uploaded, remove_avatar_file, save_avatar_file
 from app.config import get_settings
+from app.database_backup import create_database_backup
 from app.db import get_session
 from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, is_system_admin, require_admin, require_moder_plus, require_pilot_plus, require_system_admin
-from app.models import RACE_GAMES, Appeal, Banner, Championship, Penalty, Race, RaceRegistration, RaceStatus, Role, Setup, Team, TeamApplication, TeamCreationRequest, User, UserStatus, default_game_ratings
+from app.models import RACE_GAMES, Appeal, Banner, Championship, Penalty, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, Team, TeamApplication, TeamCreationRequest, TeamRaceRegistration, User, UserStatus, default_game_ratings
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
 from app.schemas import AdminDangerDeleteRequest, ProfileAnalyticsRead, RoleUpdate, TimeoutRequest, UserAdminUpdate, UserPrivate, UserPublic, UserUpdate
@@ -276,13 +277,26 @@ async def delete_all_races(
     race_video_urls = list((await session.scalars(select(Race.video_url).where(Race.video_url.is_not(None)))).all())
     await session.execute(delete(Appeal))
     await session.execute(delete(Penalty))
+    await session.execute(delete(RaceFanVote))
     await session.execute(delete(RaceRegistration))
+    await session.execute(delete(TeamRaceRegistration))
     await session.execute(update(Setup).values(race_id=None))
     await session.execute(delete(Race))
     await session.commit()
     for video_url in race_video_urls:
         remove_race_video_file(video_url)
     return {"deleted": int(race_count or 0)}
+
+
+@router.post("/admin/backup")
+@limiter.limit("3/minute")
+async def download_database_backup(
+    request: Request,
+    payload: AdminDangerDeleteRequest,
+    admin: User = Depends(require_system_admin),
+):
+    ensure_danger_request(payload, admin, "DOWNLOAD DATABASE BACKUP")
+    return await create_database_backup()
 
 
 @router.get("/{user_id}", response_model=UserPublic)

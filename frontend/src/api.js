@@ -26,7 +26,7 @@ function apiErrorMessage(message) {
   return friendly[text]?.[locale] || text
 }
 
-export async function api(path, options = {}) {
+async function request(path, options = {}) {
   const headers = new Headers(options.headers || {})
   const isFormData = options.body instanceof FormData
   if (!headers.has('Content-Type') && options.body && !isFormData) {
@@ -36,12 +36,14 @@ export async function api(path, options = {}) {
     headers.set('Authorization', `Bearer ${state.token}`)
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  return fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
     body: options.body && typeof options.body !== 'string' && !isFormData ? JSON.stringify(options.body) : options.body
   })
+}
 
+async function ensureOk(response) {
   if (response.status === 401) {
     clearSession()
   }
@@ -55,6 +57,17 @@ export async function api(path, options = {}) {
     }
     throw new Error(apiErrorMessage(message))
   }
+}
+
+export async function api(path, options = {}) {
+  const response = await request(path, options)
+  await ensureOk(response)
   if (response.status === 204) return null
   return response.json()
+}
+
+export async function apiDownload(path, options = {}) {
+  const response = await request(path, options)
+  await ensureOk(response)
+  return response.blob()
 }
