@@ -103,6 +103,7 @@ class UserPublic(BaseModel):
     discord: str | None
     steam_id: str
     role: Role
+    is_system_admin: bool = False
     status: UserStatus
     avatar_color: str
     avatar_url: str | None = None

@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     admin_login: str = "admin"
     admin_email: str = "admin@example.com"
     admin_password: str = "admin"
+    admin_danger_password_hash: str = ""
 
     rate_limit_default: str = "3/minute"
     rate_limit_storage_uri: str | None = None

@@ -82,6 +82,7 @@ const page = ref(1)
 const pageSize = 25
 const visibleUsers = computed(() => users.value)
 const hasNextPage = computed(() => users.value.length === pageSize)
+const canUseDangerZone = computed(() => state.user?.is_system_admin === true)
 const editCountries = computed(() => countryOptionsWithCurrent(state.locale, editForm.value.country || ''))
 const weatherConditions = computed(() => [
   { key: 'clear', label: t('weather.clear') },
@@ -550,7 +551,7 @@ async function chooseRole(user, role) {
 }
 
 async function ban(user) {
-  if (user.role === 'admin') return
+  if (user.is_system_admin || user.role === 'admin') return
   busyUsers.value = { ...busyUsers.value, [user.id]: true }
   try {
     await api(`/users/${user.id}/ban`, { method: 'POST' })
@@ -563,6 +564,7 @@ async function ban(user) {
 }
 
 async function unban(user) {
+  if (user.is_system_admin) return
   busyUsers.value = { ...busyUsers.value, [user.id]: true }
   try {
     await api(`/users/${user.id}/unban`, { method: 'POST' })
@@ -575,7 +577,7 @@ async function unban(user) {
 }
 
 function openTimeoutDialog(user) {
-  if (user.role === 'admin') return
+  if (user.is_system_admin || user.role === 'admin') return
   timeoutDialogUser.value = user
   timeoutUntil.value = user.timeout_end ? datetimeLocalValue(new Date(user.timeout_end)) : defaultTimeoutUntil()
 }
@@ -587,6 +589,7 @@ function closeTimeoutDialog() {
 }
 
 function openEditDialog(user) {
+  if (user.is_system_admin) return
   editDialogUser.value = user
   const gameRatings = Object.fromEntries(gameOptions(t).map((option) => [
     option.value,
@@ -659,7 +662,7 @@ async function saveUserProfile() {
 }
 
 async function uploadEditAvatar() {
-  if (!editDialogUser.value || !editAvatarFile.value) return
+  if (!editDialogUser.value || editDialogUser.value.is_system_admin || !editAvatarFile.value) return
   editAvatarSaving.value = true
   error.value = ''
   try {
@@ -703,7 +706,7 @@ async function issueTimeout() {
 }
 
 async function endTimeout(user) {
-  if (user.status !== 'timeout') return
+  if (user.is_system_admin || user.status !== 'timeout') return
   busyUsers.value = { ...busyUsers.value, [user.id]: true }
   try {
     await api(`/users/${user.id}/timeout`, { method: 'DELETE' })
@@ -716,7 +719,7 @@ async function endTimeout(user) {
 }
 
 async function deleteAccount(user) {
-  if (user.id === state.user?.id) return
+  if (user.is_system_admin || user.id === state.user?.id) return
   if (!window.confirm(t('adminUsers.deleteConfirm', { login: user.login }))) return
   busyUsers.value = { ...busyUsers.value, [user.id]: true }
   try {
@@ -989,7 +992,7 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
 
     <AuditLogPanel />
 
-    <section class="admin-danger-card card">
+    <section v-if="canUseDangerZone" class="admin-danger-card card">
       <div>
         <h2>{{ t('adminUsers.dangerTitle') }}</h2>
         <p class="muted">{{ t('adminUsers.dangerHint') }}</p>
@@ -1053,7 +1056,7 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
                   class="role-segment-option"
                   :class="{ 'is-selected': user.role === role }"
                   type="button"
-                  :disabled="busyUsers[user.id]"
+                  :disabled="user.is_system_admin || busyUsers[user.id]"
                   @click="chooseRole(user, role)"
                 >
                   {{ roleLabel(t, role) }}
@@ -1077,7 +1080,7 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
                   type="button"
                   :title="t('common.edit')"
                   :aria-label="t('common.edit')"
-                  :disabled="busyUsers[user.id]"
+                  :disabled="user.is_system_admin || busyUsers[user.id]"
                   @click="openEditDialog(user)"
                 >
                   <Edit3 :size="16" />
@@ -1087,7 +1090,7 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
                   type="button"
                   :title="t('common.ban')"
                   :aria-label="t('common.ban')"
-                  :disabled="user.role === 'admin' || busyUsers[user.id]"
+                  :disabled="user.is_system_admin || user.role === 'admin' || busyUsers[user.id]"
                   @click="ban(user)"
                 >
                   <Ban :size="16" />
@@ -1097,7 +1100,7 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
                   type="button"
                   :title="t('adminUsers.issueTimeout')"
                   :aria-label="t('adminUsers.issueTimeout')"
-                  :disabled="user.role === 'admin' || busyUsers[user.id]"
+                  :disabled="user.is_system_admin || user.role === 'admin' || busyUsers[user.id]"
                   @click="openTimeoutDialog(user)"
                 >
                   <Timer :size="16" />
@@ -1107,7 +1110,7 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
                   type="button"
                   :title="t('adminUsers.endTimeout')"
                   :aria-label="t('adminUsers.endTimeout')"
-                  :disabled="user.status !== 'timeout' || busyUsers[user.id]"
+                  :disabled="user.is_system_admin || user.status !== 'timeout' || busyUsers[user.id]"
                   @click="endTimeout(user)"
                 >
                   <TimerOff :size="16" />
@@ -1117,7 +1120,7 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
                   type="button"
                   :title="t('common.unban')"
                   :aria-label="t('common.unban')"
-                  :disabled="busyUsers[user.id]"
+                  :disabled="user.is_system_admin || busyUsers[user.id]"
                   @click="unban(user)"
                 >
                   <Undo2 :size="16" />
@@ -1127,7 +1130,7 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
                   type="button"
                   :title="t('common.delete')"
                   :aria-label="t('common.delete')"
-                  :disabled="user.id === state.user?.id || busyUsers[user.id]"
+                  :disabled="user.is_system_admin || user.id === state.user?.id || busyUsers[user.id]"
                   @click="deleteAccount(user)"
                 >
                   <Trash2 :size="16" />
@@ -1166,8 +1169,8 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
           <input v-model="dangerForm.confirmation_repeat" autocomplete="off" :placeholder="activeDangerAction.code" required />
         </label>
         <label class="field">
-          <span>{{ t('fields.password') }}</span>
-          <input v-model="dangerForm.password" type="password" autocomplete="current-password" required />
+          <span>{{ t('adminUsers.dangerPassword') }}</span>
+          <input v-model="dangerForm.password" type="password" autocomplete="off" required />
         </label>
         <div class="admin-timeout-actions">
           <button class="button" type="button" :disabled="dangerSaving" @click="closeDangerDialog">

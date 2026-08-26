@@ -42,6 +42,7 @@
 - 2026-08-24 — race-result podium: the first three finishers use three ordered information columns (P1 centered/tallest), preserving the existing gold/silver/bronze surfaces; the detailed table starts at position 4.
 - 2026-08-24 — race-result podium rating: each race-result podium column also shows the existing positive/negative RER change badge; qualification columns omit it because rating is applied to the race result.
 - 2026-08-24 — race-result podium gradient: increased the existing medal-colour gradient opacity and spread only inside the three race-result columns for clearer separation without changing their palette.
+- 2026-08-27 — admin safety controls: the system-admin row is read-only in the admin UI, bulk deletion is system-admin-only with a separate password, and host destruction stays outside the browser in favour of a verified SSH backup script.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, default-avatar, system-setting, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).

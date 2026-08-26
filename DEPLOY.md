@@ -23,6 +23,19 @@ CORS_ORIGINS=http://bmrl.example.com:8080
 POSTGRES_PASSWORD=long-random-password
 JWT_SECRET=another-long-random-secret
 ADMIN_PASSWORD=strong-admin-password
+ADMIN_DANGER_PASSWORD_HASH=bcrypt-hash-for-a-separate-danger-password
+```
+
+`ADMIN_DANGER_PASSWORD_HASH` is used only for the system-admin bulk deletion actions. Store a bcrypt hash, never the plaintext password. Generate one on a machine with the backend dependencies:
+
+```bash
+python -c "from getpass import getpass; from passlib.hash import bcrypt; print(bcrypt.hash(getpass('Danger password: ')))"
+```
+
+Put the printed hash into `.env`, then recreate the backend:
+
+```bash
+docker compose up -d --force-recreate backend web
 ```
 
 Для входа через Steam `PUBLIC_BASE_URL` должен совпадать с внешним адресом сайта, потому что Steam вернёт пользователя на `PUBLIC_BASE_URL/api/auth/steam/callback`.
@@ -79,6 +92,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\weekly-backup.ps1 -InstallWee
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\weekly-backup.ps1 -InstallWeeklyTask -WeeklyDay Monday -At 04:00 -Keep 3
 ```
+
+Для Linux/Synology перед ручным удалением проекта используй backup-скрипт:
+
+```bash
+bash scripts/backup-project.sh
+```
+
+Он сохраняет PostgreSQL в `database.dump`, загруженные файлы в `uploads.tar.gz` и манифест с контрольной суммой. Веб-приложение намеренно не получает доступ к Docker и не может уничтожить проект или хост из браузера. После проверки backup остановку проекта выполняй вручную по SSH.
 
 ## HTTPS
 
