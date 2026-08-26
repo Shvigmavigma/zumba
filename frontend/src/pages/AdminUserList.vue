@@ -1,8 +1,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Ban, Edit3, Plus, Save, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
-import { api } from '../api'
+import { Ban, Download, Edit3, Plus, Save, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
+import { api, apiDownload } from '../api'
 import { brandingSettings, setBrandingSettings } from '../brandingSettings'
 import AvatarViewer from '../components/AvatarViewer.vue'
 import AuditLogPanel from '../components/AuditLogPanel.vue'
@@ -104,6 +104,13 @@ const dangerActions = {
     code: 'DELETE RACES',
     titleKey: 'adminUsers.deleteAllRaces',
     descriptionKey: 'adminUsers.deleteAllRacesHint'
+  },
+  backup: {
+    endpoint: '/users/admin/backup',
+    code: 'DOWNLOAD DATABASE BACKUP',
+    titleKey: 'adminUsers.downloadDatabaseBackup',
+    descriptionKey: 'adminUsers.downloadDatabaseBackupHint',
+    kind: 'download'
   }
 }
 const activeDangerAction = computed(() => (dangerDialog.value ? dangerActions[dangerDialog.value] : null))
@@ -516,18 +523,32 @@ async function runDangerAction() {
   error.value = ''
   dangerResult.value = ''
   try {
-    const result = await api(action.endpoint, {
+    const requestOptions = {
       method: 'POST',
       body: {
         confirmation: dangerForm.value.confirmation,
         confirmation_repeat: dangerForm.value.confirmation_repeat,
         password: dangerForm.value.password
       }
-    })
-    dangerResult.value = t('adminUsers.deletedCount', { count: result?.deleted ?? 0 })
+    }
+    if (action.kind === 'download') {
+      const blob = await apiDownload(action.endpoint, requestOptions)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `bmrl-database-${new Date().toISOString().replace(/[:.]/g, '-')}.dump`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      dangerResult.value = t('adminUsers.backupDownloaded')
+    } else {
+      const result = await api(action.endpoint, requestOptions)
+      dangerResult.value = t('adminUsers.deletedCount', { count: result?.deleted ?? 0 })
+    }
     dangerDialog.value = null
     dangerForm.value = { confirmation: '', confirmation_repeat: '', password: '' }
-    await load()
+    if (action.kind !== 'download') await load()
   } catch (err) {
     error.value = err.message
   } finally {
@@ -1006,6 +1027,10 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
         <button class="button danger" type="button" @click="openDangerDialog('races')">
           <Trash2 :size="16" />
           {{ t('adminUsers.deleteAllRaces') }}
+        </button>
+        <button class="button" type="button" @click="openDangerDialog('backup')">
+          <Download :size="16" />
+          {{ t('adminUsers.downloadDatabaseBackup') }}
         </button>
       </div>
     </section>
