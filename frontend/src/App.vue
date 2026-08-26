@@ -2,9 +2,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CalendarDays, Calculator, Clock3, Flag, Home, Languages, ListChecks, LogIn, LogOut, Medal, Moon, MoreHorizontal, Newspaper, Shield, Sun, Trophy, User, Users } from 'lucide-vue-next'
+import { api } from './api'
 import { statusLabel } from './i18nLabels'
 import { brandingSettings, ensureBrandingSettings } from './brandingSettings'
-import { clearSession, state } from './store'
+import { clearSession, setSession, state } from './store'
 import { timeZoneOptions } from './timezone'
 
 const { t, locale } = useI18n()
@@ -163,8 +164,19 @@ function handleDocumentPointerDown(event) {
   }
 }
 
+async function refreshSession() {
+  if (!state.token) return
+  try {
+    const user = await api('/auth/me')
+    setSession(state.token, user)
+  } catch {
+    // Keep the cached session on transient startup failures.
+  }
+}
+
 onMounted(() => {
   ensureBrandingSettings().catch(() => {})
+  refreshSession()
   navResizeObserver = new ResizeObserver(queueNavReflow)
   if (navContainer.value) navResizeObserver.observe(navContainer.value)
   document.addEventListener('pointerdown', handleDocumentPointerDown)
