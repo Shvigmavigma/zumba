@@ -6,6 +6,7 @@ from app.config import get_settings
 from app.deps import ensure_not_system_admin, is_system_admin
 from app.models import User
 from app.routers.users import ensure_danger_request, reassign_restricted_user_references
+from app.schemas import AdminDangerDeleteRequest
 from app.security import hash_password
 
 
@@ -39,8 +40,6 @@ class UserDeletionTest(unittest.IsolatedAsyncioTestCase):
         try:
             settings.admin_danger_password_hash = hash_password("danger-only-password")
             admin = User(login=settings.admin_login, password_hash=hash_password("normal-admin-password"))
-            from app.schemas import AdminDangerDeleteRequest
-
             request = AdminDangerDeleteRequest(
                 confirmation="DELETE PILOTS",
                 confirmation_repeat="DELETE PILOTS",
@@ -54,6 +53,24 @@ class UserDeletionTest(unittest.IsolatedAsyncioTestCase):
                     admin,
                     "DELETE PILOTS",
                 )
+        finally:
+            settings.admin_danger_password_hash = previous_hash
+
+    def test_invalid_bulk_delete_hash_is_configuration_error(self):
+        settings = get_settings()
+        previous_hash = settings.admin_danger_password_hash
+        try:
+            settings.admin_danger_password_hash = "not-a-bcrypt-hash"
+            admin = User(login=settings.admin_login)
+            request = AdminDangerDeleteRequest(
+                confirmation="DELETE RACES",
+                confirmation_repeat="DELETE RACES",
+                password="anything",
+            )
+
+            with self.assertRaises(HTTPException) as context:
+                ensure_danger_request(request, admin, "DELETE RACES")
+            self.assertEqual(context.exception.status_code, 503)
         finally:
             settings.admin_danger_password_hash = previous_hash
 
