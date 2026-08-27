@@ -58,6 +58,13 @@ const raceAssetConfig = computed(() => {
   if (game === 'ACC') return raceAssets.value.games?.ACC || raceAssets.value || { track_images: {} }
   return raceAssets.value.games?.[game] || { track_images: {} }
 })
+const trackExpectedAverageLapMs = computed(() => {
+  const track = String(race.value?.track || '').trim().toLowerCase()
+  if (!track) return null
+  const entry = Object.entries(raceAssetConfig.value.expected_average_lap_ms || {})
+    .find(([name]) => name.toLowerCase() === track)
+  return entry && Number(entry[1]) > 0 ? Number(entry[1]) : null
+})
 const raceTrackImage = computed(() => trackImageFromConfig(raceAssetConfig.value, race.value?.track, race.value?.track_id))
 
 const raceRatingGame = computed(() => race.value?.game || 'ACC')
@@ -360,6 +367,11 @@ function resultPilotName(row) {
   const participant = participantById(row.user_id)
   if (participant) return participantName(participant)
   return row.driver_name || row.nickname || row.login || `${t('roles.pilot')} ${row.user_id || ''}`.trim()
+}
+
+function resultPilotId(row) {
+  const userId = Number(row?.user_id)
+  return Number.isInteger(userId) && userId > 0 ? userId : null
 }
 
 function resultPilotSubtitle(row) {
@@ -928,6 +940,7 @@ watch(visibleParticipants, () => {
               {{ gameLabel(t, race.game) }} -
               <RouterLink class="race-track-link" :to="{ path: '/pilots', query: { tab: 'tracks', track: race.track } }">{{ race.track }}</RouterLink>
               <span v-if="trackAverageLapMs"> · {{ t('tracks.averageLap') }}: {{ formatDuration(trackAverageLapMs) }}</span>
+              <span v-if="trackExpectedAverageLapMs"> · {{ t('tracks.expectedAverageLap') }}: {{ formatDuration(trackExpectedAverageLapMs) }}</span>
               - {{ race.car_class }}
             </p>
           </div>
@@ -961,7 +974,7 @@ watch(visibleParticipants, () => {
           <span>{{ race.is_official ? t('raceDetails.ratingCounted') : t('raceDetails.ratingNotCounted') }}</span>
         </div>
         <p class="race-details-weather-summary"><strong>{{ t('raceCard.weather') }}:</strong> {{ weatherSummary(race) }} · {{ t('weather.trackTemperature') }}: {{ weatherTemperature(race) }}</p>
-        <p>{{ t('fields.server') }}: <a :href="race.server_link">{{ race.server_link }}</a></p>
+        <p>{{ t('fields.server') }}: <a :href="race.server_link" target="_blank" rel="noopener noreferrer">{{ race.server_link }}</a></p>
         <p>{{ t('fields.mods') }}: {{ race.mods_pack?.join(', ') || t('common.none') }}</p>
         <button v-if="raceTrackImage" class="race-track-image-display race-track-image-trigger" type="button" :aria-label="race.track" @click="openTrackImage">
           <img class="race-track-image" :src="raceTrackImage" :alt="race.track" />
@@ -1388,7 +1401,10 @@ watch(visibleParticipants, () => {
               <span class="result-position-badge" :class="resultPodiumClass(row)">{{ row.position || '-' }}</span>
               <div>
                 <span class="user-name-line">
-                  <strong>{{ resultPilotName(row) }}</strong>
+                  <RouterLink v-if="resultPilotId(row)" class="result-pilot-link" :to="`/pilots/${resultPilotId(row)}`">
+                    <strong>{{ resultPilotName(row) }}</strong>
+                  </RouterLink>
+                  <strong v-else>{{ resultPilotName(row) }}</strong>
                   <LicenseBadge :rating="resultPilotRatingValue(row)" />
                 </span>
                 <span>{{ resultPilotSubtitle(row) }}</span>
@@ -1426,7 +1442,10 @@ watch(visibleParticipants, () => {
                       <UserAvatar mini :src="resultPilotAvatar(row)" :color="resultPilotColor(row)" :label="resultPilotName(row)" />
                       <div>
                         <span class="user-name-line">
-                          <strong>{{ resultPilotName(row) }}</strong>
+                          <RouterLink v-if="resultPilotId(row)" class="result-pilot-link" :to="`/pilots/${resultPilotId(row)}`">
+                            <strong>{{ resultPilotName(row) }}</strong>
+                          </RouterLink>
+                          <strong v-else>{{ resultPilotName(row) }}</strong>
                           <LicenseBadge :rating="resultPilotRatingValue(row)" />
                         </span>
                         <span class="result-driver-meta">

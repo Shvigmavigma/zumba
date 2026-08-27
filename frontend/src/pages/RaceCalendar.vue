@@ -331,7 +331,7 @@ watch(selectedRaces, () => {
               <span class="race-item-weather"><img v-if="weatherImage(race)" class="race-item-weather-icon" :src="weatherImage(race)" :alt="weatherLabel(race)" /><span v-else class="race-item-weather-icon race-item-weather-glyph" :aria-label="weatherLabel(race)" role="img">{{ weatherGlyph(race) }}</span></span>
             </div>
           </div>
-          <a v-if="isExternalRace(race)" class="button" :href="raceOpenHref(race)">{{ t('common.open') }}</a>
+          <a v-if="isExternalRace(race)" class="button" :href="raceOpenHref(race)" target="_blank" rel="noopener noreferrer">{{ t('common.open') }}</a>
           <RouterLink v-else class="button" :to="raceOpenHref(race)">{{ t('common.open') }}</RouterLink>
         </article>
         <div v-if="!selectedRaces.length" class="calendar-empty">

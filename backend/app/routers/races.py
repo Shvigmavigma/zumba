@@ -1669,6 +1669,7 @@ async def delete_race(
         setup.race_id = None
     video_url = race.video_url
     await session.delete(race)
+    await session.flush()
     await recalculate_all_ratings(session)
     await session.commit()
     remove_race_video_file(video_url)

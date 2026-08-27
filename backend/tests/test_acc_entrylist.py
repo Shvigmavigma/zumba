@@ -2,7 +2,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.race_assets import DEFAULT_ACC_CAR_MODEL_IDS, DEFAULT_RACE_ASSETS, normalize_race_assets
+from app.race_assets import DEFAULT_ACC_CAR_MODEL_IDS, DEFAULT_RACE_ASSETS, normalize_race_assets, preserve_track_metadata
 from app.routers.races import acc_driver_category_for_user, acc_forced_car_model, acc_line_car_model, race_average_lap_ms
 from app.schemas import RaceRegisterRequest, TeamRaceRegisterRequest
 
@@ -48,6 +48,12 @@ class AccEntrylistTest(unittest.TestCase):
         self.assertEqual(config.car_model_ids["Porsche 991 GT3 R"], 0)
         self.assertEqual(config.car_model_ids["Ford Mustang GT3"], 36)
         self.assertEqual(config.car_model_ids["Porsche 935"], 86)
+
+    def test_expected_average_lap_is_preserved_when_track_is_renamed(self):
+        previous = normalize_race_assets({"tracks": ["Monza"], "expected_average_lap_ms": {"Monza": 108500}, "games": {}})
+        incoming = normalize_race_assets({"tracks": ["Monza 2024"], "games": {}})
+        saved = preserve_track_metadata(previous.games["ACC"], incoming.games["ACC"])
+        self.assertEqual(saved.expected_average_lap_ms, {"Monza 2024": 108500})
 
     def test_admin_mapping_overrides_a_model_id(self):
         custom = {"BMW M4 GT3": 99}

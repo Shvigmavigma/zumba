@@ -11,6 +11,7 @@ from app.deps import require_admin, require_news_editor
 from app.models import AppSetting, User
 from app.rate_limit import limiter, set_requests_per_user_per_minute
 from app.schemas import BrandingSettingsRead, DonationSettingsRead, DonationSettingsUpdate, LicenseSettingsRead, LicenseSettingsUpdate, NewsSettingsRead, NewsSettingsUpdate, SystemSettingsRead, SystemSettingsUpdate, WeatherSettingsRead
+from app.services import recalculate_all_ratings
 
 
 router = APIRouter()
@@ -363,9 +364,11 @@ async def update_system_settings(
         session.add(AppSetting(key=SYSTEM_SETTINGS_KEY, value=value))
     else:
         setting.value = value
-    await session.commit()
     normalized = system_settings_from_value(value)
     set_requests_per_user_per_minute(normalized.requests_per_user_per_minute)
+    await session.flush()
+    await recalculate_all_ratings(session)
+    await session.commit()
     return normalized
 
 

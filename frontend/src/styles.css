@@ -2347,6 +2347,32 @@ textarea {
   flex: 0 0 auto;
 }
 
+.result-pilot-link {
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--primary-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-pilot-link:hover {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.result-pilot-link:active {
+  color: var(--primary-strong);
+}
+
+.result-pilot-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .user-list-main strong,
 .user-list-main span,
 .user-moderation-main strong,
@@ -3561,6 +3587,51 @@ textarea {
 
 .admin-race-assets-tracks textarea {
   min-height: 220px;
+}
+
+.admin-race-assets-laps {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.admin-race-assets-laps .section-header {
+  align-items: start;
+  margin: 0;
+}
+
+.admin-race-assets-laps h3 {
+  margin: 0;
+  font-size: var(--body-text-size);
+}
+
+.admin-race-assets-laps-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.admin-race-assets-lap-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 10px;
+  align-items: center;
+}
+
+.admin-race-assets-lap-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-race-assets-lap-row input {
+  min-width: 0;
+}
+
+.track-expected-lap {
+  color: var(--muted);
 }
 
 .admin-race-assets-classes {
@@ -6643,6 +6714,7 @@ select,
   .admin-settings-card,
   .admin-race-class-row,
   .admin-car-model-mapping-row,
+  .admin-race-assets-lap-row,
   .admin-danger-card,
   .team-create-panel,
   .teams-layout,

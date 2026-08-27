@@ -188,6 +188,7 @@ def preserve_track_metadata(previous: RaceAssetGameConfig, incoming: RaceAssetGa
     previous_by_name = {track.lower(): track for track in previous.tracks}
     track_ids: dict[str, str] = {}
     track_images = dict(incoming.track_images)
+    expected_average_lap_ms: dict[str, int] = {}
     for index, track in enumerate(incoming.tracks):
         old_track = previous_by_name.get(track.lower())
         if old_track is None and index < len(previous.tracks):
@@ -197,7 +198,18 @@ def preserve_track_metadata(previous: RaceAssetGameConfig, incoming: RaceAssetGa
             image_url = previous.track_images.get(old_track)
             if image_url:
                 track_images[track] = image_url
-    return RaceAssetGameConfig(tracks=incoming.tracks, classes=incoming.classes, track_images=track_images, track_ids=track_ids)
+        expected_lap = incoming.expected_average_lap_ms.get(track)
+        if expected_lap is None and old_track and old_track.lower() != track.lower():
+            expected_lap = previous.expected_average_lap_ms.get(old_track)
+        if expected_lap:
+            expected_average_lap_ms[track] = expected_lap
+    return RaceAssetGameConfig(
+        tracks=incoming.tracks,
+        classes=incoming.classes,
+        track_images=track_images,
+        track_ids=track_ids,
+        expected_average_lap_ms=expected_average_lap_ms,
+    )
 
 
 def normalize_race_assets(value: dict | None) -> RaceAssetsConfig:
@@ -236,7 +248,13 @@ async def save_race_assets(session: AsyncSession, payload: RaceAssetsConfig) -> 
 
 def assets_for_game(config: RaceAssetsConfig, game: str) -> RaceAssetGameConfig:
     if game == "ACC":
-        return RaceAssetGameConfig(tracks=config.tracks, classes=config.classes, track_images=config.track_images, track_ids=config.track_ids)
+        return RaceAssetGameConfig(
+            tracks=config.tracks,
+            classes=config.classes,
+            track_images=config.track_images,
+            track_ids=config.track_ids,
+            expected_average_lap_ms=config.expected_average_lap_ms,
+        )
     return config.games.get(game, RaceAssetGameConfig())
 
 

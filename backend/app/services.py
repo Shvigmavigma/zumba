@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import AppSetting, DEFAULT_RATING, MAX_RATING, MAX_SR, MIN_RATING, MIN_SR, RACE_GAMES, Penalty, PenaltyStatus, PenaltyType, Race, RaceStatus, User, default_game_ratings
+from app.models import AppSetting, DEFAULT_RATING, DEFAULT_SR, MAX_RATING, MAX_SR, MIN_RATING, MIN_SR, RACE_GAMES, Penalty, PenaltyStatus, PenaltyType, Race, RaceStatus, User, default_game_ratings
 
 
 APPLIED_PENALTY_STATUSES = {PenaltyStatus.active, PenaltyStatus.appealed}
@@ -389,6 +389,7 @@ async def apply_race_rating(
 
 
 async def recalculate_all_ratings(session: AsyncSession) -> None:
+    await recalculate_all_sr(session)
     users = list((await session.scalars(select(User))).all())
     for user in users:
         user.rating = DEFAULT_RATING
@@ -466,6 +467,32 @@ async def get_sr_per_race(session: AsyncSession) -> float:
         return max(0.0, min(100.0, float(value.get("sr_per_race", value.get("sr_finish_bonus", SR_FINISH_BONUS)))))
     except (TypeError, ValueError):
         return SR_FINISH_BONUS
+
+
+async def recalculate_all_sr(session: AsyncSession) -> None:
+    """Rebuild SR from the configured per-race amount and finished results."""
+    users = list((await session.scalars(select(User))).all())
+    for user in users:
+        user.sr = DEFAULT_SR
+
+    penalties = list((await session.scalars(select(Penalty))).all())
+    for penalty in penalties:
+        penalty.is_applied = False
+        penalty.sr_applied_value = 0
+
+    races = list(
+        (
+            await session.scalars(
+                select(Race)
+                .where(Race.status == RaceStatus.finished, Race.results.is_not(None))
+                .order_by(Race.datetime_start.asc(), Race.id.asc())
+            )
+        ).all()
+    )
+    for race in races:
+        race.results = set_sr_bonus_meta(race.results, None)
+        await recalculate_race_results(session, race)
+        await apply_sr_penalties(session, race)
 
 
 async def restore_race_sr_bonus(session: AsyncSession, race: Race) -> None:
