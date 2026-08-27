@@ -544,13 +544,13 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="main-menu">
-    <a v-if="banner('top')" class="banner main-menu-top-banner" :href="banner('top').link_url">
+    <a v-if="banner('top')" class="banner main-menu-top-banner" :href="banner('top').link_url" target="_blank" rel="noopener noreferrer">
       <video v-if="isVideoUrl(banner('top').image_url)" :src="banner('top').image_url" autoplay muted loop playsinline preload="metadata"></video>
       <img v-else :src="banner('top').image_url" alt="" />
     </a>
 
     <div class="main-menu-layout">
-      <a v-if="banner('left')" class="banner side main-menu-side-banner left" :href="banner('left').link_url">
+      <a v-if="banner('left')" class="banner side main-menu-side-banner left" :href="banner('left').link_url" target="_blank" rel="noopener noreferrer">
         <video v-if="isVideoUrl(banner('left').image_url)" :src="banner('left').image_url" autoplay muted loop playsinline preload="metadata"></video>
         <img v-else :src="banner('left').image_url" alt="" />
       </a>
@@ -698,7 +698,7 @@ onBeforeUnmount(() => {
                 <div class="main-race-card-head">
                   <div class="main-race-title">
                     <div class="main-race-name-row">
-                      <a v-if="isExternalRace(race)" :href="raceOpenHref(race)">{{ race.name }}</a>
+                      <a v-if="isExternalRace(race)" :href="raceOpenHref(race)" target="_blank" rel="noopener noreferrer">{{ race.name }}</a>
                       <RouterLink v-else :to="raceOpenHref(race)">{{ race.name }}</RouterLink>
                       <img
                         v-if="weatherImageUrl(race)"
@@ -741,7 +741,7 @@ onBeforeUnmount(() => {
                   <small>{{ t('fields.raceTime') }}</small>
                   <strong>{{ formatRaceDate(race.datetime_start) }}</strong>
                 </span>
-                <a v-if="isExternalRace(race)" class="button main-race-open" :href="raceOpenHref(race)">
+                <a v-if="isExternalRace(race)" class="button main-race-open" :href="raceOpenHref(race)" target="_blank" rel="noopener noreferrer">
                   <Eye :size="16" />
                   {{ t('common.open') }}
                 </a>
@@ -767,13 +767,13 @@ onBeforeUnmount(() => {
 
       </div>
 
-      <a v-if="banner('right')" class="banner side main-menu-side-banner right" :href="banner('right').link_url">
+      <a v-if="banner('right')" class="banner side main-menu-side-banner right" :href="banner('right').link_url" target="_blank" rel="noopener noreferrer">
         <video v-if="isVideoUrl(banner('right').image_url)" :src="banner('right').image_url" autoplay muted loop playsinline preload="metadata"></video>
         <img v-else :src="banner('right').image_url" alt="" />
       </a>
     </div>
 
-    <a v-if="banner('bottom')" class="banner main-menu-bottom-banner" :href="banner('bottom').link_url">
+    <a v-if="banner('bottom')" class="banner main-menu-bottom-banner" :href="banner('bottom').link_url" target="_blank" rel="noopener noreferrer">
       <video v-if="isVideoUrl(banner('bottom').image_url)" :src="banner('bottom').image_url" autoplay muted loop playsinline preload="metadata"></video>
       <img v-else :src="banner('bottom').image_url" alt="" />
     </a>
@@ -788,7 +788,7 @@ onBeforeUnmount(() => {
               <div v-for="item in directContactItems" :key="item.key" class="main-footer-contact-group">
                 <span class="main-footer-label"><component :is="item.icon" :size="15" />{{ item.label }}</span>
                 <span v-if="item.links" class="main-footer-link-stack">
-                  <a v-for="link in item.links" :key="link.href" :href="link.href">{{ link.text }}</a>
+                  <a v-for="link in item.links" :key="link.href" :href="link.href" target="_blank" rel="noopener noreferrer">{{ link.text }}</a>
                 </span>
                 <span v-else class="main-footer-value">{{ item.value }}</span>
               </div>

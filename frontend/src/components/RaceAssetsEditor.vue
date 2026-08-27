@@ -16,7 +16,7 @@ const accCarModelMappings = ref([])
 const activeRaceAssetsDraft = computed(() => raceAssetsByGame.value[raceAssetGame.value])
 
 function emptyRaceAssetDraft() {
-  return { tracksText: '', classes: [], trackImages: {} }
+  return { tracksText: '', classes: [], trackImages: {}, trackExpectedLaps: {} }
 }
 
 function defaultRaceAssetsByGame() {
@@ -27,6 +27,9 @@ function draftFromConfig(config = {}) {
   return {
     tracksText: (config.tracks || []).join('\n'),
     trackImages: { ...(config.track_images || {}) },
+    trackExpectedLaps: Object.fromEntries(
+      Object.entries(config.expected_average_lap_ms || {}).map(([track, lapMs]) => [track, formatLapDuration(lapMs)])
+    ),
     classes: (config.classes || []).map((item) => ({
       name: item.name,
       carsText: (item.cars || []).join('\n')
@@ -44,6 +47,35 @@ function normalizeRaceAssetsDraft(config = {}) {
   }
 }
 
+function trackNames(draft = emptyRaceAssetDraft()) {
+  return draft.tracksText.split('\n').map((item) => item.trim()).filter(Boolean)
+}
+
+const activeTrackNames = computed(() => trackNames(activeRaceAssetsDraft.value))
+
+function formatLapDuration(value) {
+  if (!Number.isFinite(Number(value))) return ''
+  const totalMs = Math.max(0, Math.round(Number(value)))
+  const minutes = Math.floor(totalMs / 60000)
+  const seconds = Math.floor((totalMs % 60000) / 1000)
+  const millis = totalMs % 1000
+  return `${minutes}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`
+}
+
+function parseLapDuration(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  const parts = raw.split(':').map((part) => Number(part.replace(',', '.')))
+  if (parts.length > 3 || parts.some((part) => !Number.isFinite(part))) throw new Error(t('adminUsers.raceAssetsInvalidLap'))
+  const seconds = parts.length === 1
+    ? parts[0]
+    : parts.length === 2
+      ? parts[0] * 60 + parts[1]
+      : parts[0] * 3600 + parts[1] * 60 + parts[2]
+  if (seconds <= 0) throw new Error(t('adminUsers.raceAssetsInvalidLap'))
+  return Math.round(seconds * 1000)
+}
+
 function carModelMappingsFromConfig(config = {}) {
   return Object.entries(config.car_model_ids || {}).map(([name, id]) => ({
     name,
@@ -52,11 +84,17 @@ function carModelMappingsFromConfig(config = {}) {
 }
 
 function configFromDraft(draft = emptyRaceAssetDraft()) {
-  const tracks = draft.tracksText.split('\n').map((item) => item.trim()).filter(Boolean)
+  const tracks = trackNames(draft)
   const knownTracks = new Set(tracks)
+  const expected_average_lap_ms = Object.fromEntries(
+    tracks
+      .map((track) => [track, parseLapDuration(draft.trackExpectedLaps?.[track])])
+      .filter(([, lapMs]) => lapMs !== null)
+  )
   return {
     tracks,
     track_images: Object.fromEntries(Object.entries(draft.trackImages || {}).filter(([track, url]) => knownTracks.has(track) && url)),
+    expected_average_lap_ms,
     classes: draft.classes
       .map((item) => ({
         name: item.name.trim(),
@@ -150,6 +188,27 @@ onMounted(loadRaceAssets)
       <span>{{ t('adminUsers.raceAssetsTracks') }}</span>
       <textarea v-model="activeRaceAssetsDraft.tracksText" required></textarea>
     </label>
+    <section class="admin-race-assets-laps" aria-labelledby="expected-average-lap-title">
+      <div class="section-header compact">
+        <div>
+          <h3 id="expected-average-lap-title">{{ t('adminUsers.expectedAverageLap') }}</h3>
+          <p class="muted">{{ t('adminUsers.expectedAverageLapHint') }}</p>
+        </div>
+      </div>
+      <div v-if="activeTrackNames.length" class="admin-race-assets-laps-list">
+        <label v-for="track in activeTrackNames" :key="track" class="field admin-race-assets-lap-row">
+          <span>{{ track }}</span>
+          <input
+            v-model="activeRaceAssetsDraft.trackExpectedLaps[track]"
+            type="text"
+            inputmode="decimal"
+            placeholder="1:48.500"
+            :aria-label="`${t('adminUsers.expectedAverageLap')}: ${track}`"
+          />
+        </label>
+      </div>
+      <p v-else class="muted">{{ t('adminUsers.expectedAverageLapEmpty') }}</p>
+    </section>
     <div class="admin-race-assets-classes">
       <div class="section-header compact">
         <h3>{{ t('adminUsers.raceAssetsClasses') }}</h3>

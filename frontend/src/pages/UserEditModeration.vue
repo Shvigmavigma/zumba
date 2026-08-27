@@ -18,6 +18,11 @@ const totalPages = computed(() => Math.max(1, Math.ceil(users.value.length / pag
 const pagedUsers = computed(() => users.value.slice((page.value - 1) * pageSize, page.value * pageSize))
 const isAdmin = computed(() => state.user?.role === 'admin')
 
+function visiblePendingChanges(value) {
+  if (!value || typeof value !== 'object') return String(value || '')
+  return JSON.stringify(Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'email')))
+}
+
 async function load() {
   users.value = await api('/users/moderation/pending')
 }
@@ -82,8 +87,8 @@ watch(users, () => {
           </div>
         </div>
         <div class="user-moderation-meta">
-          <p class="muted">#{{ formatPilotNumber(user.pilot_number) }} - RER {{ formatRating(user.rating) }} - {{ teamShortName(user.team_name, user.team_abbreviation) }} - {{ user.email }} - {{ t('fields.steam') }} {{ user.steam_id }}</p>
-          <p v-if="user.pending_profile_changes" class="muted">{{ t('moderation.pendingProfileChanges', { changes: user.pending_profile_changes }) }}</p>
+          <p class="muted">#{{ formatPilotNumber(user.pilot_number) }} - RER {{ formatRating(user.rating) }} - {{ teamShortName(user.team_name, user.team_abbreviation) }} - {{ t('fields.steam') }} {{ user.steam_id }}</p>
+          <p v-if="user.pending_profile_changes" class="muted">{{ t('moderation.pendingProfileChanges', { changes: visiblePendingChanges(user.pending_profile_changes) }) }}</p>
         </div>
         <div class="toolbar">
           <button class="button primary" @click="approve(user)">{{ t('common.approve') }}</button>

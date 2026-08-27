@@ -200,6 +200,12 @@ function trackImageFor(gameAssets, track, trackId = '') {
   return images[imageTrack] || Object.entries(images).find(([key]) => key.toLowerCase() === imageTrack.toLowerCase())?.[1] || ''
 }
 
+function expectedAverageLapFor(gameAssets, track) {
+  const trackName = String(track || '').trim().toLowerCase()
+  const entry = Object.entries(gameAssets.expected_average_lap_ms || {}).find(([name]) => name.toLowerCase() === trackName)
+  return entry && Number(entry[1]) > 0 ? Number(entry[1]) : null
+}
+
 const trackSummaries = computed(() => {
   const gameAssets = trackGame.value === 'ACC'
     ? (raceAssets.value.games?.ACC || raceAssets.value || { tracks: [] })
@@ -208,7 +214,7 @@ const trackSummaries = computed(() => {
 
   for (const track of gameAssets.tracks || []) {
     const track_id = trackIdFor(gameAssets, track)
-    map.set(track_id, { track_id, track, image_url: trackImageFor(gameAssets, track, track_id), race_count: 0, averageSamples: [], topByPilot: new Map() })
+    map.set(track_id, { track_id, track, image_url: trackImageFor(gameAssets, track, track_id), expected_lap_ms: expectedAverageLapFor(gameAssets, track), race_count: 0, averageSamples: [], topByPilot: new Map() })
   }
 
   for (const race of trackRacesByGame.value[trackGame.value] || []) {
@@ -219,7 +225,7 @@ const trackSummaries = computed(() => {
       summary = [...map.values()].find((item) => item.track.toLowerCase() === raceTrack.toLowerCase())
     }
     if (!summary && raceTrack) {
-      summary = { track_id: raceTrackId, track: raceTrack, image_url: trackImageFor(gameAssets, raceTrack, raceTrackId), race_count: 0, averageSamples: [], topByPilot: new Map() }
+      summary = { track_id: raceTrackId, track: raceTrack, image_url: trackImageFor(gameAssets, raceTrack, raceTrackId), expected_lap_ms: expectedAverageLapFor(gameAssets, raceTrack), race_count: 0, averageSamples: [], topByPilot: new Map() }
       map.set(raceTrackId, summary)
     }
     if (!summary) continue
@@ -245,6 +251,7 @@ const trackSummaries = computed(() => {
         track: summary.track,
         track_id: summary.track_id,
         image_url: summary.image_url,
+        expected_lap_ms: summary.expected_lap_ms,
         race_count: summary.race_count,
         average_lap_ms,
         topRows: Array.from(summary.topByPilot.values()).sort((left, right) => left.bestLapMs - right.bestLapMs).slice(0, 15)
@@ -430,6 +437,7 @@ async function deleteTrackImage() {
           <span>{{ track.track }}</span>
           <strong>{{ formatDuration(track.average_lap_ms) }}</strong>
           <small>{{ t('tracks.averageLap') }} · {{ t('tracks.racesCount', { count: track.race_count }) }}</small>
+          <small v-if="track.expected_lap_ms" class="track-expected-lap">{{ t('tracks.expectedAverageLap') }}: {{ formatDuration(track.expected_lap_ms) }}</small>
         </button>
       </div>
       <div v-else class="pilot-roster-empty">{{ t('common.noMatches') }}</div>

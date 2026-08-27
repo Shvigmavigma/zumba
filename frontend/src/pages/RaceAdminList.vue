@@ -182,7 +182,7 @@ watch(page, load)
             <td>
               <div class="race-admin-title">
                 <div class="race-admin-title-row">
-                  <a v-if="isExternalRace(race)" :href="raceOpenHref(race)">{{ race.name }}</a>
+                  <a v-if="isExternalRace(race)" :href="raceOpenHref(race)" target="_blank" rel="noopener noreferrer">{{ race.name }}</a>
                   <RouterLink v-else :to="raceOpenHref(race)">{{ race.name }}</RouterLink>
                   <span v-if="race.is_team_event" class="status-badge race-team-badge">{{ t('raceFilters.teamBadge') }}</span>
                 </div>
@@ -214,7 +214,7 @@ watch(page, load)
             </td>
             <td>
               <div class="race-admin-actions">
-                <a v-if="isExternalRace(race)" class="icon-button" :href="raceOpenHref(race)" :title="t('common.open')">
+                <a v-if="isExternalRace(race)" class="icon-button" :href="raceOpenHref(race)" target="_blank" rel="noopener noreferrer" :title="t('common.open')">
                   <Eye :size="16" />
                 </a>
                 <RouterLink v-else class="icon-button" :to="raceOpenHref(race)" :title="t('common.open')">

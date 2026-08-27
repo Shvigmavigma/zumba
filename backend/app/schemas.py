@@ -126,6 +126,10 @@ class UserPrivate(UserPublic):
     pending_profile_changes: dict | None = None
 
 
+class UserModerationRead(UserPublic):
+    pending_profile_changes: dict | None = None
+
+
 class UserUpdate(BaseModel):
     email: EmailStr | None = None
     first_name: str | None = Field(default=None, max_length=50)
@@ -394,6 +398,7 @@ class RaceAssetGameConfig(BaseModel):
     classes: list[RaceAssetClass] = Field(default_factory=list)
     track_images: dict[str, str] = Field(default_factory=dict)
     track_ids: dict[str, str] = Field(default_factory=dict)
+    expected_average_lap_ms: dict[str, int] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def normalize_items(self):
@@ -415,6 +420,11 @@ class RaceAssetGameConfig(BaseModel):
             for track, image_url in self.track_images.items()
             if track.strip().lower() in allowed_tracks and str(image_url).strip()
         }
+        self.expected_average_lap_ms = {
+            allowed_tracks[track.strip().lower()]: int(lap_ms)
+            for track, lap_ms in self.expected_average_lap_ms.items()
+            if track.strip().lower() in allowed_tracks and int(lap_ms) > 0
+        }
         seen_classes: set[str] = set()
         self.classes = [item for item in self.classes if not (item.name.lower() in seen_classes or seen_classes.add(item.name.lower()))]
         return self
@@ -433,6 +443,7 @@ class RaceAssetsConfig(RaceAssetGameConfig):
                 "classes": value.get("classes", []),
                 "track_images": value.get("track_images", {}),
                 "track_ids": value.get("track_ids", {}),
+                "expected_average_lap_ms": value.get("expected_average_lap_ms", {}),
                 "car_model_ids": value.get("car_model_ids", {}),
             }
             return {
@@ -455,13 +466,22 @@ class RaceAssetsConfig(RaceAssetGameConfig):
         }
         allowed_games = ("ACC", "AC", "iRacing", "LMU")
         self.games = {game: self.games.get(game, RaceAssetGameConfig()) for game in allowed_games}
-        if not self.tracks and not self.classes and not self.track_images:
+        if not self.tracks and not self.classes and not self.track_images and not self.expected_average_lap_ms:
             acc = self.games["ACC"]
             self.tracks = list(acc.tracks)
             self.classes = list(acc.classes)
             self.track_images = dict(acc.track_images)
             self.track_ids = dict(acc.track_ids)
-        self.games["ACC"] = RaceAssetGameConfig(tracks=self.tracks, classes=self.classes, track_images=self.track_images, track_ids=self.track_ids)
+            self.expected_average_lap_ms = dict(acc.expected_average_lap_ms)
+        elif not self.expected_average_lap_ms:
+            self.expected_average_lap_ms = dict(self.games["ACC"].expected_average_lap_ms)
+        self.games["ACC"] = RaceAssetGameConfig(
+            tracks=self.tracks,
+            classes=self.classes,
+            track_images=self.track_images,
+            track_ids=self.track_ids,
+            expected_average_lap_ms=self.expected_average_lap_ms,
+        )
         return self
 
 

@@ -213,7 +213,7 @@ watch(navItems, () => {
             <component :is="item.icon" v-if="item.icon" :size="18" />
             {{ item.label }}
           </RouterLink>
-          <a v-else :href="item.href" @click="closeMoreMenu">
+          <a v-else :href="item.href" target="_blank" rel="noopener noreferrer" @click="closeMoreMenu">
             <component :is="item.icon" v-if="item.icon" :size="18" />
             {{ item.label }}
           </a>
@@ -229,7 +229,7 @@ watch(navItems, () => {
                 <component :is="item.icon" v-if="item.icon" :size="18" />
                 {{ item.label }}
               </RouterLink>
-              <a v-else :href="item.href" role="menuitem" @click="closeMoreMenu">
+              <a v-else :href="item.href" target="_blank" rel="noopener noreferrer" role="menuitem" @click="closeMoreMenu">
                 <component :is="item.icon" v-if="item.icon" :size="18" />
                 {{ item.label }}
               </a>

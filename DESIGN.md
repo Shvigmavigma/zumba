@@ -43,6 +43,8 @@
 - 2026-08-24 — race-result podium rating: each race-result podium column also shows the existing positive/negative RER change badge; qualification columns omit it because rating is applied to the race result.
 - 2026-08-24 — race-result podium gradient: increased the existing medal-colour gradient opacity and spread only inside the three race-result columns for clearer separation without changing their palette.
 - 2026-08-27 — admin safety controls: the system-admin row is read-only in the admin UI, bulk deletion is system-admin-only with a separate password, and host destruction stays outside the browser in favour of a verified SSH backup script.
+- 2026-08-28 — result profiles and SR: result names link to pilot profiles; SR is rebuilt from the configured per-race value multiplied by each pilot's finished-race count, with penalties reapplied, while moderation cards no longer render e-mail addresses.
+- 2026-08-28 — expected track laps: the existing race-assets editor stores an optional per-track expected average lap in milliseconds, with token-based admin inputs accepting `m:ss.mmm`; race details and track cards expose the value alongside measured averages.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, default-avatar, system-setting, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
@@ -60,6 +62,7 @@
 - `frontend/src/pages/RaceEdit.vue` — separate registration-start, registration-end, and race-time controls plus weather probability and track-temperature inputs.
 - `frontend/src/pages/RaceCalendar.vue` — selected race cards with schedule and leading-weather imagery.
 - `frontend/src/pages/AdminUserList.vue` — admin weather-condition light/dark image uploads and previews.
+- `frontend/src/components/RaceAssetsEditor.vue` — per-track expected average lap inputs with format guidance and validation.
 
 ## Non-Goals
 - No Figma sync

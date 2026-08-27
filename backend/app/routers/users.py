@@ -13,9 +13,9 @@ from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, is_
 from app.models import RACE_GAMES, Appeal, Banner, Championship, Penalty, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, Team, TeamApplication, TeamCreationRequest, TeamRaceRegistration, User, UserStatus, default_game_ratings
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
-from app.schemas import AdminDangerDeleteRequest, ProfileAnalyticsRead, RoleUpdate, TimeoutRequest, UserAdminUpdate, UserPrivate, UserPublic, UserUpdate
+from app.schemas import AdminDangerDeleteRequest, ProfileAnalyticsRead, RoleUpdate, TimeoutRequest, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
 from app.security import verify_password
-from app.services import result_rows
+from app.services import recalculate_all_ratings, result_rows
 
 
 router = APIRouter()
@@ -145,7 +145,7 @@ async def list_pilots(
     return [user_response(user, team_name, team_abbreviation) for user, team_name, team_abbreviation in rows]
 
 
-@router.get("/moderation/pending", response_model=list[UserPrivate])
+@router.get("/moderation/pending", response_model=list[UserModerationRead])
 @limiter.limit("3/minute")
 async def pending_users(request: Request, _: User = Depends(require_moder_plus), session: AsyncSession = Depends(get_session)):
     rows = (
@@ -156,7 +156,17 @@ async def pending_users(request: Request, _: User = Depends(require_moder_plus),
             .order_by(User.created_at)
         )
     ).all()
-    return [user_response(user, team_name, team_abbreviation, private=True) for user, team_name, team_abbreviation in rows]
+    result = []
+    for user, team_name, team_abbreviation in rows:
+        data = user_response(user, team_name, team_abbreviation)
+        pending_changes = user.pending_profile_changes
+        data["pending_profile_changes"] = (
+            {key: value for key, value in pending_changes.items() if key != "email"}
+            if isinstance(pending_changes, dict)
+            else None
+        )
+        result.append(data)
+    return result
 
 
 @router.get("/admin", response_model=list[UserPrivate])
@@ -286,6 +296,7 @@ async def delete_all_races(
     await session.execute(delete(TeamRaceRegistration))
     await session.execute(update(Setup).values(race_id=None))
     await session.execute(delete(Race))
+    await recalculate_all_ratings(session)
     await session.commit()
     for video_url in race_video_urls:
         remove_race_video_file(video_url)
