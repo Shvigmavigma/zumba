@@ -15365,6 +15365,39 @@ body,
   }
 }
 
+/* Double-elimination columns keep the two qualification routes visually distinct. */
+.standalone-bracket-column.is-upper .standalone-bracket-column-head,
+.standalone-bracket-column.is-lower .standalone-bracket-column-head {
+  padding-top: 8px;
+  border-top: 2px solid var(--accent);
+}
+
+.standalone-bracket-column.is-lower .standalone-bracket-column-head {
+  border-top-color: var(--success);
+}
+
+.standalone-bracket-column.is-upper .standalone-bracket-match {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+}
+
+.standalone-bracket-column.is-lower .standalone-bracket-match {
+  border-color: color-mix(in srgb, var(--success) 48%, var(--border));
+}
+
+.standalone-bracket-column.is-semifinal .standalone-bracket-column-head {
+  padding-top: 8px;
+  border-top: 2px solid var(--primary-strong);
+}
+
+.standalone-bracket-column.is-third_place .standalone-bracket-match {
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+}
+
+.standalone-bracket-page.is-double-elimination .standalone-bracket-match::before,
+.standalone-bracket-page.is-double-elimination .standalone-bracket-match::after {
+  display: none !important;
+}
+
 /* Result and phase views share the same public tournament surface. */
 .standalone-bracket-phase-switch {
   display: flex;

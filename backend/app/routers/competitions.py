@@ -191,6 +191,32 @@ def playoff_matches(participants: list[str], stage: str = "playoff") -> list[dic
     return matches
 
 
+def bracket_match(participant_a: str | None, participant_b: str | None, *, stage: str, round_number: int = 1, bracket: str | None = None) -> dict:
+    match = {
+        "id": uuid4().hex,
+        "round": round_number,
+        "stage": stage,
+        "a": participant_a,
+        "b": participant_b,
+        "winner": participant_a if participant_b is None else None,
+        "votes_a": 0,
+        "votes_b": 0,
+        "status": "bye" if participant_b is None else "open",
+    }
+    if bracket:
+        match["bracket"] = bracket
+    return match
+
+
+def match_loser(match: dict) -> str | None:
+    winner = match.get("winner")
+    if winner == match.get("a"):
+        return match.get("b")
+    if winner == match.get("b"):
+        return match.get("a")
+    return None
+
+
 def normalize_advancing_places(value) -> list[int]:
     if not isinstance(value, (list, tuple, set)):
         return [1]
@@ -213,6 +239,15 @@ def build_matches(data: dict) -> None:
     data["results"] = []
     settings_data = data.setdefault("settings", {})
     variant = settings_data.get("variant", "direct")
+    if variant == "double_elimination":
+        if len(participants) != 8:
+            raise HTTPException(status_code=400, detail="Верхняя и нижняя сетка требуют ровно 8 участников")
+        settings_data["phase"] = "double_upper"
+        data["matches"] = [
+            bracket_match(participants[index], participants[index + 1], stage="upper", round_number=1, bracket="upper")
+            for index in range(0, 8, 2)
+        ]
+        return
     if variant == "groups":
         group_count = max(2, min(int(settings_data.get("group_count", 2) or 2), len(participants)))
         settings_data["advancing_places"] = normalize_advancing_places(settings_data.get("advancing_places"))
@@ -243,12 +278,70 @@ def build_matches(data: dict) -> None:
     data["matches"] = playoff_matches(participants, "qualifying" if variant == "qualifying" else "playoff")
 
 
+def advance_double_elimination(data: dict) -> None:
+    """Advance the fixed 8-participant upper/lower qualification bracket.
+
+    The format intentionally stops after four semifinal qualifiers: two come
+    from the upper bracket and two survive the lower bracket. This keeps the
+    requested Major-style split while making the stage deterministic and easy
+    to operate from the existing pair-closing controls.
+    """
+    matches = data.setdefault("matches", [])
+    settings_data = data.setdefault("settings", {})
+
+    upper_round_one = [match for match in matches if match.get("bracket") == "upper" and int(match.get("round", 1)) == 1]
+    lower_round_one = [match for match in matches if match.get("bracket") == "lower" and int(match.get("round", 1)) == 1]
+    upper_round_two = [match for match in matches if match.get("bracket") == "upper" and int(match.get("round", 1)) == 2]
+    semifinals = [match for match in matches if match.get("stage") == "semifinal"]
+    final = [match for match in matches if match.get("stage") == "playoff" and match.get("bracket") == "final"]
+
+    if len(upper_round_one) == 4 and not lower_round_one and not upper_round_two and all(match.get("status") != "open" for match in upper_round_one):
+        upper_winners = [match.get("winner") for match in upper_round_one if match.get("winner")]
+        upper_losers = [match_loser(match) for match in upper_round_one]
+        if len(upper_winners) == 4 and len(upper_losers) == 4:
+            matches.extend([
+                bracket_match(upper_winners[0], upper_winners[1], stage="upper", round_number=2, bracket="upper"),
+                bracket_match(upper_winners[2], upper_winners[3], stage="upper", round_number=2, bracket="upper"),
+                bracket_match(upper_losers[0], upper_losers[1], stage="lower", round_number=1, bracket="lower"),
+                bracket_match(upper_losers[2], upper_losers[3], stage="lower", round_number=1, bracket="lower"),
+            ])
+            settings_data["phase"] = "double_brackets"
+        return
+
+    if len(upper_round_two) == 2 and len(lower_round_one) == 2 and not semifinals and all(
+        match.get("status") != "open" for match in [*upper_round_two, *lower_round_one]
+    ):
+        upper_winners = [match.get("winner") for match in upper_round_two if match.get("winner")]
+        lower_winners = [match.get("winner") for match in lower_round_one if match.get("winner")]
+        if len(upper_winners) == 2 and len(lower_winners) == 2:
+            matches.extend([
+                bracket_match(upper_winners[0], lower_winners[0], stage="semifinal", round_number=1, bracket="semifinal"),
+                bracket_match(upper_winners[1], lower_winners[1], stage="semifinal", round_number=1, bracket="semifinal"),
+            ])
+            settings_data["phase"] = "semifinal"
+        return
+
+    if len(semifinals) == 2 and not final and all(match.get("status") != "open" for match in semifinals):
+        semifinal_winners = [match.get("winner") for match in semifinals if match.get("winner")]
+        semifinal_losers = [match_loser(match) for match in semifinals]
+        if len(semifinal_winners) == 2 and len(semifinal_losers) == 2:
+            matches.extend([
+                bracket_match(semifinal_winners[0], semifinal_winners[1], stage="playoff", round_number=2, bracket="final"),
+                bracket_match(semifinal_losers[0], semifinal_losers[1], stage="third_place", round_number=2, bracket="third_place"),
+            ])
+            settings_data["phase"] = "final"
+
+
 def advance_bracket(data: dict) -> None:
+    if data.get("settings", {}).get("variant") == "double_elimination":
+        advance_double_elimination(data)
+        return
     while True:
-        rounds = sorted({int(item.get("round", 1)) for item in data.get("matches", []) if item.get("stage") != "group"})
+        progression_matches = [item for item in data.get("matches", []) if item.get("stage") not in {"group", "third_place"}]
+        rounds = sorted({int(item.get("round", 1)) for item in progression_matches})
         advanced = False
         for round_number in rounds:
-            matches = [item for item in data["matches"] if item.get("stage") != "group" and int(item.get("round", 1)) == round_number]
+            matches = [item for item in progression_matches if int(item.get("round", 1)) == round_number]
             if not matches or any(item.get("status") == "open" for item in matches):
                 continue
             winners = [item["winner"] for item in matches if item.get("winner")]
@@ -258,31 +351,15 @@ def advance_bracket(data: dict) -> None:
             next_round = round_number + 1
             if any(int(item.get("round", 1)) == next_round for item in data["matches"]):
                 continue
+            if len(winners) == 2 and len(matches) == 2:
+                losers = [match_loser(match) for match in matches]
+                if all(losers):
+                    data["matches"].append(bracket_match(losers[0], losers[1], stage="third_place", round_number=next_round, bracket="third_place"))
             for index in range(0, len(winners) - 1, 2):
-                data["matches"].append({
-                    "id": uuid4().hex,
-                    "round": next_round,
-                    "stage": "playoff",
-                    "a": winners[index],
-                    "b": winners[index + 1],
-                    "winner": None,
-                    "votes_a": 0,
-                    "votes_b": 0,
-                    "status": "open",
-                })
+                data["matches"].append(bracket_match(winners[index], winners[index + 1], stage="playoff", round_number=next_round))
             if len(winners) % 2:
                 bye = winners[-1]
-                data["matches"].append({
-                    "id": uuid4().hex,
-                    "round": next_round,
-                    "stage": "playoff",
-                    "a": bye,
-                    "b": None,
-                    "winner": bye,
-                    "votes_a": 0,
-                    "votes_b": 0,
-                    "status": "bye",
-                })
+                data["matches"].append(bracket_match(bye, None, stage="playoff", round_number=next_round))
             advanced = True
             break
         if not advanced:
@@ -544,13 +621,29 @@ async def close_competition(competition_id: int, request: Request, _: User = Dep
         if any(match.get("status") == "open" and not match.get("winner") for match in data.get("matches", [])):
             raise HTTPException(status_code=400, detail="Сначала завершите все пары")
     if item.kind == "tournament":
-        final_round = max((int(match.get("round", 1)) for match in data.get("matches", []) if match.get("stage") != "group"), default=1)
-        final = next((match for match in data.get("matches", []) if match.get("stage") != "group" and int(match.get("round", 1)) == final_round), None)
-        ordered_ids = [final.get("winner")] if final and final.get("winner") else []
-        if final:
-            loser = final.get("b") if final.get("winner") == final.get("a") else final.get("a")
-            if loser:
-                ordered_ids.append(loser)
+        progression_matches = [
+            match for match in data.get("matches", [])
+            if match.get("stage") not in {"group", "third_place"}
+        ]
+        final_round = max((int(match.get("round", 1)) for match in progression_matches), default=1)
+        final = next(
+            (
+                match for match in progression_matches
+                if int(match.get("round", 1)) == final_round and match.get("b")
+            ),
+            None,
+        )
+        third_place = next(
+            (match for match in data.get("matches", []) if match.get("stage") == "third_place"),
+            None,
+        )
+        ordered_ids: list[str] = []
+        for match in (final, third_place):
+            if not match:
+                continue
+            for participant_id in (match.get("winner"), match_loser(match)):
+                if participant_id and participant_id not in ordered_ids:
+                    ordered_ids.append(participant_id)
         ordered_ids.extend(entry.get("id") for entry in data.get("participants", []) if entry.get("id") not in ordered_ids)
         vote_totals = {}
         for match in data.get("matches", []):
