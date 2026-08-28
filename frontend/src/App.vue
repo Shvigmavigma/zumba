@@ -1,7 +1,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CalendarDays, Calculator, Clock3, Flag, Home, Languages, ListChecks, LogIn, LogOut, Medal, Moon, MoreHorizontal, Newspaper, Shield, Sun, Trophy, User, Users } from 'lucide-vue-next'
+import { useRoute } from 'vue-router'
+import { CalendarDays, Calculator, Clock3, Flag, Home, Languages, ListChecks, LogIn, LogOut, Medal, Moon, MoreHorizontal, Newspaper, Shield, Sun, Trophy, User, Users, Vote } from 'lucide-vue-next'
 import { api } from './api'
 import { statusLabel } from './i18nLabels'
 import { brandingSettings, ensureBrandingSettings } from './brandingSettings'
@@ -9,8 +10,10 @@ import { clearSession, setSession, state } from './store'
 import { timeZoneOptions } from './timezone'
 
 const { t, locale } = useI18n()
+const route = useRoute()
 
 const isStaff = computed(() => ['admin', 'moder', 'marshall'].includes(state.user?.role))
+const isStandaloneCompetition = computed(() => route.name === 'competition-bracket' || (route.name === 'competition-view' && Boolean(route.query.match)))
 const canManageRaces = computed(() => ['admin', 'moder'].includes(state.user?.role))
 const canEditBanners = computed(() => ['admin', 'moder', 'smm'].includes(state.user?.role))
 const canManageNews = computed(() => ['admin', 'moder', 'smm'].includes(state.user?.role))
@@ -37,6 +40,7 @@ const navItems = computed(() => [
   { key: 'moderation', to: '/moderation/users', label: t('nav.moderation'), icon: User, visible: isStaff.value },
   { key: 'banners', to: '/banners', label: t('nav.banners'), icon: null, visible: canEditBanners.value },
   { key: 'news', to: '/news/manage', label: t('nav.news'), icon: Newspaper, visible: canManageNews.value },
+  { key: 'competitions', to: '/competitions/manage', label: t('nav.competitions'), icon: Vote, visible: ['admin', 'moder'].includes(state.user?.role) },
   { key: 'admin', to: '/admin/users', label: t('nav.admin'), icon: null, visible: state.user?.role === 'admin' }
 ].filter((item) => item.visible))
 
@@ -199,7 +203,22 @@ watch(navItems, () => {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div v-if="isStandaloneCompetition" class="standalone-bracket-shell">
+    <div class="standalone-bracket-shell-bar">
+      <RouterLink class="standalone-bracket-brand" to="/" aria-label="BMRL — на главную">
+        <img class="brand-logo brand-logo-light" :src="brandingSettings.light_logo_url" alt="BMRL" />
+        <img class="brand-logo brand-logo-dark" :src="brandingSettings.dark_logo_url" alt="BMRL" />
+      </RouterLink>
+      <button class="icon-button standalone-bracket-theme-toggle" type="button" :aria-label="themeTitle" :title="themeTitle" @click="toggleTheme">
+        <Sun v-if="state.theme === 'dark'" :size="18" />
+        <Moon v-else :size="18" />
+      </button>
+    </div>
+    <main class="standalone-bracket-main">
+      <RouterView />
+    </main>
+  </div>
+  <div v-else class="app-shell">
     <header class="topbar">
       <RouterLink class="brand" to="/">
         <img class="brand-logo brand-logo-light" :src="brandingSettings.light_logo_url" alt="" />

@@ -504,6 +504,28 @@ class AppSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
 
+class MediaCompetition(Base):
+    """Staff-managed image voting or tournament persisted as one JSON document.
+
+    Keeping the mutable bracket in JSONB makes the feature additive to the
+    existing schema and lets a competition be exported/imported as one unit.
+    """
+
+    __tablename__ = "media_competitions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(160), index=True)
+    kind: Mapped[str] = mapped_column(String(20), default="vote", server_default="vote", index=True)
+    status: Mapped[str] = mapped_column(String(20), default="draft", server_default="draft", index=True)
+    public_token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    data: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    creator: Mapped[User] = relationship(foreign_keys=[created_by])
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 

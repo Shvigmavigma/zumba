@@ -17,7 +17,8 @@ export const messages = {
       news: 'Новости',
       championships: 'Чемпионаты',
       fuel: 'Топливо',
-      hallOfFame: 'Общий рейтинг'
+      hallOfFame: 'Общий рейтинг',
+      competitions: 'Голосования'
     },
     common: {
       save: 'Сохранить',
@@ -773,7 +774,8 @@ export const messages = {
       news: 'News',
       championships: 'Championships',
       fuel: 'Fuel',
-      hallOfFame: 'Overall Rating'
+      hallOfFame: 'Overall Rating',
+      competitions: 'Competitions'
     },
     common: {
       save: 'Save',
