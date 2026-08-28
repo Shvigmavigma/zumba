@@ -49,7 +49,7 @@ const donationSaved = ref(false)
 const licenseTiers = ref(DEFAULT_LICENSE_TIERS)
 const licenseSaving = ref(false)
 const licenseSaved = ref(false)
-const systemSettings = ref({ requests_per_user_per_minute: 1200, rating_change_coefficient: 1.5, sr_per_race: 0.3 })
+const systemSettings = ref({ requests_per_user_per_minute: 1200, requests_per_ip_per_minute: 1200, rating_change_coefficient: 1.5, sr_per_race: 0.3 })
 const systemSettingsSaving = ref(false)
 const systemSettingsSaved = ref(false)
 const logoFiles = ref({ light: null, dark: null })
@@ -204,6 +204,7 @@ async function load() {
     setBrandingSettings(loadedBrandingSettings)
     systemSettings.value = {
       requests_per_user_per_minute: loadedSystemSettings.requests_per_user_per_minute,
+      requests_per_ip_per_minute: loadedSystemSettings.requests_per_ip_per_minute ?? loadedSystemSettings.requests_per_user_per_minute,
       rating_change_coefficient: loadedSystemSettings.rating_change_coefficient,
       sr_per_race: loadedSystemSettings.sr_per_race
     }
@@ -349,6 +350,7 @@ async function saveSystemSettings() {
       method: 'PATCH',
       body: {
         requests_per_user_per_minute: Number(systemSettings.value.requests_per_user_per_minute),
+        requests_per_ip_per_minute: Number(systemSettings.value.requests_per_ip_per_minute),
         rating_change_coefficient: Number(systemSettings.value.rating_change_coefficient),
         sr_per_race: Number(systemSettings.value.sr_per_race)
       }
@@ -873,6 +875,10 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       <label class="field">
         <span>{{ t('adminUsers.rateLimitField') }}</span>
         <input v-model.number="systemSettings.requests_per_user_per_minute" type="number" min="1" max="10000" required />
+      </label>
+      <label class="field">
+        <span>{{ t('adminUsers.rateLimitIpField') }}</span>
+        <input v-model.number="systemSettings.requests_per_ip_per_minute" type="number" min="1" max="10000" required />
       </label>
       <label class="field">
         <span>{{ t('adminUsers.ratingCoefficientField') }}</span>

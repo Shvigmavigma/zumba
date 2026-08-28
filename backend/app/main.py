@@ -10,7 +10,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import get_settings
 from app.db import SessionLocal, db_initialization_lock, init_db
-from app.rate_limit import limiter
+from app.rate_limit import check_dynamic_rate_limit, limiter
 from app.audit import actor_from_request, request_audit_details, write_audit_log_with_details
 from app.routers import app_settings, appeals, audit, auth, banners, championships, dashboard, hall_of_fame, news, penalties, race_assets, races, setups, teams, twitch, users
 from app.seed import seed_defaults
@@ -52,6 +52,18 @@ async def audit_changes(request, call_next):
     if actor is not None and 200 <= response.status_code < 400:
         await write_audit_log_with_details(request, response.status_code, actor, details)
     return response
+
+
+@app.middleware("http")
+async def runtime_rate_limits(request, call_next):
+    violation = check_dynamic_rate_limit(request)
+    if violation is not None:
+        scope, limit = violation
+        return ORJSONResponse(
+            {"detail": f"Rate limit exceeded for {scope}", "limit": limit, "window": "minute"},
+            status_code=429,
+        )
+    return await call_next(request)
 
 app.add_middleware(
     CORSMiddleware,

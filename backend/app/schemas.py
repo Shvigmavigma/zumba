@@ -1081,12 +1081,14 @@ class WeatherSettingsRead(BaseModel):
 
 class SystemSettingsRead(BaseModel):
     requests_per_user_per_minute: int = Field(ge=1, le=10000)
+    requests_per_ip_per_minute: int = Field(ge=1, le=10000)
     rating_change_coefficient: float = Field(gt=0, le=10)
     sr_per_race: float = Field(ge=0, le=100)
 
 
 class SystemSettingsUpdate(BaseModel):
     requests_per_user_per_minute: int = Field(ge=1, le=10000)
+    requests_per_ip_per_minute: int | None = Field(default=None, ge=1, le=10000)
     rating_change_coefficient: float = Field(gt=0, le=10)
     sr_per_race: float = Field(ge=0, le=100)
 
