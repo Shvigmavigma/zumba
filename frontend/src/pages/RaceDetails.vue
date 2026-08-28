@@ -614,13 +614,17 @@ async function forceRegisterPilot() {
   actionPending.value = true
   try {
     if (!forcePilotId.value) throw new Error(t('raceDetails.forceRegistrationPilotRequired'))
-    race.value = await api(`/races/${race.value.id}/registrations/${Number(forcePilotId.value)}`, {
+    const raceId = race.value.id
+    await api(`/races/${raceId}/registrations/${Number(forcePilotId.value)}`, {
       method: 'POST',
       body: {
         car_model: forcePilotCar.value || race.value.allowed_cars?.[0] || 'TBD',
         pilot_number: parsePilotNumber(forcePilotNumber.value)
       }
     })
+    // Refresh the race payload so the participant list updates immediately,
+    // even when a proxy serves a response without the expanded registrations.
+    race.value = await api(`/races/${raceId}`)
     forcePilotId.value = ''
     forcePilotNumber.value = ''
   } catch (err) {
