@@ -52,6 +52,11 @@ const manualPilotLoading = ref(false)
 const myTeam = ref(null)
 const teamRaceNumber = ref(pilotNumberDraft(state.user?.pilot_number))
 const teamDriverIds = ref([])
+const forcePilotId = ref('')
+const forcePilotNumber = ref('')
+const forcePilotCar = ref('')
+const forcePilotCandidates = ref([])
+const forcePilotLoading = ref(false)
 const raceAssetConfig = computed(() => {
   const game = race.value?.game
   if (!game) return { track_images: {} }
@@ -79,6 +84,7 @@ const teamRegistered = computed(() => Boolean(myTeamRegistration.value))
 const teamRegistrationDrivers = computed(() => myTeamRegistration.value?.drivers || [])
 const canManageTeamRegistration = computed(() => Boolean(race.value?.is_team_event && myTeam.value?.is_owner))
 const canManageRace = computed(() => ['admin', 'moder'].includes(state.user?.role))
+const canForcePilotRegistration = computed(() => canManageRace.value && state.user?.role === 'admin' && Boolean(race.value) && !race.value.is_team_event && !['ongoing', 'finished'].includes(race.value.status))
 const canRemovePilotRegistration = computed(() => canManageRace.value && Boolean(race.value) && !race.value.is_team_event && !['ongoing', 'finished'].includes(race.value.status))
 const canIssuePenalty = computed(() => ['admin', 'moder', 'marshall'].includes(state.user?.role) && ['ongoing', 'finished'].includes(race.value?.status))
 const isChampionshipStage = computed(() => Boolean(race.value?.championship_id))
@@ -575,6 +581,55 @@ function selectedTeamDriverMembers() {
   return teamDriverIds.value.map((id) => members.get(id)).filter(Boolean)
 }
 
+function selectedForcePilot() {
+  return forcePilotCandidates.value.find((pilot) => Number(pilot.id) === Number(forcePilotId.value)) || null
+}
+
+function updateForcePilotDefaults() {
+  const pilot = selectedForcePilot()
+  forcePilotNumber.value = pilot ? pilotNumberDraft(pilot.pilot_number) : ''
+  forcePilotCar.value = race.value?.allowed_cars?.[0] || ''
+}
+
+async function loadForcePilotCandidates(currentRace) {
+  forcePilotCandidates.value = []
+  forcePilotId.value = ''
+  forcePilotNumber.value = ''
+  forcePilotCar.value = currentRace?.allowed_cars?.[0] || ''
+  if (state.user?.role !== 'admin' || currentRace?.is_team_event || ['ongoing', 'finished'].includes(currentRace?.status)) return
+  forcePilotLoading.value = true
+  try {
+    const params = new URLSearchParams({ limit: '100', rating_game: currentRace.game || 'ACC' })
+    forcePilotCandidates.value = await api(`/users/pilots?${params.toString()}`)
+  } catch {
+    forcePilotCandidates.value = []
+  } finally {
+    forcePilotLoading.value = false
+  }
+}
+
+async function forceRegisterPilot() {
+  if (!race.value || !canForcePilotRegistration.value) return
+  error.value = ''
+  actionPending.value = true
+  try {
+    if (!forcePilotId.value) throw new Error(t('raceDetails.forceRegistrationPilotRequired'))
+    race.value = await api(`/races/${race.value.id}/registrations/${Number(forcePilotId.value)}`, {
+      method: 'POST',
+      body: {
+        car_model: forcePilotCar.value || race.value.allowed_cars?.[0] || 'TBD',
+        pilot_number: parsePilotNumber(forcePilotNumber.value)
+      }
+    })
+    forcePilotId.value = ''
+    forcePilotNumber.value = ''
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    actionPending.value = false
+  }
+}
+
 async function load() {
   try {
     const loadedRace = await api(`/races/${route.params.id}`)
@@ -589,6 +644,7 @@ async function load() {
     race.value = loadedRace
     fanVote.value = loadedFanVote
     raceAssets.value = loadedRaceAssets
+    await loadForcePilotCandidates(loadedRace)
     await loadTrackAverageLap(loadedRace)
     if (state.user?.team_id && loadedRace.is_team_event) {
       try {
@@ -1240,6 +1296,38 @@ watch(visibleParticipants, () => {
             </button>
           </div>
         </div>
+
+        <form v-if="canForcePilotRegistration" class="force-pilot-registration" @submit.prevent="forceRegisterPilot">
+          <div class="force-pilot-registration-copy">
+            <strong>{{ t('raceDetails.forceRegistrationTitle') }}</strong>
+            <span>{{ t('raceDetails.forceRegistrationHint') }}</span>
+          </div>
+          <div class="force-pilot-registration-fields">
+            <label class="field">
+              <span>{{ t('raceDetails.forceRegistrationPilot') }}</span>
+              <select v-model="forcePilotId" :disabled="forcePilotLoading || actionPending" required @change="updateForcePilotDefaults">
+                <option value="" disabled>{{ forcePilotLoading ? t('common.loading') : t('raceDetails.forceRegistrationPilotRequired') }}</option>
+                <option v-for="pilot in forcePilotCandidates" :key="pilot.id" :value="String(pilot.id)">
+                  {{ participantName(pilot) }} · #{{ formatPilotNumber(pilot.pilot_number) }}
+                </option>
+              </select>
+            </label>
+            <label class="field">
+              <span>{{ t('common.car') }}</span>
+              <select v-model="forcePilotCar" :disabled="actionPending">
+                <option v-if="!race.allowed_cars?.length" value="">TBD</option>
+                <option v-for="item in race.allowed_cars" :key="item" :value="item">{{ item }}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>{{ t('fields.pilotNumber') }}</span>
+              <input v-model="forcePilotNumber" inputmode="numeric" pattern="[0-9]{3}" minlength="3" maxlength="3" placeholder="001" required :disabled="actionPending" />
+            </label>
+            <button class="button primary" type="submit" :disabled="actionPending || forcePilotLoading || !forcePilotId">
+              {{ t('raceDetails.forceRegistrationSubmit') }}
+            </button>
+          </div>
+        </form>
 
         <div v-if="participantsExpanded && !race.is_team_event" class="pilot-inline-controls">
           <input v-model="participantSearch" type="search" :placeholder="t('raceDetails.participantSearch')" />

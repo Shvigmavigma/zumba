@@ -45,6 +45,7 @@
 - 2026-08-27 — admin safety controls: the system-admin row is read-only in the admin UI, bulk deletion is system-admin-only with a separate password, and host destruction stays outside the browser in favour of a verified SSH backup script.
 - 2026-08-28 — result profiles and SR: result names link to pilot profiles; SR is rebuilt from the configured per-race value multiplied by each pilot's finished-race count, with penalties reapplied, while moderation cards no longer render e-mail addresses.
 - 2026-08-28 — expected track laps: the existing race-assets editor stores an optional per-track expected average lap in milliseconds, with token-based admin inputs accepting `m:ss.mmm`; race details and track cards expose the value alongside measured averages.
+- 2026-08-28 — admin race registration: the race participants card exposes a compact admin-only force-registration form using the existing field, button, border, and responsive grid tokens.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, default-avatar, system-setting, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
@@ -55,6 +56,7 @@
 - `frontend/src/components/AuditLogPanel.vue` — compact, refreshable staff audit history panel with explicit empty and error states.
 - `frontend/src/pages/NewsManage.vue` — news editor with single-item pin controls and pinned-first management ordering.
 - `frontend/src/pages/RaceDetails.vue` — moderator-only pilot removal action in the individual registration list, with confirmation and refreshed pagination.
+- `frontend/src/pages/RaceDetails.vue` — admin-only force registration form for adding active pilots before a race starts.
 - `frontend/src/pages/NewsManage.vue` — autoplay interval/pause settings plus single-pinned-news state reconciliation after saves.
 - `frontend/src/components/ProfileAnalytics.vue` — reusable profile statistics block with simulator filter, best-lap source labels, recent result links, and an SVG rating trend.
 - `frontend/src/pages/PilotList.vue` — track records table with the qualifying/race source for each selected best lap.

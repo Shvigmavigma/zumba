@@ -4686,6 +4686,43 @@ textarea {
   margin-bottom: 0;
 }
 
+.force-pilot-registration {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--primary) 7%, var(--panel));
+}
+
+.force-pilot-registration-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.force-pilot-registration-copy strong {
+  color: var(--text);
+  font-weight: 900;
+}
+
+.force-pilot-registration-copy span {
+  color: var(--muted);
+  font-size: var(--small-text-size);
+  font-weight: 750;
+}
+
+.force-pilot-registration-fields {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) minmax(170px, 1fr) 120px auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.force-pilot-registration-fields .button {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
 .race-participants-panel h2,
 .race-participants-panel p,
 .race-video-panel h2,
@@ -6707,6 +6744,10 @@ select,
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .force-pilot-registration-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .pilot-profile-card,
   .pilot-public-grid,
   .race-admin-filters,
@@ -6826,7 +6867,8 @@ select,
 
   .pilot-list-header,
   .pilot-list-controls,
-  .pilot-inline-controls {
+  .pilot-inline-controls,
+  .force-pilot-registration-fields {
     grid-template-columns: minmax(0, 1fr);
   }
 

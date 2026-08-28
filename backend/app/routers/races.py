@@ -1863,6 +1863,69 @@ async def register_for_race(
     return race
 
 
+@router.post("/{race_id}/registrations/{user_id}", response_model=RaceRead)
+@limiter.limit("120/minute")
+async def force_register_pilot_for_race(
+    race_id: int,
+    user_id: int,
+    request: Request,
+    payload: RaceRegisterRequest,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Register an active pilot from the admin race-management panel."""
+    result = await session.execute(select(Race).where(Race.id == race_id).with_for_update())
+    race = result.scalar_one_or_none()
+    if race is None:
+        raise HTTPException(status_code=404, detail="Race not found")
+    update_time_based_status(race)
+    if race.is_team_event:
+        raise HTTPException(status_code=400, detail="Team races use team registration")
+    if race.status in {RaceStatus.ongoing, RaceStatus.finished}:
+        raise HTTPException(status_code=400, detail="Registration can be changed only before the race starts")
+    target = await session.scalar(
+        select(User).where(User.id == user_id, User.status == UserStatus.active)
+    )
+    if target is None:
+        raise HTTPException(status_code=404, detail="Active pilot not found")
+    registration_number = payload.pilot_number or target.pilot_number
+    if registration_number == 0:
+        raise HTTPException(status_code=400, detail="Pilot number 000 is not allowed")
+    if race.allowed_cars and payload.car_model not in race.allowed_cars:
+        raise HTTPException(status_code=400, detail="Car is not allowed")
+    existing = await session.scalar(
+        select(RaceRegistration).where(
+            RaceRegistration.race_id == race.id,
+            RaceRegistration.user_id == target.id,
+        )
+    )
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="Pilot is already registered")
+    await ensure_race_pilot_number_available(session, race.id, registration_number)
+    registered_count = await session.scalar(
+        select(func.count()).select_from(RaceRegistration).where(RaceRegistration.race_id == race.id)
+    )
+    if (registered_count or 0) >= race.max_pilots:
+        raise HTTPException(status_code=409, detail="Race is full")
+    session.add(
+        RaceRegistration(
+            race_id=race.id,
+            user_id=target.id,
+            car_model=payload.car_model,
+            pilot_number=registration_number,
+            registered_at=datetime.now(timezone.utc),
+        )
+    )
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="Pilot number is already taken in this race") from exc
+    await session.refresh(race)
+    await attach_registered_pilots(session, [race])
+    return race
+
+
 @router.post("/{race_id}/team-register", response_model=RaceRead)
 @limiter.limit("120/minute")
 async def register_team_for_race(
