@@ -3457,7 +3457,7 @@ textarea {
 }
 
 .admin-system-config-card {
-  grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(150px, 0.55fr)) auto auto;
+  grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(150px, 0.55fr)) auto auto;
   align-items: end;
 }
 

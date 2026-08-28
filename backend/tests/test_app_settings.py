@@ -1,6 +1,6 @@
 import unittest
 
-from app.routers.app_settings import DEFAULT_AVATAR_URL, DEFAULT_LOGOS, DEFAULT_RATING_CHANGE_COEFFICIENT, DEFAULT_REQUESTS_PER_USER_PER_MINUTE, DEFAULT_SR_PER_RACE, branding_settings_from_value, system_settings_from_value
+from app.routers.app_settings import DEFAULT_AVATAR_URL, DEFAULT_LOGOS, DEFAULT_RATING_CHANGE_COEFFICIENT, DEFAULT_REQUESTS_PER_IP_PER_MINUTE, DEFAULT_REQUESTS_PER_USER_PER_MINUTE, DEFAULT_SR_PER_RACE, branding_settings_from_value, system_settings_from_value
 
 
 class BrandingSettingsTest(unittest.TestCase):
@@ -23,14 +23,19 @@ class BrandingSettingsTest(unittest.TestCase):
             system_settings_from_value(None).model_dump(),
             {
                 "requests_per_user_per_minute": DEFAULT_REQUESTS_PER_USER_PER_MINUTE,
+                "requests_per_ip_per_minute": DEFAULT_REQUESTS_PER_IP_PER_MINUTE,
                 "rating_change_coefficient": DEFAULT_RATING_CHANGE_COEFFICIENT,
                 "sr_per_race": DEFAULT_SR_PER_RACE,
             },
         )
         normalized = system_settings_from_value({"rate_limit_per_minute": 0, "rating_change_coefficient": 99})
         self.assertEqual(normalized.requests_per_user_per_minute, 1)
+        self.assertEqual(normalized.requests_per_ip_per_minute, 1)
         self.assertEqual(normalized.rating_change_coefficient, 10)
         self.assertEqual(normalized.sr_per_race, DEFAULT_SR_PER_RACE)
+        separate = system_settings_from_value({"requests_per_user_per_minute": 5, "requests_per_ip_per_minute": 7})
+        self.assertEqual(separate.requests_per_user_per_minute, 5)
+        self.assertEqual(separate.requests_per_ip_per_minute, 7)
 
     def test_legacy_sr_coefficient_is_migrated_to_common_rating_coefficient(self):
         normalized = system_settings_from_value({"sr_change_coefficient": 2.5})

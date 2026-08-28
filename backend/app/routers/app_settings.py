@@ -9,7 +9,7 @@ from app.config import get_settings
 from app.db import get_session
 from app.deps import require_admin, require_news_editor
 from app.models import AppSetting, User
-from app.rate_limit import limiter, set_requests_per_user_per_minute
+from app.rate_limit import limiter, set_request_limits
 from app.schemas import BrandingSettingsRead, DonationSettingsRead, DonationSettingsUpdate, LicenseSettingsRead, LicenseSettingsUpdate, NewsSettingsRead, NewsSettingsUpdate, SystemSettingsRead, SystemSettingsUpdate, WeatherSettingsRead
 from app.services import recalculate_all_ratings
 
@@ -31,6 +31,7 @@ DEFAULT_LOGOS = {
 }
 DEFAULT_AVATAR_URL = "/assets/avatar-template.jpg"
 DEFAULT_REQUESTS_PER_USER_PER_MINUTE = 1200
+DEFAULT_REQUESTS_PER_IP_PER_MINUTE = 1200
 DEFAULT_RATING_CHANGE_COEFFICIENT = 1.5
 DEFAULT_SR_PER_RACE = 0.3
 # Kept as an import-compatible alias for older callers.
@@ -129,6 +130,15 @@ def system_settings_from_value(value: dict | None) -> SystemSettingsRead:
     except (TypeError, ValueError):
         requests_per_user = DEFAULT_REQUESTS_PER_USER_PER_MINUTE
     try:
+        requests_per_ip = int(
+            value.get(
+                "requests_per_ip_per_minute",
+                value.get("rate_limit_per_ip", requests_per_user),
+            )
+        )
+    except (TypeError, ValueError):
+        requests_per_ip = DEFAULT_REQUESTS_PER_IP_PER_MINUTE
+    try:
         coefficient = float(
             value.get(
                 "rating_change_coefficient",
@@ -143,6 +153,7 @@ def system_settings_from_value(value: dict | None) -> SystemSettingsRead:
         sr_per_race = DEFAULT_SR_PER_RACE
     return SystemSettingsRead(
         requests_per_user_per_minute=max(1, min(10000, requests_per_user)),
+        requests_per_ip_per_minute=max(1, min(10000, requests_per_ip)),
         rating_change_coefficient=max(0.01, min(10, coefficient)),
         sr_per_race=max(0, min(100, sr_per_race)),
     )
@@ -184,7 +195,7 @@ async def load_runtime_settings(session: AsyncSession) -> SystemSettingsRead:
     elif setting.value != normalized_value:
         setting.value = normalized_value
         await session.commit()
-    set_requests_per_user_per_minute(value.requests_per_user_per_minute)
+    set_request_limits(value.requests_per_user_per_minute, value.requests_per_ip_per_minute)
     return value
 
 
@@ -356,6 +367,7 @@ async def update_system_settings(
 ):
     value = {
         "requests_per_user_per_minute": payload.requests_per_user_per_minute,
+        "requests_per_ip_per_minute": payload.requests_per_ip_per_minute or payload.requests_per_user_per_minute,
         "rating_change_coefficient": payload.rating_change_coefficient,
         "sr_per_race": payload.sr_per_race,
     }
@@ -365,7 +377,7 @@ async def update_system_settings(
     else:
         setting.value = value
     normalized = system_settings_from_value(value)
-    set_requests_per_user_per_minute(normalized.requests_per_user_per_minute)
+    set_request_limits(normalized.requests_per_user_per_minute, normalized.requests_per_ip_per_minute)
     await session.flush()
     await recalculate_all_ratings(session)
     await session.commit()
