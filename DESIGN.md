@@ -49,6 +49,26 @@
 - 2026-08-28 — admin race registration refresh: after a force-registration request, RaceDetails reloads the race payload so the participant list updates immediately without a page refresh.
 - 2026-08-28 — rating chart hover: profile rating points expose a keyboard-focusable, theme-aware tooltip with the pilot's rating and change at that race.
 - 2026-08-28 — runtime request limits: the admin system card controls independent per-user and per-IP limits, enforced by a shared Redis-backed runtime guard.
+- 2026-08-28 — media competitions: staff-only competition manager and public viewer use existing cards, fields, pills, borders, and token colors; each participant supports up to four responsive image slots, anti-bot arithmetic verification, public vote/match links, and polling for live intermediate results.
+- 2026-08-28 — media viewer reliability: polling keeps the active captcha challenge stable until a vote is submitted, pair URLs focus one match, and public tournament viewers include closed matches with winner and vote totals for live bracket history.
+- 2026-08-28 — media viewer anti-bot hardening: captcha tokens are opaque and answers stay in Redis (with an expiring local fallback), so the expected result is never encoded in the browser payload.
+- 2026-08-28 — media competition overview links: the tournament's main public URL shows every candidate, a horizontally scrollable round/group bracket, and links to each pair; pair URLs remain focused on one duel.
+- 2026-08-28 — media competition standalone bracket: tournament overview links use a separate read-only page with only the themed logo in the shell; candidates are shown inside horizontally scrollable playoff/group columns and pair links remain separate.
+- 2026-08-28 — media competition public shell: individual pair voting links use the same logo-only shell while preserving only the pair's captcha and vote controls; the staff manager exposes a dedicated `Сетка` action beside tournament overview links.
+- 2026-08-28 — media competition visual polish: public vote cards and pair battles use token-based hierarchy, score/progress indicators, initials fallbacks, status states, live totals, and responsive loading/empty surfaces.
+- 2026-08-28 — media competition theme control: standalone public voting and bracket pages expose the shared light/dark theme toggle beside the logo, with token-based focus and responsive spacing.
+- 2026-08-28 — media competition bracket connectors: stage headings align to the first match and columns use wider token spacing with connector strokes between match blocks.
+- 2026-08-28 — media competition bracket alignment: playoff columns use fixed card geometry and calculated offsets/gaps, so connector lines meet the midpoint of the next round without pseudo-element drift.
+- 2026-08-28 — media competition bracket joinery: paired cards use connected branch segments inside the stage gap, avoiding detached vertical strokes or overhanging connector ends.
+- 2026-08-28 — media competition bracket joinery: the outgoing midpoint connector starts at the vertical pair junction, while each round heading follows its first card vertically.
+- 2026-08-28 — media competition bracket phases: tournament public pages expose the selection system, switch group and playoff phases with compact tabs, and make each match card the link to its pair page.
+- 2026-08-28 — media competition media flow: participant uploads accept several selected files by batching the existing one-file endpoint up to four images; all staff and public image tiles open in a shared keyboard-friendly lightbox viewer.
+- 2026-08-28 — upload delivery: the nginx upload alias serves the shared backend volume directly, avoiding `try_files` path rewriting that could return 404 for valid competition images.
+- 2026-08-29 — completed tournament results: the public bracket switches between the playoff bracket, group stage, and a final results view with a winner highlight, centred three-place podium, vote shares, and a full ranking; tournament pages no longer expose a separate voting tab.
+- 2026-08-29 — competition media uploads: the participant media endpoint accepts repeated multipart `file` fields in one request, validates all selected files before saving, and commits the participant once; the manager sends one request for a multi-selection and reports how many of the four available slots were added.
+- 2026-08-29 — competition media persistence: JSONB participant data is deep-copied before nested image/name edits so SQLAlchemy detects the replacement and stores uploaded URLs for staff and public viewers.
+- 2026-08-29 — competition voting carousel: public vote cards use a vertical list with one prominent active image per candidate, keyboard-friendly previous/next controls, position counters, and a direct vote action; pair voting uses the same carousel pattern on each side without nested interactive buttons.
+- 2026-08-29 — competition revoting: the same device token can change its general or pair vote after a fresh captcha check; JSONB counts move from the previous choice to the new one and public controls mark the saved choice with an explicit «Переголосовать» action.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
@@ -68,6 +88,8 @@
 - `frontend/src/pages/RaceCalendar.vue` — selected race cards with schedule and leading-weather imagery.
 - `frontend/src/pages/AdminUserList.vue` — admin weather-condition light/dark image uploads and previews.
 - `frontend/src/components/RaceAssetsEditor.vue` — per-track expected average lap inputs with format guidance and validation.
+- `frontend/src/pages/Competitions.vue` — moderator/admin competition manager plus public vote and tournament viewer with responsive image cards, carousel-based voting/duels, link export, anti-bot challenge, and live result polling.
+- `frontend/src/pages/CompetitionBracket.vue` — standalone public tournament bracket page with no application navigation or authentication controls.
 
 ## Non-Goals
 - No Figma sync

@@ -19,6 +19,8 @@ import TeamList from './pages/TeamList.vue'
 import HallOfFame from './pages/HallOfFame.vue'
 import ChampionshipList from './pages/ChampionshipList.vue'
 import FuelCalculator from './pages/FuelCalculator.vue'
+import Competitions from './pages/Competitions.vue'
+import CompetitionBracket from './pages/CompetitionBracket.vue'
 import { state } from './store'
 
 const router = createRouter({
@@ -44,7 +46,10 @@ const router = createRouter({
     { path: '/banners', component: BannerEdit, meta: { roles: ['admin', 'moder', 'smm'] } },
     { path: '/news/manage', component: NewsManage, meta: { roles: ['admin', 'moder', 'smm'] } },
     { path: '/admin/users', component: AdminUserList, meta: { roles: ['admin'] } },
-    { path: '/moderation/users', component: UserEditModeration, meta: { roles: ['admin', 'moder'] } }
+    { path: '/moderation/users', component: UserEditModeration, meta: { roles: ['admin', 'moder'] } },
+    { path: '/competitions/manage', name: 'competition-manage', component: Competitions, meta: { roles: ['admin', 'moder'] } },
+    { path: '/competitions/bracket/:token', name: 'competition-bracket', component: CompetitionBracket },
+    { path: '/competitions/view/:token', name: 'competition-view', component: Competitions }
   ]
 })
 
