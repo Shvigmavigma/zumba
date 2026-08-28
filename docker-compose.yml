@@ -42,6 +42,10 @@ services:
       context: ./backend
     restart: unless-stopped
     env_file: .env
+    environment:
+      # Keep the runtime request limit shared by every gunicorn worker even
+      # when an older .env does not contain RATE_LIMIT_STORAGE_URI.
+      RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-redis://redis:6379/0}
     depends_on:
       postgres:
         condition: service_healthy
