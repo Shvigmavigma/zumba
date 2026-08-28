@@ -17,6 +17,7 @@ const error = ref('')
 const analytics = ref({ best_laps: [], recent_results: [], rating_history: [] })
 const activeTab = ref('laps')
 const selectedGame = ref('all')
+const hoveredPoint = ref(null)
 const tabs = computed(() => [
   { key: 'laps', label: t('profile.statsBestLaps') },
   { key: 'results', label: t('profile.statsRecentResults') },
@@ -75,6 +76,16 @@ const chartAreaPath = computed(() => {
 })
 const chartMin = computed(() => chartPoints.value.length ? Math.min(...chartPoints.value.map((item) => item.rating)) : 0)
 const chartMax = computed(() => chartPoints.value.length ? Math.max(...chartPoints.value.map((item) => item.rating)) : 0)
+
+function chartTooltipStyle(point) {
+  const left = Math.min(96, Math.max(4, (point.x / 560) * 100))
+  const top = Math.min(92, Math.max(8, (point.y / 180) * 100))
+  return { left: `${left}%`, top: `${top}%` }
+}
+
+function chartPointLabel(point) {
+  return `${point.race_name || t('profile.currentRating')}: ${formatRating(point.rating)} (${signedChange(point.change)})`
+}
 
 function gameLabel(game) {
   return t(`games.${game}`, game)
@@ -191,20 +202,39 @@ watch(() => props.userId, load)
       <div v-else class="profile-stat-panel profile-rating-panel">
         <div v-if="chartPoints.length" class="profile-rating-chart-wrap">
           <div class="profile-rating-chart-labels"><span>{{ chartMax }}</span><span>{{ chartMin }}</span></div>
-          <svg class="profile-rating-chart" viewBox="0 0 560 180" role="img" :aria-label="t('profile.statsRatingChart')">
-            <defs>
-              <linearGradient id="profile-rating-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="var(--primary)" stop-opacity="0.22" />
-                <stop offset="100%" stop-color="var(--primary)" stop-opacity="0" />
-              </linearGradient>
-            </defs>
-            <line v-for="line in [0, 45, 90, 135, 180]" :key="line" x1="0" :y1="line" x2="560" :y2="line" />
-            <path class="profile-rating-chart-area" :d="chartAreaPath" />
-            <path class="profile-rating-chart-line" :d="chartPath" />
-            <circle v-for="point in chartPoints" :key="`${point.race_id}-${point.recorded_at}`" :cx="point.x" :cy="point.y" r="3.5">
-              <title>{{ point.race_name || t('profile.currentRating') }}: {{ formatRating(point.rating) }} ({{ signedChange(point.change) }})</title>
-            </circle>
-          </svg>
+          <div class="profile-rating-chart-canvas">
+            <svg class="profile-rating-chart" viewBox="0 0 560 180" role="img" :aria-label="t('profile.statsRatingChart')">
+              <defs>
+                <linearGradient id="profile-rating-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--primary)" stop-opacity="0.22" />
+                  <stop offset="100%" stop-color="var(--primary)" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+              <line v-for="line in [0, 45, 90, 135, 180]" :key="line" x1="0" :y1="line" x2="560" :y2="line" />
+              <path class="profile-rating-chart-area" :d="chartAreaPath" />
+              <path class="profile-rating-chart-line" :d="chartPath" />
+              <circle
+                v-for="point in chartPoints"
+                :key="`${point.race_id}-${point.recorded_at}`"
+                :cx="point.x"
+                :cy="point.y"
+                r="3.5"
+                tabindex="0"
+                :aria-label="chartPointLabel(point)"
+                @mouseenter="hoveredPoint = point"
+                @mouseleave="hoveredPoint = null"
+                @focus="hoveredPoint = point"
+                @blur="hoveredPoint = null"
+              >
+                <title>{{ chartPointLabel(point) }}</title>
+              </circle>
+            </svg>
+            <div v-if="hoveredPoint" class="profile-rating-tooltip" :style="chartTooltipStyle(hoveredPoint)" role="status">
+              <strong>{{ formatRating(hoveredPoint.rating) }}</strong>
+              <span>{{ hoveredPoint.race_name || t('profile.currentRating') }}</span>
+              <em :class="changeClass(hoveredPoint.change)">{{ signedChange(hoveredPoint.change) }}</em>
+            </div>
+          </div>
         </div>
         <p v-else class="muted">{{ t('profile.noRatingHistory') }}</p>
         <div v-if="chartPoints.length" class="profile-rating-history">

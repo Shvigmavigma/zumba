@@ -47,6 +47,7 @@
 - 2026-08-28 — expected track laps: the existing race-assets editor stores an optional per-track expected average lap in milliseconds, with token-based admin inputs accepting `m:ss.mmm`; race details and track cards expose the value alongside measured averages.
 - 2026-08-28 — admin race registration: the race participants card exposes a compact admin-only force-registration form using the existing field, button, border, and responsive grid tokens.
 - 2026-08-28 — admin race registration refresh: after a force-registration request, RaceDetails reloads the race payload so the participant list updates immediately without a page refresh.
+- 2026-08-28 — rating chart hover: profile rating points expose a keyboard-focusable, theme-aware tooltip with the pilot's rating and change at that race.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, default-avatar, system-setting, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
