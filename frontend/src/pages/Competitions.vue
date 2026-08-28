@@ -37,7 +37,17 @@ const selectionSystemLabel = (variant) => ({
   direct: 'Прямой плей-офф',
   qualifying: 'Отбор + плей-офф',
   groups: 'Группы + плей-офф',
+  double_elimination: 'Верхняя + нижняя сетка (8 → 4)',
 }[variant] || 'Прямой плей-офф')
+const competitionMatchStageLabel = (match) => ({
+  group: `Группа ${match?.group || 1}`,
+  qualifying: 'Отбор',
+  upper: 'Верхняя сетка',
+  lower: 'Нижняя сетка',
+  semifinal: 'Полуфинал',
+  third_place: 'Матч за 3-е место',
+  playoff: 'Плей-офф',
+}[match?.stage] || 'Плей-офф')
 const publicUrl = (path) => `${window.location.origin}${path}`
 const mediaUrl = (value) => {
   const raw = String(value || '').trim()
@@ -81,18 +91,19 @@ const publicBracketColumns = computed(() => {
   const columns = []
   const byKey = new Map()
   for (const match of viewer.value?.matches || []) {
-    const type = match.stage === 'group' ? 'group' : 'round'
+    const type = match.stage === 'group' ? 'group' : ['upper', 'lower', 'semifinal', 'third_place'].includes(match.stage) ? match.stage : 'round'
     const number = Number(match.stage === 'group' ? match.group : match.round) || 1
     const key = `${type}-${number}`
     let column = byKey.get(key)
     if (!column) {
-      column = { key, type, number, label: type === 'group' ? `Группа ${number}` : `Раунд ${number}`, matches: [] }
+      column = { key, type, number, label: competitionMatchStageLabel(match), matches: [] }
       byKey.set(key, column)
       columns.push(column)
     }
     column.matches.push(match)
   }
-  return columns.sort((left, right) => left.type === right.type ? left.number - right.number : left.type === 'group' ? -1 : 1)
+  const order = { group: 0, upper: 1, lower: 2, semifinal: 3, round: 4, third_place: 5 }
+  return columns.sort((left, right) => order[left.type] - order[right.type] || left.number - right.number)
 })
 const publicMatchPath = (match) => `/competitions/view/${encodeURIComponent(route.params.token)}?match=${encodeURIComponent(match.id)}`
 const publicBracketPath = computed(() => `/competitions/bracket/${encodeURIComponent(route.params.token || '')}`)
@@ -196,6 +207,10 @@ async function saveVariant() {
   if (!selected.value || selected.value.kind !== 'tournament') return
   if (variant.value === 'groups' && !advancingPlaces.value.length) {
     error.value = 'Отметьте хотя бы одно место, выходящее в плей-офф'
+    return
+  }
+  if (variant.value === 'double_elimination' && selected.value.participants.length !== 8) {
+    error.value = 'Для верхней и нижней сетки добавьте ровно 8 участников'
     return
   }
   try {
@@ -435,7 +450,7 @@ onBeforeUnmount(() => {
         </article>
 
         <article v-if="selected.kind === 'tournament' && selected.status === 'draft'" class="card competition-settings-card">
-          <label class="field"><span>Вариант турнирной сетки</span><select v-model="variant"><option value="direct">Прямой плей-офф</option><option value="qualifying">С отбором</option><option value="groups">Группы</option></select></label>
+          <label class="field"><span>Вариант турнирной сетки</span><select v-model="variant"><option value="direct">Прямой плей-офф</option><option value="qualifying">С отбором</option><option value="groups">Группы</option><option value="double_elimination">Верхняя + нижняя сетка (ровно 8)</option></select></label>
           <label v-if="variant === 'groups'" class="field"><span>Количество групп</span><input v-model.number="groupCount" type="number" min="2" max="8" /></label>
           <fieldset v-if="variant === 'groups'" class="competition-advancing-places"><legend>В плей-офф выходят места</legend><div class="competition-place-options"><label v-for="place in groupPlaceOptions" :key="place"><input v-model="advancingPlaces" type="checkbox" :value="place" /><span>{{ place }}-е место</span></label></div><small class="muted">Выбор применяется к каждой группе.</small></fieldset>
           <button class="button" type="button" @click="saveVariant"><Save :size="16" />Сохранить вариант</button>
@@ -456,7 +471,7 @@ onBeforeUnmount(() => {
 
         <article v-if="selected.kind === 'tournament' && selected.matches.length" class="card competition-bracket-card">
           <div class="section-header"><div><h2>Турнирная сетка</h2><p class="muted">Для каждой пары создана отдельная ссылка.</p></div><Trophy :size="22" /></div>
-          <div class="competition-match-list"><div v-for="match in selected.matches" :key="match.id" class="competition-match-row"><span>Раунд {{ match.round }}</span><strong>{{ match.a_name || '—' }} — {{ match.b_name || 'автопроход' }}</strong><span class="muted">{{ match.status === 'open' ? 'Открыта' : 'Завершена' }}</span><button class="button small" type="button" @click="copyLink(match.public_path)"><Copy :size="14" />Ссылка пары</button><a class="button small" :href="publicUrl(match.public_path)" target="_blank" rel="noopener noreferrer"><ExternalLink :size="14" />Открыть</a><button v-if="match.status === 'open'" class="button small primary" type="button" @click="closeMatch(match)"><Check :size="14" />Закрыть пару</button></div></div>
+          <div class="competition-match-list"><div v-for="match in selected.matches" :key="match.id" class="competition-match-row"><span>{{ competitionMatchStageLabel(match) }}</span><strong>{{ match.a_name || '—' }} — {{ match.b_name || 'автопроход' }}</strong><span class="muted">{{ match.status === 'open' ? 'Открыта' : 'Завершена' }}</span><button class="button small" type="button" @click="copyLink(match.public_path)"><Copy :size="14" />Ссылка пары</button><a class="button small" :href="publicUrl(match.public_path)" target="_blank" rel="noopener noreferrer"><ExternalLink :size="14" />Открыть</a><button v-if="match.status === 'open'" class="button small primary" type="button" @click="closeMatch(match)"><Check :size="14" />Закрыть пару</button></div></div>
         </article>
 
         <article v-if="selected.status === 'complete'" class="card competition-results-card"><h2>Результаты</h2><ol><li v-for="result in selected.results" :key="result.participant_id"><strong>{{ selected.participants.find((item) => item.id === result.participant_id)?.name || 'Участник' }}</strong><span>{{ result.votes }} голосов</span></li></ol></article>

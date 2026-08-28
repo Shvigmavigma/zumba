@@ -22,8 +22,10 @@ const selectionSystemLabel = computed(() => ({
   direct: 'Прямой плей-офф',
   qualifying: 'Отбор + плей-офф',
   groups: 'Группы + плей-офф',
+  double_elimination: 'Верхняя + нижняя сетка (8 → 4)',
 }[competition.value?.settings?.variant] || 'Прямой плей-офф'))
 const advancingPlacesDescription = computed(() => {
+  if (competition.value?.settings?.variant === 'double_elimination') return 'Ровно 8 участников: 4 победителя сеток переходят в полуфинал.'
   if (competition.value?.settings?.variant !== 'groups') return ''
   const places = [...new Set((competition.value?.settings?.advancing_places || [1]).map(Number).filter((place) => Number.isInteger(place) && place > 0))].sort((left, right) => left - right)
   return places.length ? `В плей-офф проходят ${places.map((place) => `${place}-е`).join(', ')} места из каждой группы` : ''
@@ -42,7 +44,15 @@ const formatVotes = (value) => {
 }
 const participantInitials = (participant) => String(participant?.name || '?').trim().slice(0, 2).toUpperCase()
 const matchStatusLabel = (match) => match.status === 'open' ? 'Голосование открыто' : match.status === 'bye' ? 'Автопроход' : 'Завершено'
-const matchStageLabel = (match) => match.stage === 'group' ? `Группа ${match.group || 1}` : match.stage === 'qualifying' ? 'Отбор' : 'Плей-офф'
+const matchStageLabel = (match) => ({
+  group: `Группа ${match?.group || 1}`,
+  qualifying: 'Отбор',
+  upper: 'Верхняя сетка',
+  lower: 'Нижняя сетка',
+  semifinal: 'Полуфинал',
+  third_place: 'Матч за 3-е место',
+  playoff: 'Финал',
+}[match?.stage] || 'Плей-офф')
 const matchTotalVotes = (match) => Number(match.votes_a || 0) + Number(match.votes_b || 0)
 const voteShare = (match, side) => {
   const total = matchTotalVotes(match)
@@ -59,15 +69,15 @@ const columns = computed(() => {
   const matches = competition.value?.matches || []
   const matchHeight = 174
   const baseGap = 32
-  const playoffMatches = matches.filter((match) => match.stage !== 'group' && match.stage !== 'qualifying')
+  const playoffMatches = matches.filter((match) => match.stage === 'playoff')
   const maxRound = Math.max(...playoffMatches.map((match) => Number(match.round) || 1), 1)
   const grouped = new Map()
   for (const match of matches) {
-    const type = match.stage === 'group' ? 'group' : match.stage === 'qualifying' ? 'qualifying' : 'playoff'
+    const type = match.stage === 'group' ? 'group' : match.stage === 'qualifying' ? 'qualifying' : ['upper', 'lower', 'semifinal', 'third_place'].includes(match.stage) ? match.stage : 'playoff'
     const number = type === 'group' ? Number(match.group) || 1 : Number(match.round) || 1
     const key = `${type}-${number}`
     if (!grouped.has(key)) {
-      const label = type === 'group' ? `Группа ${number}` : type === 'qualifying' ? 'Отбор' : roundLabel(number, maxRound)
+      const label = type === 'playoff' ? roundLabel(number, maxRound) : matchStageLabel(match)
       const depth = type === 'playoff' ? Math.max(0, number - 1) : 0
       grouped.set(key, {
         key,
@@ -83,7 +93,7 @@ const columns = computed(() => {
     grouped.get(key).matches.push(match)
   }
   return [...grouped.values()].sort((left, right) => {
-    const order = { group: 0, qualifying: 1, playoff: 2 }
+    const order = { group: 0, qualifying: 1, upper: 2, lower: 3, semifinal: 4, playoff: 5, third_place: 6 }
     return order[left.type] - order[right.type] || left.number - right.number
   })
 })
@@ -178,7 +188,7 @@ onBeforeUnmount(stopPolling)
 </script>
 
 <template>
-  <section class="standalone-bracket-page">
+  <section class="standalone-bracket-page" :class="{ 'is-double-elimination': competition?.settings?.variant === 'double_elimination' }">
     <div v-if="loading" class="standalone-bracket-loading" aria-live="polite">
       <div class="standalone-bracket-skeleton skeleton-line wide"></div>
       <div class="standalone-bracket-skeleton skeleton-line"></div>

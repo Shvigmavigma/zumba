@@ -69,6 +69,7 @@
 - 2026-08-29 — competition media persistence: JSONB participant data is deep-copied before nested image/name edits so SQLAlchemy detects the replacement and stores uploaded URLs for staff and public viewers.
 - 2026-08-29 — competition voting carousel: public vote cards use a vertical list with one prominent active image per candidate, keyboard-friendly previous/next controls, position counters, and a direct vote action; pair voting uses the same carousel pattern on each side without nested interactive buttons.
 - 2026-08-29 — competition revoting: the same device token can change its general or pair vote after a fresh captcha check; JSONB counts move from the previous choice to the new one and public controls mark the saved choice with an explicit «Переголосовать» action.
+- 2026-08-29 — competition brackets: tournaments add an optional fixed-eight upper/lower qualification format that sends four survivors into semifinals; every standard tournament with two semifinal pairs also creates a separate third-place match, using the existing bracket cards and token-based status colors.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
