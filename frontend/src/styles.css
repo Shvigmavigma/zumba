@@ -2163,6 +2163,11 @@ textarea {
   overflow: visible;
 }
 
+.profile-rating-chart-canvas {
+  position: relative;
+  min-width: 0;
+}
+
 .profile-rating-chart line {
   stroke: color-mix(in srgb, var(--border) 66%, transparent);
   stroke-width: 1;
@@ -2187,7 +2192,59 @@ textarea {
   fill: var(--panel);
   stroke: var(--primary);
   stroke-width: 2.25;
+  cursor: help;
+  outline: none;
   vector-effect: non-scaling-stroke;
+}
+
+.profile-rating-chart circle:hover,
+.profile-rating-chart circle:focus-visible {
+  fill: var(--primary);
+  stroke: var(--panel);
+  stroke-width: 3;
+}
+
+.profile-rating-tooltip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: 2px;
+  max-width: min(220px, 70%);
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--glass);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 10px));
+  white-space: nowrap;
+}
+
+.profile-rating-tooltip strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-rating-tooltip span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  text-overflow: ellipsis;
+}
+
+.profile-rating-tooltip em {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-style: normal;
+  font-weight: 900;
+}
+
+.profile-rating-tooltip em.is-positive {
+  color: var(--success);
+}
+
+.profile-rating-tooltip em.is-negative {
+  color: var(--danger);
 }
 
 .profile-rating-history {
