@@ -70,6 +70,15 @@
 - 2026-08-29 — competition voting carousel: public vote cards use a vertical list with one prominent active image per candidate, keyboard-friendly previous/next controls, position counters, and a direct vote action; pair voting uses the same carousel pattern on each side without nested interactive buttons.
 - 2026-08-29 — competition revoting: the same device token can change its general or pair vote after a fresh captcha check; JSONB counts move from the previous choice to the new one and public controls mark the saved choice with an explicit «Переголосовать» action.
 - 2026-08-29 — competition brackets: tournaments add an optional fixed-eight upper/lower qualification format that sends four survivors into semifinals; every standard tournament with two semifinal pairs also creates a separate third-place match, using the existing bracket cards and token-based status colors.
+- 2026-08-29 — competition bracket routes: upper and lower qualification paths now render as independent playoff-like columns, with round-based narrowing, offsets, and spacing while the final stage remains separate.
+- 2026-08-29 — competition bracket canvas: the double-elimination view keeps upper and lower routes on one shared grid, stacked vertically with semifinal pairs in the adjacent final column.
+- 2026-08-29 — competition bracket default: completed double-elimination tournaments open on the unified bracket first; final results remain available from the adjacent tab.
+- 2026-08-29 — competition bracket distribution: the fixed-eight format shows a shared first stage on the left, then upper and lower routes stacked in one canvas, feeding two semifinal pairs on the right.
+- 2026-08-29 — competition bracket headers: each route owns one continuous accent stripe; round headers no longer draw a duplicate top stripe.
+- 2026-08-30 — competition bracket flow: the shared opening stage, upper route, and lower route sections share one horizontal parallel while their match cards remain vertical; the final route keeps both semifinal pairs in the adjacent column.
+- 2026-08-30 — competition bracket third-place placement: the bronze match occupies the row directly below the main final and is right-aligned under that final column.
+- 2026-08-30 — competition bracket third-place alignment: the public viewer measures the final card after layout and offsets the bronze-match section to keep it directly below the final at every viewport size.
+- 2026-08-29 — competition bracket routing: responsive SVG elbow connectors map each upper/lower match winner to the matching semifinal card and update after resize or phase changes.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
