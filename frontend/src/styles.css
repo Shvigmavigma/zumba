@@ -15393,9 +15393,199 @@ body,
   border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
 }
 
-.standalone-bracket-page.is-double-elimination .standalone-bracket-match::before,
-.standalone-bracket-page.is-double-elimination .standalone-bracket-match::after {
-  display: none !important;
+.standalone-bracket-routes {
+  display: grid;
+  gap: clamp(30px, 4vw, 54px);
+}
+
+.standalone-bracket-route {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.standalone-bracket-route-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: fit-content;
+  min-width: min(100%, 280px);
+  padding: 9px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel-muted) 72%, var(--panel));
+}
+
+.standalone-bracket-route-head > div {
+  display: grid;
+  gap: 2px;
+}
+
+.standalone-bracket-route-head span {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.standalone-bracket-route-head strong {
+  color: var(--text);
+  font-size: var(--small-text-size);
+  font-weight: 900;
+}
+
+.standalone-bracket-route-head small {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.standalone-bracket-route.is-upper .standalone-bracket-route-head {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+}
+
+.standalone-bracket-route.is-lower .standalone-bracket-route-head {
+  border-color: color-mix(in srgb, var(--success) 48%, var(--border));
+}
+
+.standalone-bracket-route.is-third .standalone-bracket-route-head {
+  border-color: color-mix(in srgb, var(--primary) 48%, var(--border));
+}
+
+.standalone-bracket-route .standalone-bracket-columns {
+  width: max-content;
+}
+
+.standalone-bracket-route.is-upper .standalone-bracket-column-head {
+  border-top-color: var(--accent);
+}
+
+.standalone-bracket-route.is-lower .standalone-bracket-column-head {
+  border-top-color: var(--success);
+}
+
+/* Double-elimination uses one wide canvas: opening, upper, and lower route sections
+   share the first horizontal parallel, with both semifinal pairs in the final column. */
+.standalone-bracket-routes.is-double {
+  display: grid;
+  position: relative;
+  grid-template-columns: max-content max-content max-content max-content;
+  grid-template-areas:
+    'opening upper lower final'
+    'opening upper lower final'
+    'third third third third';
+  align-items: start;
+  column-gap: clamp(34px, 4vw, 60px);
+  row-gap: clamp(28px, 4vw, 52px);
+  min-width: max-content;
+  padding: clamp(18px, 3vw, 30px);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--panel-muted) 72%, var(--panel)), var(--panel));
+  box-shadow: var(--shadow);
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route-connectors {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route-connectors path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 62%, var(--border));
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route-connectors path.is-lower {
+  stroke: color-mix(in srgb, var(--success) 68%, var(--border));
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route {
+  position: relative;
+  z-index: 1;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-opening {
+  grid-area: opening;
+  align-self: start;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-upper {
+  grid-area: upper;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-lower {
+  grid-area: lower;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-final {
+  grid-area: final;
+  align-self: start;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-final .standalone-bracket-route-head {
+  border-bottom-color: var(--primary-strong);
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-third {
+  grid-area: third;
+  justify-self: end;
+  transform: translateY(var(--standalone-bracket-third-shift, 0px));
+}
+
+/* The opening round is the shared left-hand stage: keep all four matches in one column. */
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-opening .standalone-bracket-columns,
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-opening .standalone-bracket-column {
+  width: clamp(220px, 22vw, 290px);
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-opening .standalone-bracket-column-matches {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-opening .standalone-bracket-match {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-column-matches {
+  min-width: 0;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-match {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route-head {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0 0 8px;
+  border-width: 0 0 2px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-opening .standalone-bracket-route-head {
+  border-bottom-color: var(--primary-strong);
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-column-head {
+  padding-top: 0;
+  border-top: 0;
 }
 
 /* Result and phase views share the same public tournament surface. */

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowUpRight, BarChart3, CheckCircle2, Clock3, Trophy, Users, Vote } from 'lucide-vue-next'
 import { useRoute } from 'vue-router'
 import { api } from '../api'
@@ -10,6 +10,8 @@ const loading = ref(true)
 const error = ref('')
 let pollTimer = null
 let pollingActive = false
+const bracketRoutesEl = ref(null)
+const connectorPaths = ref([])
 
 const token = computed(() => String(route.params.token || ''))
 const statusLabel = computed(() => ({ draft: 'Черновик', 'in-progress': 'Идёт', complete: 'Завершён' }[competition.value?.status] || ''))
@@ -53,6 +55,7 @@ const matchStageLabel = (match) => ({
   third_place: 'Матч за 3-е место',
   playoff: 'Финал',
 }[match?.stage] || 'Плей-офф')
+const displayMatchStageLabel = (match) => match?.stage === 'upper' && Number(match?.round || 1) === 1 ? '1 этап' : matchStageLabel(match)
 const matchTotalVotes = (match) => Number(match.votes_a || 0) + Number(match.votes_b || 0)
 const voteShare = (match, side) => {
   const total = matchTotalVotes(match)
@@ -77,8 +80,14 @@ const columns = computed(() => {
     const number = type === 'group' ? Number(match.group) || 1 : Number(match.round) || 1
     const key = `${type}-${number}`
     if (!grouped.has(key)) {
-      const label = type === 'playoff' ? roundLabel(number, maxRound) : matchStageLabel(match)
-      const depth = type === 'playoff' ? Math.max(0, number - 1) : 0
+      const label = type === 'playoff'
+        ? roundLabel(number, maxRound)
+        : type === 'upper'
+          ? number === 1 ? '1 этап' : `Раунд ${number}`
+          : type === 'lower'
+            ? `Раунд ${number}`
+            : matchStageLabel(match)
+      const depth = ['playoff', 'upper', 'lower'].includes(type) ? Math.max(0, number - 1) : 0
       grouped.set(key, {
         key,
         type,
@@ -96,6 +105,19 @@ const columns = computed(() => {
     const order = { group: 0, qualifying: 1, upper: 2, lower: 3, semifinal: 4, playoff: 5, third_place: 6 }
     return order[left.type] - order[right.type] || left.number - right.number
   })
+})
+
+const isDoubleElimination = computed(() => competition.value?.settings?.variant === 'double_elimination')
+const bracketRoutes = computed(() => {
+  const columnsList = visibleColumns.value
+  if (!isDoubleElimination.value) return [{ key: 'main', columns: columnsList }]
+  return [
+    { key: 'opening', kicker: 'Этап', label: 'До распределения', columns: columnsList.filter((column) => column.type === 'upper' && column.number === 1) },
+    { key: 'upper', label: 'Верхняя сетка', columns: columnsList.filter((column) => column.type === 'upper' && column.number > 1) },
+    { key: 'lower', label: 'Нижняя сетка', columns: columnsList.filter((column) => column.type === 'lower') },
+    { key: 'final', label: 'Финальная стадия', columns: columnsList.filter((column) => ['semifinal', 'playoff'].includes(column.type)) },
+    { key: 'third', label: 'Матч за 3-е место', columns: columnsList.filter((column) => column.type === 'third_place') },
+  ].filter((route) => route.columns.length)
 })
 
 const activePhase = ref('playoff')
@@ -145,6 +167,56 @@ const stats = computed(() => {
 })
 const hasLiveMatches = computed(() => stats.value.matches > stats.value.closed)
 
+function updateBracketConnectors() {
+  const canvas = bracketRoutesEl.value
+  if (!canvas || !isDoubleElimination.value || activeView.value !== 'playoff') {
+    connectorPaths.value = []
+    canvas?.querySelector('.standalone-bracket-route.is-third')?.style.removeProperty('--standalone-bracket-third-shift')
+    return
+  }
+  const canvasRect = canvas.getBoundingClientRect()
+  const thirdRoute = canvas.querySelector('.standalone-bracket-route.is-third')
+  thirdRoute?.style.removeProperty('--standalone-bracket-third-shift')
+  const upperMatches = [...canvas.querySelectorAll('.standalone-bracket-route.is-upper .standalone-bracket-match')]
+  const lowerMatches = [...canvas.querySelectorAll('.standalone-bracket-route.is-lower .standalone-bracket-match')]
+  const semifinalMatches = [...canvas.querySelectorAll('.standalone-bracket-route.is-final .standalone-bracket-column.is-semifinal .standalone-bracket-match')]
+  const toPoint = (element, side) => {
+    const rect = element.getBoundingClientRect()
+    return {
+      x: (side === 'right' ? rect.right : rect.left) - canvasRect.left,
+      y: rect.top - canvasRect.top + rect.height / 2,
+    }
+  }
+  const paths = []
+  const addConnections = (matches, kind) => {
+    matches.slice(0, semifinalMatches.length).forEach((source, index) => {
+      const start = toPoint(source, 'right')
+      const end = toPoint(semifinalMatches[index], 'left')
+      const bendX = end.x - 16
+      paths.push({
+        key: `${kind}-${index}`,
+        kind,
+        d: `M ${start.x} ${start.y} H ${bendX} V ${end.y} H ${end.x}`,
+      })
+    })
+  }
+  addConnections(upperMatches, 'upper')
+  addConnections(lowerMatches, 'lower')
+  connectorPaths.value = paths
+
+  const finalMatch = canvas.querySelector('.standalone-bracket-route.is-final .standalone-bracket-column.is-playoff .standalone-bracket-match')
+  if (finalMatch && thirdRoute) {
+    const finalRect = finalMatch.getBoundingClientRect()
+    const thirdRect = thirdRoute.getBoundingClientRect()
+    const shift = finalRect.bottom + 28 - thirdRect.top
+    thirdRoute.style.setProperty('--standalone-bracket-third-shift', `${shift}px`)
+  }
+}
+
+function scheduleBracketConnectors() {
+  window.requestAnimationFrame(updateBracketConnectors)
+}
+
 async function load() {
   try {
     const next = await api(`/competitions/public/${token.value}`)
@@ -175,16 +247,26 @@ function stopPolling() {
 
 onMounted(async () => {
   await load()
+  await nextTick()
+  scheduleBracketConnectors()
+  window.addEventListener('resize', scheduleBracketConnectors)
   if (competition.value?.status !== 'complete') startPolling()
 })
 watch(() => competition.value?.settings?.phase, (phase) => {
   if (phase) activePhase.value = phase === 'groups' ? 'groups' : 'playoff'
 }, { immediate: true })
 watch(() => competition.value?.status, (status) => {
-  if (status === 'complete' && resultRows.value.length) activeView.value = 'results'
+  if (status === 'complete' && resultRows.value.length) activeView.value = competition.value?.settings?.variant === 'double_elimination' ? 'playoff' : 'results'
   else if (status !== 'complete' && activeView.value === 'results') activeView.value = 'playoff'
 }, { immediate: true })
-onBeforeUnmount(stopPolling)
+watch(() => `${competition.value?.matches?.length || 0}:${activeView.value}:${activePhase.value}`, async () => {
+  await nextTick()
+  scheduleBracketConnectors()
+})
+onBeforeUnmount(() => {
+  stopPolling()
+  window.removeEventListener('resize', scheduleBracketConnectors)
+})
 </script>
 
 <template>
@@ -224,7 +306,30 @@ onBeforeUnmount(stopPolling)
           <div class="standalone-results-podium" v-if="resultRows.length"><article v-for="row in podiumRows" :key="row.participant_id" class="standalone-results-podium-card" :class="`place-${row.place}`"><span class="standalone-results-place">{{ row.place }}</span><div class="standalone-results-avatar"><img v-if="row.participant.images?.[0]" :src="mediaUrl(row.participant.images[0])" :alt="row.participant.name" /><span v-else>{{ participantInitials(row.participant) }}</span></div><strong>{{ row.participant.name }}</strong><span>{{ formatVotes(row.votes) }}</span><small>{{ resultTotalVotes ? Math.round((row.votes / resultTotalVotes) * 100) : 0 }}% голосов</small></article></div>
           <div class="standalone-results-ranking"><div class="standalone-results-ranking-head"><span>Место</span><span>Участник</span><span>Голоса</span></div><div v-for="row in resultRows.slice(3)" :key="row.participant_id" class="standalone-results-ranking-row"><b>{{ row.place }}</b><span class="standalone-results-ranking-name"><span class="standalone-results-mini-avatar">{{ participantInitials(row.participant) }}</span>{{ row.participant.name }}</span><strong>{{ formatVotes(row.votes) }}</strong></div><p v-if="resultRows.length <= 3" class="standalone-results-ranking-empty">Все участники вошли в подиум.</p></div>
         </div>
-        <div v-else class="standalone-bracket-scroll"><div class="standalone-bracket-columns"><section v-for="column in visibleColumns" :key="column.key" class="standalone-bracket-column" :class="`is-${column.type}`" :style="{ '--standalone-bracket-match-count': column.matches.length, '--standalone-bracket-column-offset': `${column.offset}px`, '--standalone-bracket-column-gap': `${column.gap}px` }"><header class="standalone-bracket-column-head"><div><span>{{ column.type === 'playoff' ? 'Раунд' : 'Этап' }}</span><h2>{{ column.label }}</h2></div><span class="standalone-bracket-column-count">{{ column.matches.length }} {{ column.matches.length === 1 ? 'пара' : 'пар' }}</span></header><div class="standalone-bracket-column-matches"><RouterLink v-for="(match, index) in column.matches" :key="match.id" class="standalone-bracket-match" :class="{ 'is-closed': match.status === 'closed', 'is-open': match.status === 'open', 'is-bye': match.status === 'bye' }" :to="pairPath(match)" :aria-label="`Открыть пару: ${match.a?.name || '—'} — ${match.b?.name || 'автопроход'}`"><div class="standalone-bracket-match-meta"><span>{{ matchStageLabel(match) }} · Пара {{ index + 1 }}</span><span class="standalone-bracket-match-state" :class="`is-${match.status}`"><i></i>{{ matchStatusLabel(match) }}</span></div><div class="standalone-bracket-team" :class="{ winner: match.winner === match.a }"><span class="standalone-bracket-avatar"><img v-if="match.a?.images?.[0]" :src="mediaUrl(match.a.images[0])" alt="" /><span v-else>{{ participantInitials(match.a) }}</span></span><strong>{{ match.a?.name || '—' }}</strong><b>{{ match.votes_a }}</b></div><div class="standalone-bracket-team" :class="{ winner: match.winner === match.b }"><span class="standalone-bracket-avatar"><img v-if="match.b?.images?.[0]" :src="mediaUrl(match.b.images[0])" alt="" /><span v-else>{{ participantInitials(match.b) }}</span></span><strong>{{ match.b?.name || 'Автопроход' }}</strong><b>{{ match.votes_b }}</b></div><div class="standalone-bracket-progress" aria-hidden="true"><span :style="{ width: `${voteShare(match, 'a')}%` }"></span></div><div class="standalone-bracket-match-foot"><span v-if="match.winner" class="standalone-bracket-winner" :title="match.winner_name" :aria-label="`Победитель: ${match.winner_name}`"><BarChart3 :size="13" />Победитель: {{ match.winner_name }}</span><span v-else class="standalone-bracket-vote-total">{{ formatVotes(matchTotalVotes(match)) }}</span><span class="standalone-bracket-match-link"><ArrowUpRight :size="14" />Открыть пару</span></div></RouterLink></div></section></div></div>
+        <div v-else class="standalone-bracket-scroll">
+          <div ref="bracketRoutesEl" class="standalone-bracket-routes" :class="{ 'is-double': isDoubleElimination }">
+            <svg v-if="isDoubleElimination && connectorPaths.length" class="standalone-bracket-route-connectors" aria-hidden="true">
+              <path v-for="connector in connectorPaths" :key="connector.key" :class="`is-${connector.kind}`" :d="connector.d"></path>
+            </svg>
+            <section v-for="route in bracketRoutes" :key="route.key" class="standalone-bracket-route" :class="`is-${route.key}`">
+              <header v-if="route.label" class="standalone-bracket-route-head"><div><span>{{ route.kicker || 'Сетка' }}</span><strong>{{ route.label }}</strong></div><small>{{ route.columns.reduce((sum, column) => sum + column.matches.length, 0) }} пар</small></header>
+              <div class="standalone-bracket-columns">
+                <section v-for="column in route.columns" :key="column.key" class="standalone-bracket-column" :class="`is-${column.type}`" :style="{ '--standalone-bracket-match-count': column.matches.length, '--standalone-bracket-column-offset': `${column.offset}px`, '--standalone-bracket-column-gap': `${column.gap}px` }">
+                  <header class="standalone-bracket-column-head"><div><span>{{ column.type === 'playoff' ? 'Раунд' : 'Этап' }}</span><h2>{{ column.label }}</h2></div><span class="standalone-bracket-column-count">{{ column.matches.length }} {{ column.matches.length === 1 ? 'пара' : 'пар' }}</span></header>
+                  <div class="standalone-bracket-column-matches">
+                    <RouterLink v-for="(match, index) in column.matches" :key="match.id" class="standalone-bracket-match" :class="{ 'is-closed': match.status === 'closed', 'is-open': match.status === 'open', 'is-bye': match.status === 'bye' }" :to="pairPath(match)" :aria-label="`Открыть пару: ${match.a?.name || '—'} — ${match.b?.name || 'автопроход'}`">
+                      <div class="standalone-bracket-match-meta"><span>{{ displayMatchStageLabel(match) }} · Пара {{ index + 1 }}</span><span class="standalone-bracket-match-state" :class="`is-${match.status}`"><i></i>{{ matchStatusLabel(match) }}</span></div>
+                      <div class="standalone-bracket-team" :class="{ winner: match.winner === match.a?.id }"><span class="standalone-bracket-avatar"><img v-if="match.a?.images?.[0]" :src="mediaUrl(match.a.images[0])" alt="" /><span v-else>{{ participantInitials(match.a) }}</span></span><strong>{{ match.a?.name || '—' }}</strong><b>{{ match.votes_a }}</b></div>
+                      <div class="standalone-bracket-team" :class="{ winner: match.winner === match.b?.id }"><span class="standalone-bracket-avatar"><img v-if="match.b?.images?.[0]" :src="mediaUrl(match.b.images[0])" alt="" /><span v-else>{{ participantInitials(match.b) }}</span></span><strong>{{ match.b?.name || 'Автопроход' }}</strong><b>{{ match.votes_b }}</b></div>
+                      <div class="standalone-bracket-progress" aria-hidden="true"><span :style="{ width: `${voteShare(match, 'a')}%` }"></span></div>
+                      <div class="standalone-bracket-match-foot"><span v-if="match.winner" class="standalone-bracket-winner" :title="match.winner_name" :aria-label="`Победитель: ${match.winner_name}`"><BarChart3 :size="13" />Победитель: {{ match.winner_name }}</span><span v-else class="standalone-bracket-vote-total">{{ formatVotes(matchTotalVotes(match)) }}</span><span class="standalone-bracket-match-link"><ArrowUpRight :size="14" />Открыть пару</span></div>
+                    </RouterLink>
+                  </div>
+                </section>
+              </div>
+            </section>
+          </div>
+        </div>
       </template>
     </template>
   </section>
