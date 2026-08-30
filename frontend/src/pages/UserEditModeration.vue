@@ -88,10 +88,22 @@ watch(users, () => {
         </div>
         <div class="user-moderation-meta">
           <p class="muted">#{{ formatPilotNumber(user.pilot_number) }} - RER {{ formatRating(user.rating) }} - {{ teamShortName(user.team_name, user.team_abbreviation) }} - {{ t('fields.steam') }} {{ user.steam_id }}</p>
+          <span
+            v-if="user.steam_blacklisted"
+            class="status-badge status-banned moderation-blacklist-badge"
+            :title="t('moderation.steamBlacklistReason', { reason: user.steam_blacklist_reason || t('moderation.steamBlacklistNoReason') })"
+            :aria-label="t('moderation.steamBlacklistReason', { reason: user.steam_blacklist_reason || t('moderation.steamBlacklistNoReason') })"
+          >{{ t('moderation.steamBlacklisted') }}</span>
           <p v-if="user.pending_profile_changes" class="muted">{{ t('moderation.pendingProfileChanges', { changes: visiblePendingChanges(user.pending_profile_changes) }) }}</p>
         </div>
         <div class="toolbar">
-          <button class="button primary" @click="approve(user)">{{ t('common.approve') }}</button>
+          <button
+            class="button primary"
+            :disabled="user.steam_blacklisted && !isAdmin"
+            :title="user.steam_blacklisted && !isAdmin ? t('moderation.steamBlacklistAdminOnly') : ''"
+            @click="approve(user)"
+          >{{ t('common.approve') }}</button>
+          <span v-if="user.steam_blacklisted && !isAdmin" class="muted moderation-blacklist-lock">{{ t('moderation.steamBlacklistAdminOnly') }}</span>
           <button class="button danger" @click="reject(user)">{{ t('common.reject') }}</button>
           <button
             v-if="isAdmin"

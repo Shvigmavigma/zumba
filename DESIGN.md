@@ -80,6 +80,10 @@
 - 2026-08-30 — competition bracket third-place alignment: the public viewer measures the final card after layout and offsets the bronze-match section to keep it directly below the final at every viewport size.
 - 2026-08-29 — competition bracket routing: responsive SVG elbow connectors map each upper/lower match winner to the matching semifinal card and update after resize or phase changes.
 - 2026-08-30 — browser branding: the admin page reuses the branding card and shared cropper for a configurable browser tab title and square favicon; saved values update document metadata immediately.
+- 2026-08-30 — main-menu setup visibility: the persisted admin checkbox controls the «Сетапы» section itself; when enabled, the heading remains visible with a compact empty state until setup cards are published.
+- 2026-08-30 — admin setup visibility: the system settings card includes a persisted checkbox for showing the «Сетапы» section on the main page; disabling it hides both heading and content.
+- 2026-08-31 — admin collapsible zones: existing admin cards reuse the token-based icon-button and chevron pattern; every major zone can collapse to its title row, starts expanded, and remains keyboard accessible without adding dependencies.
+- 2026-08-31 — Steam blacklist: the admin settings page uses the existing collapsible card, table, input, upload, and danger-action tokens for numeric Steam ID/reason entries; the downloadable Excel example keeps IDs as text, and moderation exposes a hover reason while server-side approval remains admin-only.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, browser title/favicon, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
@@ -101,6 +105,7 @@
 - `frontend/src/components/RaceAssetsEditor.vue` — per-track expected average lap inputs with format guidance and validation.
 - `frontend/src/pages/Competitions.vue` — moderator/admin competition manager plus public vote and tournament viewer with responsive image cards, carousel-based voting/duels, link export, anti-bot challenge, and live result polling.
 - `frontend/src/pages/CompetitionBracket.vue` — standalone public tournament bracket page with no application navigation or authentication controls.
+- `frontend/src/pages/UserEditModeration.vue` — moderation queue with a red Steam blacklist badge and admin-only approval affordance for blocked registrations.
 
 ## Non-Goals
 - No Figma sync

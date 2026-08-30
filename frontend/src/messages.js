@@ -300,6 +300,9 @@ export const messages = {
       emptyLabel: 'Ничего не найдено'
     },
     adminUsers: {
+      collapseZone: 'Свернуть раздел',
+      expandZone: 'Развернуть раздел',
+      usersTitle: 'Пользователи',
       deleteConfirm: 'Удалить аккаунт {login}? Это действие нельзя отменить.',
       dangerTitle: 'Опасная зона',
       dangerHint: 'Массовые удаления доступны только системному администратору и требуют двух подтверждений и отдельного пароля.',
@@ -337,6 +340,17 @@ export const messages = {
       defaultAvatarField: 'Файл аватара',
       defaultAvatarCropTitle: 'Обрезка аватара',
       defaultAvatarCropHint: 'Выберите квадратную область и настройте масштаб.',
+      steamBlacklistTitle: 'Чёрный список Steam ID',
+      steamBlacklistHint: 'Заявки с этими Steam ID помечаются в модерации; одобрить их может только администратор.',
+      steamBlacklistSteamId: 'Steam ID',
+      steamBlacklistReason: 'Причина',
+      steamBlacklistAdd: 'Добавить в ЧС',
+      steamBlacklistSave: 'Сохранить запись',
+      steamBlacklistImport: 'Импортировать Excel',
+      steamBlacklistTemplate: 'Скачать пример',
+      steamBlacklistEmpty: 'Чёрный список пуст',
+      steamBlacklistDeleteConfirm: 'Удалить Steam ID {steamId} из чёрного списка?',
+      steamBlacklistImportErrors: 'Импорт завершён с ошибками: {count}',
       weatherImagesTitle: 'Изображения погоды',
       weatherImagesHint: 'Выберите отдельные изображения для светлой и тёмной темы каждого состояния. В карточке гонки показывается состояние с самой высокой вероятностью.',
       weatherImageEmpty: 'Изображение не выбрано',
@@ -346,6 +360,7 @@ export const messages = {
       rateLimitIpField: 'Запросов с одного IP в минуту',
       ratingCoefficientField: 'Коэффициент изменения RER',
       srPerRaceField: 'SR за гонку',
+      showSetupsField: 'Показывать раздел «Сетапы» на главной',
       simulatorRatings: 'Рейтинг по симуляторам',
       twitchFallbackTitle: 'Видео Twitch вне эфира',
       twitchFallbackHint: 'Это видео будет открываться в Twitch-окне, пока трансляция не идет. Когда канал выйдет в эфир, сайт покажет стрим.',
@@ -627,7 +642,11 @@ export const messages = {
     moderation: {
       pendingProfileChanges: 'Ожидающие изменения профиля: {changes}',
       deleteRequest: 'Удалить заявку навсегда',
-      confirmDelete: 'Удалить эту заявку модерации навсегда?'
+      confirmDelete: 'Удалить эту заявку модерации навсегда?',
+      steamBlacklisted: 'Steam ID в ЧС',
+      steamBlacklistReason: 'Причина: {reason}',
+      steamBlacklistNoReason: 'Причина не указана',
+      steamBlacklistAdminOnly: 'Одобрить может только администратор'
     },
     news: {
       title: 'Новости',
@@ -1063,6 +1082,9 @@ export const messages = {
       emptyLabel: 'Nothing found'
     },
     adminUsers: {
+      collapseZone: 'Collapse section',
+      expandZone: 'Expand section',
+      usersTitle: 'Users',
       deleteConfirm: 'Delete account {login}? This action cannot be undone.',
       dangerTitle: 'Danger Zone',
       dangerHint: 'Bulk deletion is available only to the system administrator and requires two confirmations plus a separate password.',
@@ -1100,6 +1122,17 @@ export const messages = {
       defaultAvatarField: 'Avatar file',
       defaultAvatarCropTitle: 'Crop avatar',
       defaultAvatarCropHint: 'Choose a square area and adjust the zoom.',
+      steamBlacklistTitle: 'Steam ID blacklist',
+      steamBlacklistHint: 'Requests from these Steam IDs are marked in moderation; only an administrator can approve them.',
+      steamBlacklistSteamId: 'Steam ID',
+      steamBlacklistReason: 'Reason',
+      steamBlacklistAdd: 'Add to blacklist',
+      steamBlacklistSave: 'Save entry',
+      steamBlacklistImport: 'Import Excel',
+      steamBlacklistTemplate: 'Download example',
+      steamBlacklistEmpty: 'The blacklist is empty',
+      steamBlacklistDeleteConfirm: 'Remove Steam ID {steamId} from the blacklist?',
+      steamBlacklistImportErrors: 'Import finished with errors: {count}',
       weatherImagesTitle: 'Weather images',
       weatherImagesHint: 'Choose separate light and dark theme images for each condition. Race cards show the condition with the highest probability.',
       weatherImageEmpty: 'No image selected',
@@ -1109,6 +1142,7 @@ export const messages = {
       rateLimitIpField: 'Requests per IP per minute',
       ratingCoefficientField: 'RER change coefficient',
       srPerRaceField: 'SR per race',
+      showSetupsField: 'Show the “Setups” section on the main page',
       simulatorRatings: 'Simulator ratings',
       twitchFallbackTitle: 'Offline Twitch video',
       twitchFallbackHint: 'This video opens in the Twitch window while the channel is offline. When the channel goes live, the site shows the stream.',
@@ -1390,7 +1424,11 @@ export const messages = {
     moderation: {
       pendingProfileChanges: 'Pending profile changes: {changes}',
       deleteRequest: 'Delete request permanently',
-      confirmDelete: 'Delete this moderation request permanently?'
+      confirmDelete: 'Delete this moderation request permanently?',
+      steamBlacklisted: 'Steam ID blacklisted',
+      steamBlacklistReason: 'Reason: {reason}',
+      steamBlacklistNoReason: 'No reason provided',
+      steamBlacklistAdminOnly: 'Only an administrator can approve this request'
     },
     news: {
       title: 'News',

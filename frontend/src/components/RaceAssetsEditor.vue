@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Save, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, Plus, Save, Trash2 } from 'lucide-vue-next'
 import { api } from '../api'
 
 const { t } = useI18n()
@@ -12,6 +12,7 @@ const raceAssetGame = ref('ACC')
 const raceAssetsByGame = ref(defaultRaceAssetsByGame())
 const raceAssetsSaving = ref(false)
 const raceAssetsSaved = ref(false)
+const isCollapsed = ref(false)
 const accCarModelMappings = ref([])
 const activeRaceAssetsDraft = computed(() => raceAssetsByGame.value[raceAssetGame.value])
 
@@ -167,10 +168,13 @@ onMounted(loadRaceAssets)
 </script>
 
 <template>
-  <form class="admin-settings-card admin-race-assets-card card" @submit.prevent="saveRaceAssets">
-    <div class="admin-race-assets-head">
+  <form class="admin-settings-card admin-race-assets-card card" :class="{ 'is-collapsed': isCollapsed }" @submit.prevent="saveRaceAssets">
+    <div class="admin-race-assets-head admin-zone-head">
       <h2>{{ t('adminUsers.raceAssetsTitle') }}</h2>
       <p class="muted">{{ t('adminUsers.raceAssetsHint') }}</p>
+      <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isCollapsed" :aria-label="isCollapsed ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isCollapsed ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="isCollapsed = !isCollapsed">
+        <ChevronDown :size="18" />
+      </button>
     </div>
     <div class="admin-race-assets-tabs">
       <button

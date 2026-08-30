@@ -3399,6 +3399,75 @@ textarea {
   gap: 12px;
 }
 
+.admin-zone-head {
+  position: relative;
+  min-width: 0;
+  padding-right: 44px;
+}
+
+.admin-zone-head h2,
+.admin-zone-head p {
+  margin: 0;
+}
+
+.admin-zone-head p {
+  margin-top: 5px;
+}
+
+.admin-zone-toggle {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+}
+
+.admin-zone-toggle svg {
+  transition: transform 0.16s ease;
+}
+
+.admin-settings-card.is-collapsed,
+.admin-danger-card.is-collapsed,
+.admin-users-card.is-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+}
+
+.admin-settings-card.is-collapsed > .admin-zone-head,
+.admin-danger-card.is-collapsed > .admin-zone-head,
+.admin-users-card.is-collapsed > .admin-zone-head {
+  grid-column: 1 / -1;
+}
+
+.admin-settings-card.is-collapsed > :not(.admin-zone-head),
+.admin-danger-card.is-collapsed > :not(.admin-zone-head),
+.admin-users-card.is-collapsed > :not(.admin-zone-head) {
+  display: none;
+}
+
+.admin-settings-card.is-collapsed .admin-zone-head p,
+.admin-danger-card.is-collapsed .admin-zone-head p {
+  display: none;
+}
+
+.admin-danger-card.is-collapsed .admin-zone-head > .pill,
+.admin-audit-card.is-collapsed .admin-audit-actions > :not(.admin-zone-toggle) {
+  display: none;
+}
+
+.admin-settings-card.is-collapsed .admin-zone-toggle svg,
+.admin-danger-card.is-collapsed .admin-zone-toggle svg,
+.admin-users-card.is-collapsed .admin-zone-toggle svg {
+  transform: rotate(-90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-zone-toggle svg {
+    transition: none;
+  }
+}
+
 .admin-settings-card h2,
 .admin-settings-card p {
   margin: 0;
@@ -3408,10 +3477,84 @@ textarea {
   margin-top: 5px;
 }
 
+.admin-steam-blacklist-card {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.admin-steam-blacklist-tools,
+.admin-steam-blacklist-table-wrap {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.admin-steam-blacklist-add {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.75fr) minmax(240px, 1.25fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.admin-steam-blacklist-import {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.admin-steam-blacklist-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+}
+
+.admin-steam-blacklist-table th {
+  padding: 0 10px 4px;
+  color: var(--muted);
+  font-size: var(--small-text-size);
+  text-align: left;
+}
+
+.admin-steam-blacklist-table td {
+  padding: 4px 6px;
+  background: color-mix(in srgb, var(--panel-muted) 74%, transparent);
+}
+
+.admin-steam-blacklist-table td:first-child {
+  border-radius: 10px 0 0 10px;
+}
+
+.admin-steam-blacklist-table td:last-child {
+  border-radius: 0 10px 10px 0;
+}
+
+.admin-steam-blacklist-table input {
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-steam-blacklist-id {
+  min-width: 180px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.admin-steam-blacklist-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  white-space: nowrap;
+}
+
 .admin-audit-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
+}
+
+.admin-audit-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .admin-audit-list {
@@ -3457,8 +3600,15 @@ textarea {
 }
 
 .admin-system-config-card {
-  grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(150px, 0.55fr)) auto auto;
+  grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(150px, 0.55fr)) minmax(210px, 0.8fr) auto auto;
   align-items: end;
+}
+
+.admin-show-setups-field {
+  height: auto;
+  min-height: var(--control-height);
+  white-space: normal;
+  line-height: 1.2;
 }
 
 .admin-avatar-config-card {
@@ -4630,6 +4780,18 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.moderation-blacklist-badge {
+  margin-top: 6px;
+  min-width: 0;
+  cursor: help;
+}
+
+.moderation-blacklist-lock {
+  max-width: 180px;
+  font-size: var(--small-text-size);
+  line-height: 1.25;
 }
 
 .race-details-page {
@@ -6849,6 +7011,10 @@ select,
   .teams-layout,
   .team-detail-hero,
   .team-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-steam-blacklist-add {
     grid-template-columns: minmax(0, 1fr);
   }
 

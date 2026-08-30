@@ -128,6 +128,27 @@ class UserPrivate(UserPublic):
 
 class UserModerationRead(UserPublic):
     pending_profile_changes: dict | None = None
+    steam_blacklisted: bool = False
+    steam_blacklist_reason: str | None = None
+
+
+class SteamBlacklistEntryRead(BaseModel):
+    id: int
+    steam_id: str
+    reason: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SteamBlacklistEntryCreate(BaseModel):
+    steam_id: str = Field(min_length=1, max_length=50, pattern=r"^\d+$")
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class SteamBlacklistEntryUpdate(SteamBlacklistEntryCreate):
+    pass
 
 
 class UserUpdate(BaseModel):
@@ -1090,6 +1111,7 @@ class SystemSettingsRead(BaseModel):
     requests_per_ip_per_minute: int = Field(ge=1, le=10000)
     rating_change_coefficient: float = Field(gt=0, le=10)
     sr_per_race: float = Field(ge=0, le=100)
+    show_setups_section: bool = True
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -1097,6 +1119,7 @@ class SystemSettingsUpdate(BaseModel):
     requests_per_ip_per_minute: int | None = Field(default=None, ge=1, le=10000)
     rating_change_coefficient: float = Field(gt=0, le=10)
     sr_per_race: float = Field(ge=0, le=100)
+    show_setups_section: bool = True
 
 
 class LicenseTierRead(BaseModel):

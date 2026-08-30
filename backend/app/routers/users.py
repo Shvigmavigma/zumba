@@ -1,5 +1,10 @@
 ﻿from datetime import datetime, timezone
 
+import csv
+import io
+import zipfile
+from xml.etree import ElementTree as ET
+
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy import Numeric, String, cast, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -10,16 +15,91 @@ from app.config import get_settings
 from app.database_backup import create_database_backup
 from app.db import get_session
 from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, is_system_admin, require_admin, require_moder_plus, require_pilot_plus, require_system_admin
-from app.models import RACE_GAMES, Appeal, Banner, Championship, Penalty, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, Team, TeamApplication, TeamCreationRequest, TeamRaceRegistration, User, UserStatus, default_game_ratings
+from app.models import RACE_GAMES, Appeal, Banner, Championship, Penalty, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamRaceRegistration, User, UserStatus, default_game_ratings
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
-from app.schemas import AdminDangerDeleteRequest, ProfileAnalyticsRead, RoleUpdate, TimeoutRequest, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
+from app.schemas import AdminDangerDeleteRequest, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
 from app.security import verify_password
 from app.services import recalculate_all_ratings, result_rows
 
 
 router = APIRouter()
 settings = get_settings()
+
+
+def _xlsx_column_index(reference: str) -> int:
+    letters = "".join(char for char in reference if char.isalpha()).upper()
+    index = 0
+    for char in letters:
+        index = index * 26 + ord(char) - ord("A") + 1
+    return max(index - 1, 0)
+
+
+def parse_steam_blacklist_rows(raw: bytes, filename: str | None) -> tuple[list[tuple[str, str]], list[str]]:
+    """Read the two-column Steam ID/reason format used by the admin template."""
+    suffix = (filename or "").lower().rsplit(".", 1)[-1] if "." in (filename or "") else ""
+    rows: list[list[str]] = []
+    if suffix in {"csv", "tsv"}:
+        delimiter = "\t" if suffix == "tsv" else ","
+        try:
+            rows = [[str(cell or "").strip() for cell in row] for row in csv.reader(io.StringIO(raw.decode("utf-8-sig")), delimiter=delimiter)]
+        except (UnicodeDecodeError, csv.Error) as exc:
+            raise ValueError("Не удалось прочитать CSV-файл") from exc
+    else:
+        try:
+            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                shared_values: list[str] = []
+                if "xl/sharedStrings.xml" in archive.namelist():
+                    shared_root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+                    shared_values = ["".join(node.itertext()).strip() for node in shared_root.findall(".//{*}si")]
+                sheet_name = "xl/worksheets/sheet1.xml"
+                if sheet_name not in archive.namelist():
+                    raise ValueError("В Excel-файле не найден первый лист")
+                root = ET.fromstring(archive.read(sheet_name))
+                for row_node in root.findall(".//{*}row"):
+                    cells: dict[int, str] = {}
+                    for cell in row_node.findall("{*}c"):
+                        value_node = cell.find("{*}v")
+                        if value_node is None:
+                            inline_node = cell.find(".//{*}t")
+                            value = "" if inline_node is None else "".join(inline_node.itertext())
+                        else:
+                            value = value_node.text or ""
+                            if cell.attrib.get("t") == "s":
+                                try:
+                                    value = shared_values[int(value)]
+                                except (ValueError, IndexError):
+                                    value = ""
+                        cells[_xlsx_column_index(cell.attrib.get("r", "A1"))] = str(value).strip()
+                    if cells:
+                        width = max(cells) + 1
+                        rows.append([cells.get(index, "") for index in range(width)])
+        except (zipfile.BadZipFile, ET.ParseError, OSError) as exc:
+            raise ValueError("Загрузите корректный файл Excel (.xlsx) или CSV") from exc
+
+    rows = [row for row in rows if any(cell.strip() for cell in row)]
+    if not rows:
+        return [], ["Файл не содержит строк"]
+    normalized_headers = {str(value).strip().lower().replace("_", " "): index for index, value in enumerate(rows[0])}
+    steam_index = next((normalized_headers[key] for key in ("steam id", "steamid", "id") if key in normalized_headers), 0)
+    reason_index = next((normalized_headers[key] for key in ("reason", "причина") if key in normalized_headers), 1)
+    has_header = any(key in normalized_headers for key in ("steam id", "steamid", "id", "reason", "причина"))
+    data_rows = rows[1:] if has_header else rows
+    entries: list[tuple[str, str]] = []
+    errors: list[str] = []
+    for row_number, row in enumerate(data_rows, 2 if has_header else 1):
+        steam_id = row[steam_index].strip().lstrip("'") if steam_index < len(row) else ""
+        reason = row[reason_index].strip() if reason_index < len(row) else ""
+        if not steam_id and not reason:
+            continue
+        if not steam_id.isdigit():
+            errors.append(f"Строка {row_number}: Steam ID должен содержать только цифры")
+            continue
+        if not reason:
+            errors.append(f"Строка {row_number}: укажите причину")
+            continue
+        entries.append((steam_id[:50], reason[:1000]))
+    return entries, errors
 
 
 def user_response(user: User, team_name: str | None = None, team_abbreviation: str | None = None, private: bool = False) -> dict:
@@ -156,6 +236,13 @@ async def pending_users(request: Request, _: User = Depends(require_moder_plus),
             .order_by(User.created_at)
         )
     ).all()
+    blocked_by_steam: dict[str, str] = {}
+    steam_ids = [user.steam_id for user, _, _ in rows if user.steam_id]
+    if steam_ids:
+        blocked_entries = (
+            await session.scalars(select(SteamBlacklistEntry).where(SteamBlacklistEntry.steam_id.in_(steam_ids)))
+        ).all()
+        blocked_by_steam = {entry.steam_id: entry.reason for entry in blocked_entries}
     result = []
     for user, team_name, team_abbreviation in rows:
         data = user_response(user, team_name, team_abbreviation)
@@ -165,6 +252,9 @@ async def pending_users(request: Request, _: User = Depends(require_moder_plus),
             if isinstance(pending_changes, dict)
             else None
         )
+        blacklist_reason = blocked_by_steam.get(user.steam_id)
+        data["steam_blacklisted"] = blacklist_reason is not None
+        data["steam_blacklist_reason"] = blacklist_reason
         result.append(data)
     return result
 
@@ -214,6 +304,125 @@ async def admin_user_list(
         for user in users:
             await session.refresh(user)
     return [user_response(user, team_name, team_abbreviation, private=True) for user, team_name, team_abbreviation in rows]
+
+
+@router.get("/admin/steam-blacklist", response_model=list[SteamBlacklistEntryRead])
+@limiter.limit("120/minute")
+async def list_steam_blacklist(
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    return list((await session.scalars(select(SteamBlacklistEntry).order_by(SteamBlacklistEntry.created_at.desc(), SteamBlacklistEntry.id.desc()))).all())
+
+
+@router.post("/admin/steam-blacklist", response_model=SteamBlacklistEntryRead)
+@limiter.limit("60/minute")
+async def add_steam_blacklist_entry(
+    payload: SteamBlacklistEntryCreate,
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    steam_id = payload.steam_id.strip()
+    reason = payload.reason.strip()
+    existing = await session.scalar(select(SteamBlacklistEntry).where(SteamBlacklistEntry.steam_id == steam_id))
+    if existing is None:
+        existing = SteamBlacklistEntry(steam_id=steam_id, reason=reason)
+        session.add(existing)
+    else:
+        existing.reason = reason
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="Этот Steam ID уже есть в чёрном списке") from exc
+    await session.refresh(existing)
+    return existing
+
+
+@router.patch("/admin/steam-blacklist/{entry_id}", response_model=SteamBlacklistEntryRead)
+@limiter.limit("60/minute")
+async def update_steam_blacklist_entry(
+    entry_id: int,
+    payload: SteamBlacklistEntryUpdate,
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    entry = await session.get(SteamBlacklistEntry, entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Запись чёрного списка не найдена")
+    entry.steam_id = payload.steam_id.strip()
+    entry.reason = payload.reason.strip()
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="Этот Steam ID уже есть в чёрном списке") from exc
+    await session.refresh(entry)
+    return entry
+
+
+@router.delete("/admin/steam-blacklist/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("60/minute")
+async def delete_steam_blacklist_entry(
+    entry_id: int,
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    entry = await session.get(SteamBlacklistEntry, entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Запись чёрного списка не найдена")
+    await session.delete(entry)
+    await session.commit()
+
+
+@router.post("/admin/steam-blacklist/import")
+@limiter.limit("10/minute")
+async def import_steam_blacklist(
+    request: Request,
+    file: UploadFile = File(...),
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    raw = await file.read()
+    if len(raw) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Файл слишком большой (максимум 5 МБ)")
+    try:
+        entries, errors = parse_steam_blacklist_rows(raw, file.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not entries and errors:
+        raise HTTPException(status_code=400, detail="; ".join(errors[:5]))
+    incoming_ids = {steam_id for steam_id, _ in entries}
+    existing_entries = list(
+        (
+            await session.scalars(
+                select(SteamBlacklistEntry).where(SteamBlacklistEntry.steam_id.in_(incoming_ids))
+            )
+        ).all()
+    ) if incoming_ids else []
+    by_steam = {entry.steam_id: entry for entry in existing_entries}
+    imported = 0
+    updated = 0
+    for steam_id, reason in entries:
+        entry = by_steam.get(steam_id)
+        if entry is None:
+            entry = SteamBlacklistEntry(steam_id=steam_id, reason=reason)
+            session.add(entry)
+            by_steam[steam_id] = entry
+            imported += 1
+        else:
+            entry.reason = reason
+            updated += 1
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="Не удалось импортировать записи: найдены дубли Steam ID") from exc
+    return {"imported": imported, "updated": updated, "skipped": len(errors), "errors": errors[:20]}
 
 
 @router.post("/admin/delete-pilots")
@@ -534,10 +743,15 @@ async def upload_user_avatar(
 
 @router.post("/{user_id}/approve", response_model=UserPrivate)
 @limiter.limit("3/minute")
-async def approve_user(user_id: int, request: Request, _: User = Depends(require_moder_plus), session: AsyncSession = Depends(get_session)):
+async def approve_user(user_id: int, request: Request, moderator: User = Depends(require_moder_plus), session: AsyncSession = Depends(get_session)):
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    blacklist_entry = await session.scalar(
+        select(SteamBlacklistEntry).where(SteamBlacklistEntry.steam_id == user.steam_id)
+    )
+    if blacklist_entry is not None and moderator.role != Role.admin:
+        raise HTTPException(status_code=403, detail="Только администратор может одобрить заявку из чёрного списка Steam")
     if user.pending_profile_changes is not None:
         pending_changes = user.pending_profile_changes or {}
         if "email" in pending_changes:
