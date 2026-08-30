@@ -3556,6 +3556,37 @@ textarea {
   object-fit: contain;
 }
 
+.admin-browser-branding-card {
+  grid-template-columns: minmax(220px, 0.75fr) minmax(220px, 1fr) 76px minmax(220px, 1fr) auto auto auto;
+  align-items: end;
+}
+
+.admin-browser-branding-copy {
+  align-self: start;
+}
+
+.admin-browser-title-field,
+.admin-browser-icon-field {
+  min-width: 0;
+}
+
+.admin-browser-icon-preview {
+  display: grid;
+  width: 76px;
+  height: 76px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--panel-muted);
+}
+
+.admin-browser-icon-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .admin-weather-config-card {
   grid-template-columns: minmax(220px, 0.7fr) minmax(0, 2fr);
   align-items: start;
@@ -13177,6 +13208,7 @@ body,
 
   .admin-logo-config-card,
   .admin-logo-option,
+  .admin-browser-branding-card,
   .admin-system-config-card,
   .admin-avatar-config-card,
   .admin-weather-config-card {

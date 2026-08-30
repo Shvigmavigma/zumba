@@ -79,9 +79,10 @@
 - 2026-08-30 — competition bracket third-place placement: the bronze match occupies the row directly below the main final and is right-aligned under that final column.
 - 2026-08-30 — competition bracket third-place alignment: the public viewer measures the final card after layout and offsets the bronze-match section to keep it directly below the final at every viewport size.
 - 2026-08-29 — competition bracket routing: responsive SVG elbow connectors map each upper/lower match winner to the matching semifinal card and update after resize or phase changes.
+- 2026-08-30 — browser branding: the admin page reuses the branding card and shared cropper for a configurable browser tab title and square favicon; saved values update document metadata immediately.
 
 ## Components
-- `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
+- `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, browser title/favicon, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
 - `frontend/src/App.vue` — existing application shell, navigation, and theme-specific brand logo.
 - `frontend/src/components/ImageCropper.vue` — reusable fixed-ratio crop dialog for selected raster images.
 - `frontend/src/pages/MainMenu.vue` — main race filter bar with a compact native dropdown plus centred race time, in-card registration badge, and weather tooltip.
