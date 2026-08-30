@@ -10,7 +10,7 @@ from app.db import get_session
 from app.deps import require_admin, require_news_editor
 from app.models import AppSetting, User
 from app.rate_limit import limiter, set_request_limits
-from app.schemas import BrandingSettingsRead, DonationSettingsRead, DonationSettingsUpdate, LicenseSettingsRead, LicenseSettingsUpdate, NewsSettingsRead, NewsSettingsUpdate, SystemSettingsRead, SystemSettingsUpdate, WeatherSettingsRead
+from app.schemas import BrandingSettingsRead, BrandingSettingsUpdate, DonationSettingsRead, DonationSettingsUpdate, LicenseSettingsRead, LicenseSettingsUpdate, NewsSettingsRead, NewsSettingsUpdate, SystemSettingsRead, SystemSettingsUpdate, WeatherSettingsRead
 from app.services import recalculate_all_ratings
 
 
@@ -30,6 +30,8 @@ DEFAULT_LOGOS = {
     "dark_logo_url": "/assets/bmrl-logo-dark-cutout.png",
 }
 DEFAULT_AVATAR_URL = "/assets/avatar-template.jpg"
+DEFAULT_BROWSER_TITLE = "BMRL Race Control"
+DEFAULT_BROWSER_ICON_URL = DEFAULT_LOGOS["light_logo_url"]
 DEFAULT_REQUESTS_PER_USER_PER_MINUTE = 1200
 DEFAULT_REQUESTS_PER_IP_PER_MINUTE = 1200
 DEFAULT_RATING_CHANGE_COEFFICIENT = 1.5
@@ -110,6 +112,8 @@ def branding_settings_from_value(value: dict | None) -> BrandingSettingsRead:
         light_logo_url=str(value.get("light_logo_url") or DEFAULT_LOGOS["light_logo_url"]),
         dark_logo_url=str(value.get("dark_logo_url") or DEFAULT_LOGOS["dark_logo_url"]),
         default_avatar_url=str(value.get("default_avatar_url") or DEFAULT_AVATAR_URL),
+        browser_title=str(value.get("browser_title") or DEFAULT_BROWSER_TITLE).strip()[:120],
+        browser_icon_url=str(value.get("browser_icon_url") or DEFAULT_BROWSER_ICON_URL),
     )
 
 
@@ -251,6 +255,26 @@ async def get_branding_settings(request: Request, session: AsyncSession = Depend
     return await get_branding_settings_value(session)
 
 
+@router.patch("/branding", response_model=BrandingSettingsRead)
+@limiter.limit("20/minute")
+async def update_branding_settings(
+    payload: BrandingSettingsUpdate,
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    current = await get_branding_settings_value(session)
+    value = current.model_dump()
+    value["browser_title"] = payload.browser_title.strip()[:120] or DEFAULT_BROWSER_TITLE
+    setting = await session.get(AppSetting, BRANDING_SETTINGS_KEY)
+    if setting is None:
+        session.add(AppSetting(key=BRANDING_SETTINGS_KEY, value=value))
+    else:
+        setting.value = value
+    await session.commit()
+    return branding_settings_from_value(value)
+
+
 @router.get("/weather", response_model=WeatherSettingsRead)
 @limiter.limit("600/minute")
 async def get_weather_settings(request: Request, session: AsyncSession = Depends(get_session)):
@@ -294,7 +318,7 @@ async def upload_weather_image(
 @router.post("/branding/{theme}/upload", response_model=BrandingSettingsRead)
 @limiter.limit("10/minute")
 async def upload_branding_logo(
-    theme: Literal["light", "dark", "default-avatar"],
+    theme: Literal["light", "dark", "default-avatar", "browser-icon"],
     request: Request,
     file: UploadFile = File(...),
     _: User = Depends(require_admin),
@@ -316,7 +340,10 @@ async def upload_branding_logo(
 
     current = await get_branding_settings_value(session)
     value = current.model_dump()
-    setting_key = "default_avatar_url" if theme == "default-avatar" else f"{theme}_logo_url"
+    setting_key = {
+        "default-avatar": "default_avatar_url",
+        "browser-icon": "browser_icon_url",
+    }.get(theme, f"{theme}_logo_url")
     value[setting_key] = f"/api/uploads/logos/{path.name}"
     setting = await session.get(AppSetting, BRANDING_SETTINGS_KEY)
     if setting is None:

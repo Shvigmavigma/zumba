@@ -56,6 +56,13 @@ const logoFiles = ref({ light: null, dark: null })
 const logoSaving = ref({ light: false, dark: false })
 const logoSaved = ref({ light: false, dark: false })
 const logoCropper = ref(null)
+const browserTitle = ref('BMRL Race Control')
+const browserTitleSaving = ref(false)
+const browserTitleSaved = ref(false)
+const browserIconFile = ref(null)
+const browserIconSaving = ref(false)
+const browserIconSaved = ref(false)
+const browserIconCropper = ref(null)
 const defaultAvatarFile = ref(null)
 const defaultAvatarSaving = ref(false)
 const defaultAvatarSaved = ref(false)
@@ -202,6 +209,7 @@ async function load() {
     donationSettings.value = normalizeDonationSettings(loadedDonationSettings)
     licenseTiers.value = normalizeLicenseTiers(loadedLicenseSettings)
     setBrandingSettings(loadedBrandingSettings)
+    browserTitle.value = brandingSettings.browser_title
     systemSettings.value = {
       requests_per_user_per_minute: loadedSystemSettings.requests_per_user_per_minute,
       requests_per_ip_per_minute: loadedSystemSettings.requests_per_ip_per_minute ?? loadedSystemSettings.requests_per_user_per_minute,
@@ -420,6 +428,78 @@ function closeLogoCropper() {
   if (!logoCropper.value || logoSaving.value[logoCropper.value.theme]) return
   URL.revokeObjectURL(logoCropper.value.sourceUrl)
   logoCropper.value = null
+}
+
+async function saveBrowserTitle() {
+  browserTitleSaving.value = true
+  browserTitleSaved.value = false
+  error.value = ''
+  try {
+    const saved = await api('/app-settings/branding', {
+      method: 'PATCH',
+      body: { browser_title: String(browserTitle.value || '').trim() }
+    })
+    setBrandingSettings(saved)
+    browserTitle.value = brandingSettings.browser_title
+    browserTitleSaved.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    browserTitleSaving.value = false
+  }
+}
+
+function setBrowserIconFile(event) {
+  const file = event.target.files?.[0] || null
+  event.target.value = ''
+  browserIconSaved.value = false
+  if (!file) return
+  if (isGifFile(file)) {
+    browserIconFile.value = file
+    return
+  }
+  closeBrowserIconCropper()
+  browserIconFile.value = null
+  browserIconCropper.value = { sourceUrl: URL.createObjectURL(file), error: '' }
+}
+
+async function saveBrowserIcon(file) {
+  browserIconSaving.value = true
+  browserIconSaved.value = false
+  error.value = ''
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    setBrandingSettings(await api('/app-settings/branding/browser-icon/upload', {
+      method: 'POST',
+      body: formData
+    }))
+    browserIconFile.value = null
+    browserIconSaved.value = true
+    return true
+  } catch (err) {
+    error.value = err.message
+    if (browserIconCropper.value) browserIconCropper.value = { ...browserIconCropper.value, error: err.message }
+    return false
+  } finally {
+    browserIconSaving.value = false
+  }
+}
+
+async function uploadBrowserIcon() {
+  if (browserIconFile.value) await saveBrowserIcon(browserIconFile.value)
+}
+
+async function uploadCroppedBrowserIcon(blob) {
+  if (await saveBrowserIcon(new File([blob], 'browser-icon.webp', { type: 'image/webp' }))) {
+    closeBrowserIconCropper()
+  }
+}
+
+function closeBrowserIconCropper() {
+  if (!browserIconCropper.value || browserIconSaving.value) return
+  URL.revokeObjectURL(browserIconCropper.value.sourceUrl)
+  browserIconCropper.value = null
 }
 
 function setDefaultAvatarFile(event) {
@@ -758,6 +838,7 @@ async function deleteAccount(user) {
 onMounted(load)
 onBeforeUnmount(() => {
   closeLogoCropper()
+  closeBrowserIconCropper()
   closeDefaultAvatarCropper()
 })
 watch(page, load)
@@ -804,6 +885,46 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       :error="logoCropper.error"
       @close="closeLogoCropper"
       @crop="uploadCroppedLogo"
+    />
+
+    <form class="admin-settings-card admin-browser-branding-card card" @submit.prevent="saveBrowserTitle">
+      <div class="admin-browser-branding-copy">
+        <h2>{{ t('adminUsers.browserBrandingTitle') }}</h2>
+        <p class="muted">{{ t('adminUsers.browserBrandingHint') }}</p>
+      </div>
+      <label class="field admin-browser-title-field">
+        <span>{{ t('adminUsers.browserTitleField') }}</span>
+        <input v-model="browserTitle" type="text" maxlength="120" required />
+      </label>
+      <div class="admin-browser-icon-preview">
+        <img :src="brandingSettings.browser_icon_url" alt="" />
+      </div>
+      <label class="field admin-browser-icon-field">
+        <span>{{ t('adminUsers.browserIconField') }}</span>
+        <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="setBrowserIconFile" />
+      </label>
+      <button class="button primary" type="submit" :disabled="browserTitleSaving">
+        <Save :size="16" />
+        {{ browserTitleSaving ? t('common.saving') : t('common.save') }}
+      </button>
+      <button class="button" type="button" :disabled="browserIconSaving || !browserIconFile" @click="uploadBrowserIcon">
+        <Upload :size="16" />
+        {{ t('common.upload') }}
+      </button>
+      <span v-if="browserTitleSaved || browserIconSaved" class="pill">{{ t('common.saved') }}</span>
+    </form>
+
+    <ImageCropper
+      v-if="browserIconCropper"
+      :source-url="browserIconCropper.sourceUrl"
+      :title="t('adminUsers.browserIconCropTitle')"
+      :hint="t('adminUsers.browserIconCropHint')"
+      :target-width="256"
+      :target-height="256"
+      :saving="browserIconSaving"
+      :error="browserIconCropper.error"
+      @close="closeBrowserIconCropper"
+      @crop="uploadCroppedBrowserIcon"
     />
 
     <section class="admin-settings-card admin-avatar-config-card card">
