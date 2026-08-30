@@ -124,6 +124,11 @@ async def get_branding_settings_value(session: AsyncSession) -> BrandingSettings
 
 def system_settings_from_value(value: dict | None) -> SystemSettingsRead:
     value = value if isinstance(value, dict) else {}
+    raw_show_setups = value.get("show_setups_section", True)
+    if isinstance(raw_show_setups, str):
+        show_setups_section = raw_show_setups.strip().lower() not in {"", "0", "false", "no", "off"}
+    else:
+        show_setups_section = bool(raw_show_setups)
     try:
         requests_per_user = int(
             value.get(
@@ -160,6 +165,7 @@ def system_settings_from_value(value: dict | None) -> SystemSettingsRead:
         requests_per_ip_per_minute=max(1, min(10000, requests_per_ip)),
         rating_change_coefficient=max(0.01, min(10, coefficient)),
         sr_per_race=max(0, min(100, sr_per_race)),
+        show_setups_section=show_setups_section,
     )
 
 
@@ -397,6 +403,7 @@ async def update_system_settings(
         "requests_per_ip_per_minute": payload.requests_per_ip_per_minute or payload.requests_per_user_per_minute,
         "rating_change_coefficient": payload.rating_change_coefficient,
         "sr_per_race": payload.sr_per_race,
+        "show_setups_section": payload.show_setups_section,
     }
     setting = await session.get(AppSetting, SYSTEM_SETTINGS_KEY)
     if setting is None:

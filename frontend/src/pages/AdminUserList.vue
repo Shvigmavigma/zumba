@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Ban, Download, Edit3, Plus, Save, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
+import { Ban, ChevronDown, Download, Edit3, Plus, Save, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
 import { api, apiDownload } from '../api'
 import { brandingSettings, setBrandingSettings } from '../brandingSettings'
 import AvatarViewer from '../components/AvatarViewer.vue'
@@ -49,7 +49,7 @@ const donationSaved = ref(false)
 const licenseTiers = ref(DEFAULT_LICENSE_TIERS)
 const licenseSaving = ref(false)
 const licenseSaved = ref(false)
-const systemSettings = ref({ requests_per_user_per_minute: 1200, requests_per_ip_per_minute: 1200, rating_change_coefficient: 1.5, sr_per_race: 0.3 })
+const systemSettings = ref({ requests_per_user_per_minute: 1200, requests_per_ip_per_minute: 1200, rating_change_coefficient: 1.5, sr_per_race: 0.3, show_setups_section: true })
 const systemSettingsSaving = ref(false)
 const systemSettingsSaved = ref(false)
 const logoFiles = ref({ light: null, dark: null })
@@ -67,6 +67,12 @@ const defaultAvatarFile = ref(null)
 const defaultAvatarSaving = ref(false)
 const defaultAvatarSaved = ref(false)
 const defaultAvatarCropper = ref(null)
+const steamBlacklist = ref([])
+const steamBlacklistForm = ref({ steam_id: '', reason: '' })
+const steamBlacklistSaving = ref(false)
+const steamBlacklistImporting = ref(false)
+const steamBlacklistSaved = ref(false)
+const steamBlacklistRowSaving = ref({})
 const weatherImages = ref({
   clear_light_url: '', clear_dark_url: '',
   partly_cloudy_light_url: '', partly_cloudy_dark_url: '',
@@ -78,6 +84,7 @@ const weatherImages = ref({
 const weatherImageFiles = ref({})
 const weatherImageSaving = ref({})
 const weatherImageSaved = ref({})
+const collapsedAdminZones = ref({})
 const dangerDialog = ref(null)
 const dangerForm = ref({ confirmation: '', confirmation_repeat: '', password: '' })
 const dangerSaving = ref(false)
@@ -181,7 +188,7 @@ async function load() {
       rating_game: userRatingGame.value
     })
     if (userSearch.value.trim()) params.set('search', userSearch.value.trim())
-    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedDonationSettings, loadedLicenseSettings, loadedBrandingSettings, loadedSystemSettings, loadedWeatherImages] = await Promise.all([
+    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedDonationSettings, loadedLicenseSettings, loadedBrandingSettings, loadedSystemSettings, loadedWeatherImages, loadedSteamBlacklist] = await Promise.all([
       api(`/users/admin?${params.toString()}`),
       api('/teams/config'),
       api('/races/fan-vote/config'),
@@ -197,7 +204,8 @@ async function load() {
         light_rain_light_url: '', light_rain_dark_url: '',
         heavy_rain_light_url: '', heavy_rain_dark_url: '',
         storm_light_url: '', storm_dark_url: ''
-      }))
+      })),
+      api('/users/admin/steam-blacklist')
     ])
     users.value = loadedUsers
     teamLimit.value = teamConfig.member_limit
@@ -214,9 +222,11 @@ async function load() {
       requests_per_user_per_minute: loadedSystemSettings.requests_per_user_per_minute,
       requests_per_ip_per_minute: loadedSystemSettings.requests_per_ip_per_minute ?? loadedSystemSettings.requests_per_user_per_minute,
       rating_change_coefficient: loadedSystemSettings.rating_change_coefficient,
-      sr_per_race: loadedSystemSettings.sr_per_race
+      sr_per_race: loadedSystemSettings.sr_per_race,
+      show_setups_section: loadedSystemSettings.show_setups_section !== false
     }
     weatherImages.value = loadedWeatherImages
+    steamBlacklist.value = loadedSteamBlacklist
   } catch (err) {
     error.value = err.message
   }
@@ -360,7 +370,8 @@ async function saveSystemSettings() {
         requests_per_user_per_minute: Number(systemSettings.value.requests_per_user_per_minute),
         requests_per_ip_per_minute: Number(systemSettings.value.requests_per_ip_per_minute),
         rating_change_coefficient: Number(systemSettings.value.rating_change_coefficient),
-        sr_per_race: Number(systemSettings.value.sr_per_race)
+        sr_per_race: Number(systemSettings.value.sr_per_race),
+        show_setups_section: Boolean(systemSettings.value.show_setups_section)
       }
     })
     systemSettings.value = saved
@@ -369,6 +380,85 @@ async function saveSystemSettings() {
     error.value = err.message
   } finally {
     systemSettingsSaving.value = false
+  }
+}
+
+async function loadSteamBlacklist() {
+  steamBlacklist.value = await api('/users/admin/steam-blacklist')
+}
+
+async function addSteamBlacklistEntry() {
+  const steamId = String(steamBlacklistForm.value.steam_id || '').trim()
+  const reason = String(steamBlacklistForm.value.reason || '').trim()
+  if (!/^\d+$/.test(steamId) || !reason) return
+  steamBlacklistSaving.value = true
+  steamBlacklistSaved.value = false
+  error.value = ''
+  try {
+    const entry = await api('/users/admin/steam-blacklist', {
+      method: 'POST',
+      body: { steam_id: steamId, reason }
+    })
+    steamBlacklist.value = [entry, ...steamBlacklist.value.filter((item) => item.id !== entry.id)]
+    steamBlacklistForm.value = { steam_id: '', reason: '' }
+    steamBlacklistSaved.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    steamBlacklistSaving.value = false
+  }
+}
+
+async function saveSteamBlacklistEntry(entry) {
+  const reason = String(entry.reason || '').trim()
+  if (!/^\d+$/.test(String(entry.steam_id || '').trim()) || !reason) return
+  steamBlacklistRowSaving.value = { ...steamBlacklistRowSaving.value, [entry.id]: true }
+  error.value = ''
+  try {
+    const saved = await api(`/users/admin/steam-blacklist/${entry.id}`, {
+      method: 'PATCH',
+      body: { steam_id: String(entry.steam_id).trim(), reason }
+    })
+    steamBlacklist.value = steamBlacklist.value.map((item) => (item.id === saved.id ? saved : item))
+    steamBlacklistSaved.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    steamBlacklistRowSaving.value = { ...steamBlacklistRowSaving.value, [entry.id]: false }
+  }
+}
+
+async function removeSteamBlacklistEntry(entry) {
+  if (!window.confirm(t('adminUsers.steamBlacklistDeleteConfirm', { steamId: entry.steam_id }))) return
+  error.value = ''
+  try {
+    await api(`/users/admin/steam-blacklist/${entry.id}`, { method: 'DELETE' })
+    steamBlacklist.value = steamBlacklist.value.filter((item) => item.id !== entry.id)
+  } catch (err) {
+    error.value = err.message
+  }
+}
+
+async function importSteamBlacklist(event) {
+  const file = event.target.files?.[0] || null
+  event.target.value = ''
+  if (!file) return
+  steamBlacklistImporting.value = true
+  steamBlacklistSaved.value = false
+  error.value = ''
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const result = await api('/users/admin/steam-blacklist/import', { method: 'POST', body: formData })
+    await loadSteamBlacklist()
+    steamBlacklistSaved.value = true
+    if (result.errors?.length) {
+      error.value = t('adminUsers.steamBlacklistImportErrors', { count: result.errors.length })
+    }
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    steamBlacklistImporting.value = false
   }
 }
 
@@ -841,6 +931,17 @@ onBeforeUnmount(() => {
   closeBrowserIconCropper()
   closeDefaultAvatarCropper()
 })
+
+function isAdminZoneCollapsed(key) {
+  return collapsedAdminZones.value[key] === true
+}
+
+function toggleAdminZone(key) {
+  collapsedAdminZones.value = {
+    ...collapsedAdminZones.value,
+    [key]: !isAdminZoneCollapsed(key)
+  }
+}
 watch(page, load)
 watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
 </script>
@@ -853,10 +954,13 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
     <p v-if="error" class="error">{{ error }}</p>
 
     <!-- Loading/empty states are N/A: bundled logos are always available as immediate defaults. -->
-    <section class="admin-settings-card admin-logo-config-card card">
-      <div>
+    <section class="admin-settings-card admin-logo-config-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('logos') }">
+      <div class="admin-zone-head">
         <h2>{{ t('adminUsers.logoTitle') }}</h2>
         <p class="muted">{{ t('adminUsers.logoHint') }}</p>
+        <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isAdminZoneCollapsed('logos')" :aria-label="isAdminZoneCollapsed('logos') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isAdminZoneCollapsed('logos') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="toggleAdminZone('logos')">
+          <ChevronDown :size="18" />
+        </button>
       </div>
       <article v-for="theme in ['light', 'dark']" :key="theme" class="admin-logo-option">
         <div class="admin-logo-preview" :class="`is-${theme}`">
@@ -887,10 +991,13 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       @crop="uploadCroppedLogo"
     />
 
-    <form class="admin-settings-card admin-browser-branding-card card" @submit.prevent="saveBrowserTitle">
-      <div class="admin-browser-branding-copy">
+    <form class="admin-settings-card admin-browser-branding-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('browser-branding') }" @submit.prevent="saveBrowserTitle">
+      <div class="admin-browser-branding-copy admin-zone-head">
         <h2>{{ t('adminUsers.browserBrandingTitle') }}</h2>
         <p class="muted">{{ t('adminUsers.browserBrandingHint') }}</p>
+        <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isAdminZoneCollapsed('browser-branding')" :aria-label="isAdminZoneCollapsed('browser-branding') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isAdminZoneCollapsed('browser-branding') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="toggleAdminZone('browser-branding')">
+          <ChevronDown :size="18" />
+        </button>
       </div>
       <label class="field admin-browser-title-field">
         <span>{{ t('adminUsers.browserTitleField') }}</span>
@@ -927,10 +1034,13 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       @crop="uploadCroppedBrowserIcon"
     />
 
-    <section class="admin-settings-card admin-avatar-config-card card">
-      <div>
+    <section class="admin-settings-card admin-avatar-config-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('avatar') }">
+      <div class="admin-zone-head">
         <h2>{{ t('adminUsers.defaultAvatarTitle') }}</h2>
         <p class="muted">{{ t('adminUsers.defaultAvatarHint') }}</p>
+        <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isAdminZoneCollapsed('avatar')" :aria-label="isAdminZoneCollapsed('avatar') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isAdminZoneCollapsed('avatar') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="toggleAdminZone('avatar')">
+          <ChevronDown :size="18" />
+        </button>
       </div>
       <div class="admin-default-avatar-preview">
         <UserAvatar :src="brandingSettings.default_avatar_url" :label="t('adminUsers.defaultAvatarTitle')" />
@@ -959,10 +1069,13 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       @crop="uploadCroppedDefaultAvatar"
     />
 
-    <section class="admin-settings-card admin-weather-config-card card">
-      <div>
+    <section class="admin-settings-card admin-weather-config-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('weather') }">
+      <div class="admin-zone-head">
         <h2>{{ t('adminUsers.weatherImagesTitle') }}</h2>
         <p class="muted">{{ t('adminUsers.weatherImagesHint') }}</p>
+        <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isAdminZoneCollapsed('weather')" :aria-label="isAdminZoneCollapsed('weather') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isAdminZoneCollapsed('weather') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="toggleAdminZone('weather')">
+          <ChevronDown :size="18" />
+        </button>
       </div>
       <div class="admin-weather-image-grid">
         <article v-for="condition in weatherConditions" :key="condition.key" class="admin-weather-image-option">
@@ -988,10 +1101,13 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       </div>
     </section>
 
-    <form class="admin-settings-card admin-system-config-card card" @submit.prevent="saveSystemSettings">
-      <div>
+    <form class="admin-settings-card admin-system-config-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('system') }" @submit.prevent="saveSystemSettings">
+      <div class="admin-zone-head">
         <h2>{{ t('adminUsers.systemTitle') }}</h2>
         <p class="muted">{{ t('adminUsers.systemHint') }}</p>
+        <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isAdminZoneCollapsed('system')" :aria-label="isAdminZoneCollapsed('system') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isAdminZoneCollapsed('system') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="toggleAdminZone('system')">
+          <ChevronDown :size="18" />
+        </button>
       </div>
       <label class="field">
         <span>{{ t('adminUsers.rateLimitField') }}</span>
@@ -1009,6 +1125,10 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
         <span>{{ t('adminUsers.srPerRaceField') }}</span>
         <input v-model.number="systemSettings.sr_per_race" type="number" min="0" max="100" step="0.01" required />
       </label>
+      <label class="toggle-field admin-show-setups-field">
+        <input v-model="systemSettings.show_setups_section" type="checkbox" />
+        <span>{{ t('adminUsers.showSetupsField') }}</span>
+      </label>
       <button class="button primary" type="submit" :disabled="systemSettingsSaving">
         <Save :size="16" />
         {{ t('common.save') }}
@@ -1016,10 +1136,73 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       <span v-if="systemSettingsSaved" class="pill">{{ t('common.saved') }}</span>
     </form>
 
-    <form class="admin-settings-card card" @submit.prevent="saveTeamLimit">
-      <div>
+    <section class="admin-settings-card admin-steam-blacklist-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('steam-blacklist') }">
+      <div class="admin-zone-head">
+        <h2>{{ t('adminUsers.steamBlacklistTitle') }}</h2>
+        <p class="muted">{{ t('adminUsers.steamBlacklistHint') }}</p>
+        <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isAdminZoneCollapsed('steam-blacklist')" :aria-label="isAdminZoneCollapsed('steam-blacklist') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isAdminZoneCollapsed('steam-blacklist') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="toggleAdminZone('steam-blacklist')">
+          <ChevronDown :size="18" />
+        </button>
+      </div>
+      <div class="admin-steam-blacklist-tools">
+        <form class="admin-steam-blacklist-add" @submit.prevent="addSteamBlacklistEntry">
+          <label class="field">
+            <span>{{ t('adminUsers.steamBlacklistSteamId') }}</span>
+            <input v-model="steamBlacklistForm.steam_id" type="text" inputmode="numeric" pattern="[0-9]+" required />
+          </label>
+          <label class="field">
+            <span>{{ t('adminUsers.steamBlacklistReason') }}</span>
+            <input v-model="steamBlacklistForm.reason" type="text" maxlength="1000" required />
+          </label>
+          <button class="button primary" type="submit" :disabled="steamBlacklistSaving">
+            <Plus :size="16" />
+            {{ t('adminUsers.steamBlacklistAdd') }}
+          </button>
+        </form>
+        <div class="admin-steam-blacklist-import">
+          <a class="button" href="/templates/steam-blacklist-example.xlsx" download="steam-blacklist-example.xlsx">
+            <Download :size="16" />
+            {{ t('adminUsers.steamBlacklistTemplate') }}
+          </a>
+          <label class="button" :class="{ disabled: steamBlacklistImporting }">
+            <Upload :size="16" />
+            {{ steamBlacklistImporting ? t('common.loading') : t('adminUsers.steamBlacklistImport') }}
+            <input type="file" hidden accept=".xlsx,.csv,.tsv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" :disabled="steamBlacklistImporting" @change="importSteamBlacklist" />
+          </label>
+        </div>
+      </div>
+      <div v-if="steamBlacklist.length" class="admin-steam-blacklist-table-wrap">
+        <table class="admin-steam-blacklist-table">
+          <thead>
+            <tr>
+              <th>{{ t('adminUsers.steamBlacklistSteamId') }}</th>
+              <th>{{ t('adminUsers.steamBlacklistReason') }}</th>
+              <th><span class="sr-only">{{ t('common.actions') }}</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="entry in steamBlacklist" :key="entry.id">
+              <td><input v-model="entry.steam_id" class="admin-steam-blacklist-id" type="text" inputmode="numeric" pattern="[0-9]+" /></td>
+              <td><input v-model="entry.reason" type="text" maxlength="1000" /></td>
+              <td class="admin-steam-blacklist-actions">
+                <button class="icon-button" type="button" :disabled="steamBlacklistRowSaving[entry.id]" :title="t('adminUsers.steamBlacklistSave')" :aria-label="t('adminUsers.steamBlacklistSave')" @click="saveSteamBlacklistEntry(entry)"><Save :size="16" /></button>
+                <button class="icon-button danger-icon" type="button" :title="t('common.delete')" :aria-label="t('common.delete')" @click="removeSteamBlacklistEntry(entry)"><Trash2 :size="16" /></button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-else class="muted">{{ t('adminUsers.steamBlacklistEmpty') }}</p>
+      <span v-if="steamBlacklistSaved" class="pill">{{ t('common.saved') }}</span>
+    </section>
+
+    <form class="admin-settings-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('team-limit') }" @submit.prevent="saveTeamLimit">
+      <div class="admin-zone-head">
         <h2>{{ t('adminUsers.teamLimitTitle') }}</h2>
         <p class="muted">{{ t('adminUsers.teamLimitHint') }}</p>
+        <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isAdminZoneCollapsed('team-limit')" :aria-label="isAdminZoneCollapsed('team-limit') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isAdminZoneCollapsed('team-limit') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="toggleAdminZone('team-limit')">
+          <ChevronDown :size="18" />
+        </button>
       </div>
       <label class="field admin-team-limit-field">
         <span>{{ t('adminUsers.teamLimitField') }}</span>
@@ -1032,10 +1215,13 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       <span v-if="settingsSaved" class="pill">{{ t('common.saved') }}</span>
     </form>
 
-    <form class="admin-settings-card card" @submit.prevent="saveFanVoteConfig">
-      <div>
+    <form class="admin-settings-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('fan-vote') }" @submit.prevent="saveFanVoteConfig">
+      <div class="admin-zone-head">
         <h2>{{ t('adminUsers.fanVoteTitle') }}</h2>
         <p class="muted">{{ t('adminUsers.fanVoteHint') }}</p>
+        <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isAdminZoneCollapsed('fan-vote')" :aria-label="isAdminZoneCollapsed('fan-vote') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isAdminZoneCollapsed('fan-vote') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="toggleAdminZone('fan-vote')">
+          <ChevronDown :size="18" />
+        </button>
       </div>
       <label class="field admin-team-limit-field">
         <span>{{ t('adminUsers.fanVoteDurationField') }}</span>
@@ -1048,10 +1234,13 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       <span v-if="fanVoteSaved" class="pill">{{ t('common.saved') }}</span>
     </form>
 
-    <form class="admin-settings-card admin-twitch-config-card card" @submit.prevent="saveTwitchConfig">
-      <div>
+    <form class="admin-settings-card admin-twitch-config-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('twitch') }" @submit.prevent="saveTwitchConfig">
+      <div class="admin-zone-head">
         <h2>{{ t('adminUsers.twitchFallbackTitle') }}</h2>
         <p class="muted">{{ t('adminUsers.twitchFallbackHint') }}</p>
+        <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isAdminZoneCollapsed('twitch')" :aria-label="isAdminZoneCollapsed('twitch') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isAdminZoneCollapsed('twitch') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="toggleAdminZone('twitch')">
+          <ChevronDown :size="18" />
+        </button>
       </div>
       <label class="field admin-twitch-video-field">
         <span>{{ t('adminUsers.twitchFallbackUrl') }}</span>
@@ -1068,10 +1257,13 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       <span v-if="twitchConfigSaved" class="pill">{{ t('common.saved') }}</span>
     </form>
 
-    <form class="admin-settings-card admin-license-config-card card" @submit.prevent="saveLicenseSettings">
-      <div>
+    <form class="admin-settings-card admin-license-config-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('licenses') }" @submit.prevent="saveLicenseSettings">
+      <div class="admin-zone-head">
         <h2>{{ t('adminUsers.licenseTitle') }}</h2>
         <p class="muted">{{ t('adminUsers.licenseHint') }}</p>
+        <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isAdminZoneCollapsed('licenses')" :aria-label="isAdminZoneCollapsed('licenses') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isAdminZoneCollapsed('licenses') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="toggleAdminZone('licenses')">
+          <ChevronDown :size="18" />
+        </button>
       </div>
       <div class="admin-license-list">
         <article v-for="tier in licenseTiers" :key="tier.min_rating" class="admin-license-row">
@@ -1094,10 +1286,13 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       <span v-if="licenseSaved" class="pill">{{ t('common.saved') }}</span>
     </form>
 
-    <form class="admin-settings-card admin-donation-config-card card" @submit.prevent="saveDonationSettings">
-      <div>
+    <form class="admin-settings-card admin-donation-config-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('donations') }" @submit.prevent="saveDonationSettings">
+      <div class="admin-zone-head">
         <h2>{{ t('adminUsers.donationTitle') }}</h2>
         <p class="muted">{{ t('adminUsers.donationHint') }}</p>
+        <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isAdminZoneCollapsed('donations')" :aria-label="isAdminZoneCollapsed('donations') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isAdminZoneCollapsed('donations') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="toggleAdminZone('donations')">
+          <ChevronDown :size="18" />
+        </button>
       </div>
       <label class="field admin-donation-url-field">
         <span>{{ t('adminUsers.donationUrl') }}</span>
@@ -1140,11 +1335,14 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
 
     <AuditLogPanel />
 
-    <section v-if="canUseDangerZone" class="admin-danger-card card">
-      <div>
+    <section v-if="canUseDangerZone" class="admin-danger-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('danger') }">
+      <div class="admin-zone-head">
         <h2>{{ t('adminUsers.dangerTitle') }}</h2>
         <p class="muted">{{ t('adminUsers.dangerHint') }}</p>
         <span v-if="dangerResult" class="pill">{{ dangerResult }}</span>
+        <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isAdminZoneCollapsed('danger')" :aria-label="isAdminZoneCollapsed('danger') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isAdminZoneCollapsed('danger') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="toggleAdminZone('danger')">
+          <ChevronDown :size="18" />
+        </button>
       </div>
       <div class="admin-danger-actions">
         <button class="button danger" type="button" @click="openDangerDialog('pilots')">
@@ -1162,7 +1360,13 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       </div>
     </section>
 
-    <div class="admin-users-card card">
+    <div class="admin-users-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('users') }">
+      <div class="admin-zone-head">
+        <h2>{{ t('adminUsers.usersTitle') }}</h2>
+        <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isAdminZoneCollapsed('users')" :aria-label="isAdminZoneCollapsed('users') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isAdminZoneCollapsed('users') ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="toggleAdminZone('users')">
+          <ChevronDown :size="18" />
+        </button>
+      </div>
       <div class="pilot-inline-controls admin-users-controls">
         <input v-model="userSearch" type="search" :placeholder="t('common.search')" />
         <select v-model="userSort" :aria-label="t('common.sort')">

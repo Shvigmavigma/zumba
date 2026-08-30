@@ -159,6 +159,16 @@ class User(Base):
     owned_teams: Mapped[list["Team"]] = relationship(back_populates="owner", foreign_keys="Team.owner_id")
 
 
+class SteamBlacklistEntry(Base):
+    __tablename__ = "steam_blacklist_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    steam_id: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
 class Team(Base):
     __tablename__ = "teams"
     __table_args__ = (

@@ -18,6 +18,7 @@ const router = useRouter()
 const stats = ref({ pilots: 0, completed_races: 0, open_races: 0, staff: 0 })
 const races = ref([])
 const setups = ref([])
+const showSetupsSection = ref(true)
 const banners = ref([])
 const news = ref([])
 const newsSettings = ref({ auto_rotate_seconds: 30, manual_pause_seconds: 300 })
@@ -489,7 +490,7 @@ onMounted(async () => {
   placeTwitchWidget()
   loadTwitchStatus()
   try {
-    const [statsData, setupsData, bannerData, newsData, championshipData, donationData, loadedNewsSettings, loadedWeatherSettings] = await Promise.all([
+    const [statsData, setupsData, bannerData, newsData, championshipData, donationData, loadedNewsSettings, loadedWeatherSettings, loadedSystemSettings] = await Promise.all([
       api('/dashboard/stats'),
       api('/setups?limit=6'),
       api('/banners'),
@@ -497,10 +498,12 @@ onMounted(async () => {
       api('/championships?status_filter=registration_open&limit=3'),
       api('/app-settings/donations'),
       api('/app-settings/news').catch(() => ({ auto_rotate_seconds: 30, manual_pause_seconds: 300 })),
-      api('/app-settings/weather').catch(() => weatherSettings.value)
+      api('/app-settings/weather').catch(() => weatherSettings.value),
+      api('/app-settings/system').catch(() => ({ show_setups_section: true }))
     ])
     stats.value = statsData
     setups.value = setupsData
+    showSetupsSection.value = loadedSystemSettings.show_setups_section !== false
     banners.value = bannerData
     news.value = newsData
     registrationChampionships.value = championshipData
@@ -755,9 +758,9 @@ onBeforeUnmount(() => {
           <PaginationControls v-model:page="racePage" :page-size="racePageSize" :loaded-count="races.length" :has-next="racesHasNextPage" />
         </section>
 
-        <section class="section main-setups-section">
+        <section v-if="showSetupsSection" class="section main-setups-section">
           <div class="section-header"><h2>{{ t('main.setups') }}</h2></div>
-          <div class="grid cols-2 main-setup-grid">
+          <div v-if="setups.length" class="grid cols-2 main-setup-grid">
             <article v-for="setup in setups" :key="setup.id" class="card main-setup-card">
               <strong>{{ setup.car_model }}</strong>
               <p class="muted">{{ setup.description || setup.setup_data }}</p>
