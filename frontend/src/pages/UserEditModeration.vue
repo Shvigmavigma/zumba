@@ -11,11 +11,15 @@ import { state } from '../store'
 
 const { t } = useI18n()
 const users = ref([])
+const history = ref([])
 const error = ref('')
+const viewMode = ref('current')
 const page = ref(1)
 const pageSize = 8
-const totalPages = computed(() => Math.max(1, Math.ceil(users.value.length / pageSize)))
+const visibleItems = computed(() => viewMode.value === 'current' ? users.value : history.value)
+const totalPages = computed(() => Math.max(1, Math.ceil(visibleItems.value.length / pageSize)))
 const pagedUsers = computed(() => users.value.slice((page.value - 1) * pageSize, page.value * pageSize))
+const pagedHistory = computed(() => history.value.slice((page.value - 1) * pageSize, page.value * pageSize))
 const isAdmin = computed(() => state.user?.role === 'admin')
 
 function visiblePendingChanges(value) {
@@ -23,8 +27,32 @@ function visiblePendingChanges(value) {
   return JSON.stringify(Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'email')))
 }
 
-async function load() {
+async function loadCurrent() {
   users.value = await api('/users/moderation/pending')
+}
+
+async function loadHistory() {
+  history.value = await api('/users/moderation/history')
+}
+
+async function load() {
+  if (viewMode.value === 'current') {
+    await loadCurrent()
+  } else {
+    await loadHistory()
+  }
+}
+
+async function switchMode(mode) {
+  if (viewMode.value === mode) return
+  viewMode.value = mode
+  page.value = 1
+  error.value = ''
+  try {
+    await load()
+  } catch (err) {
+    error.value = err.message
+  }
 }
 
 async function approve(user) {
@@ -55,6 +83,15 @@ async function deleteRequest(user) {
   }
 }
 
+function formatHistoryDate(value) {
+  if (!value) return t('common.none')
+  return new Intl.DateTimeFormat(state.locale === 'ru' ? 'ru-RU' : 'en-US', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone: state.timeZone
+  }).format(new Date(value))
+}
+
 onMounted(async () => {
   try {
     await load()
@@ -63,7 +100,7 @@ onMounted(async () => {
   }
 })
 
-watch(users, () => {
+watch([users, history, viewMode], () => {
   if (page.value > totalPages.value) {
     page.value = totalPages.value
   }
@@ -73,8 +110,16 @@ watch(users, () => {
 <template>
   <section class="section">
     <h1>{{ t('nav.moderation') }}</h1>
+    <div class="moderation-view-switch" role="tablist" :aria-label="t('moderation.viewAria')">
+      <button type="button" :class="{ active: viewMode === 'current' }" :aria-selected="viewMode === 'current'" role="tab" @click="switchMode('current')">
+        {{ t('moderation.current') }} <span>{{ users.length }}</span>
+      </button>
+      <button type="button" :class="{ active: viewMode === 'completed' }" :aria-selected="viewMode === 'completed'" role="tab" @click="switchMode('completed')">
+        {{ t('moderation.completed') }} <span>{{ history.length }}</span>
+      </button>
+    </div>
     <p v-if="error" class="error">{{ error }}</p>
-    <div class="grid">
+    <div v-if="viewMode === 'current'" class="grid">
       <article v-for="user in pagedUsers" :key="user.id" class="card user-moderation-card">
         <div class="user-list-cell">
           <UserAvatar :src="user.avatar_url" :color="user.avatar_color" :label="user.nickname || user.login" />
@@ -118,6 +163,25 @@ watch(users, () => {
         </div>
       </article>
     </div>
-    <PaginationControls v-model:page="page" :page-size="pageSize" :total-items="users.length" />
+    <div v-else class="grid">
+      <article v-for="request in pagedHistory" :key="request.id" class="card moderation-history-card">
+        <div class="user-list-cell">
+          <UserAvatar :label="request.nickname || request.login" />
+          <div class="user-moderation-main">
+            <span class="user-name-line"><strong>{{ request.first_name }} {{ request.last_name }}</strong></span>
+            <span>{{ request.nickname || request.login }}</span>
+          </div>
+        </div>
+        <div class="user-moderation-meta">
+          <p class="muted">#{{ formatPilotNumber(request.pilot_number) }} - {{ t('fields.steam') }} {{ request.steam_id }}</p>
+          <p class="muted">{{ t(`moderation.requestTypes.${request.request_type}`) }} · {{ t('moderation.resolvedAt', { date: formatHistoryDate(request.resolved_at) }) }}</p>
+        </div>
+        <div class="moderation-history-resolution" :class="`is-${request.resolution}`">
+          {{ t(`moderation.resolutions.${request.resolution}`) }}
+        </div>
+      </article>
+      <p v-if="!history.length" class="muted moderation-empty">{{ t('moderation.historyEmpty') }}</p>
+    </div>
+    <PaginationControls v-model:page="page" :page-size="pageSize" :total-items="visibleItems.length" />
   </section>
 </template>

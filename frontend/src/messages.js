@@ -640,6 +640,20 @@ export const messages = {
       chooseCars: 'Выберите хотя бы одну машину'
     },
     moderation: {
+      viewAria: 'Разделы запросов модерации',
+      current: 'Актуальные',
+      completed: 'Пройденные',
+      historyEmpty: 'Пройденных запросов пока нет',
+      resolvedAt: 'Решено: {date}',
+      requestTypes: {
+        registration: 'Регистрация',
+        profile: 'Изменение профиля'
+      },
+      resolutions: {
+        approved: 'Одобрено',
+        rejected: 'Отклонено',
+        deleted: 'Удалено'
+      },
       pendingProfileChanges: 'Ожидающие изменения профиля: {changes}',
       deleteRequest: 'Удалить заявку навсегда',
       confirmDelete: 'Удалить эту заявку модерации навсегда?',
@@ -1422,6 +1436,20 @@ export const messages = {
       chooseCars: 'Choose at least one car'
     },
     moderation: {
+      viewAria: 'Moderation request sections',
+      current: 'Current',
+      completed: 'Completed',
+      historyEmpty: 'No completed requests yet',
+      resolvedAt: 'Resolved: {date}',
+      requestTypes: {
+        registration: 'Registration',
+        profile: 'Profile change'
+      },
+      resolutions: {
+        approved: 'Approved',
+        rejected: 'Rejected',
+        deleted: 'Deleted'
+      },
       pendingProfileChanges: 'Pending profile changes: {changes}',
       deleteRequest: 'Delete request permanently',
       confirmDelete: 'Delete this moderation request permanently?',

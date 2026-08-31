@@ -15,10 +15,10 @@ from app.config import get_settings
 from app.database_backup import create_database_backup
 from app.db import get_session
 from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, is_system_admin, require_admin, require_moder_plus, require_pilot_plus, require_system_admin
-from app.models import RACE_GAMES, Appeal, Banner, Championship, Penalty, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamRaceRegistration, User, UserStatus, default_game_ratings
+from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamRaceRegistration, User, UserStatus, default_game_ratings
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
-from app.schemas import AdminDangerDeleteRequest, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
+from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
 from app.security import verify_password
 from app.services import recalculate_all_ratings, result_rows
 
@@ -100,6 +100,24 @@ def parse_steam_blacklist_rows(raw: bytes, filename: str | None) -> tuple[list[t
             continue
         entries.append((steam_id[:50], reason[:1000]))
     return entries, errors
+
+
+def add_moderation_history(session: AsyncSession, user: User, request_type: str, resolution: str, resolved_by: int) -> None:
+    session.add(
+        ModerationHistory(
+            user_id=user.id,
+            request_type=request_type,
+            resolution=resolution,
+            login=user.login,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            nickname=user.nickname,
+            pilot_number=user.pilot_number,
+            steam_id=user.steam_id,
+            pending_profile_changes=dict(user.pending_profile_changes) if isinstance(user.pending_profile_changes, dict) else None,
+            resolved_by=resolved_by,
+        )
+    )
 
 
 def user_response(user: User, team_name: str | None = None, team_abbreviation: str | None = None, private: bool = False) -> dict:
@@ -257,6 +275,22 @@ async def pending_users(request: Request, _: User = Depends(require_moder_plus),
         data["steam_blacklist_reason"] = blacklist_reason
         result.append(data)
     return result
+
+
+@router.get("/moderation/history", response_model=list[ModerationHistoryRead])
+@limiter.limit("60/minute")
+async def moderation_history(
+    request: Request,
+    _: User = Depends(require_moder_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    return list(
+        (
+            await session.scalars(
+                select(ModerationHistory).order_by(ModerationHistory.resolved_at.desc(), ModerationHistory.id.desc()).limit(500)
+            )
+        ).all()
+    )
 
 
 @router.get("/admin", response_model=list[UserPrivate])
@@ -752,6 +786,14 @@ async def approve_user(user_id: int, request: Request, moderator: User = Depends
     )
     if blacklist_entry is not None and moderator.role != Role.admin:
         raise HTTPException(status_code=403, detail="Только администратор может одобрить заявку из чёрного списка Steam")
+    if user.status == UserStatus.unapproved or user.pending_profile_changes is not None:
+        add_moderation_history(
+            session,
+            user,
+            "registration" if user.status == UserStatus.unapproved else "profile",
+            "approved",
+            moderator.id,
+        )
     if user.pending_profile_changes is not None:
         pending_changes = user.pending_profile_changes or {}
         if "email" in pending_changes:
@@ -772,15 +814,17 @@ async def approve_user(user_id: int, request: Request, moderator: User = Depends
 
 @router.delete("/{user_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("3/minute")
-async def reject_user(user_id: int, request: Request, _: User = Depends(require_moder_plus), session: AsyncSession = Depends(get_session)):
+async def reject_user(user_id: int, request: Request, moderator: User = Depends(require_moder_plus), session: AsyncSession = Depends(get_session)):
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     ensure_not_system_admin(user)
     avatar_url = user.avatar_url
     if user.status == UserStatus.unapproved:
+        add_moderation_history(session, user, "registration", "rejected", moderator.id)
         await session.delete(user)
     elif user.pending_profile_changes is not None:
+        add_moderation_history(session, user, "profile", "rejected", moderator.id)
         user.pending_profile_changes = None
     else:
         raise HTTPException(status_code=400, detail="No registration or profile change to reject")
@@ -794,7 +838,7 @@ async def reject_user(user_id: int, request: Request, _: User = Depends(require_
 async def delete_moderation_request(
     user_id: int,
     request: Request,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
     user = await session.get(User, user_id)
@@ -804,8 +848,10 @@ async def delete_moderation_request(
     avatar_url = user.avatar_url
     delete_user = user.status == UserStatus.unapproved
     if delete_user:
+        add_moderation_history(session, user, "registration", "deleted", admin.id)
         await session.delete(user)
     elif user.pending_profile_changes is not None:
+        add_moderation_history(session, user, "profile", "deleted", admin.id)
         user.pending_profile_changes = None
     else:
         raise HTTPException(status_code=400, detail="No registration or profile change to delete")
