@@ -152,7 +152,10 @@ class User(Base):
         ForeignKey("teams.id", ondelete="SET NULL", use_alter=True, name="fk_users_team_id"),
         index=True,
     )
-    pending_profile_changes: Mapped[dict | None] = mapped_column(JSONB)
+    # Store an empty moderation state as SQL NULL rather than JSON ``null``.
+    # JSONB's default serializer otherwise turns Python None into a JSON value,
+    # which still matches ``IS NOT NULL`` filters.
+    pending_profile_changes: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
 
     created_races: Mapped[list["Race"]] = relationship(back_populates="creator", foreign_keys="Race.creator_id")
     team: Mapped["Team | None"] = relationship(back_populates="members", foreign_keys=[team_id])
@@ -182,7 +185,7 @@ class ModerationHistory(Base):
     nickname: Mapped[str] = mapped_column(String(80))
     pilot_number: Mapped[int] = mapped_column(Integer)
     steam_id: Mapped[str] = mapped_column(String(50), index=True)
-    pending_profile_changes: Mapped[dict | None] = mapped_column(JSONB)
+    pending_profile_changes: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)

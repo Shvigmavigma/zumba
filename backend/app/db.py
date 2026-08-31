@@ -45,6 +45,10 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Older deployments used JSONB's default ``none_as_null=False`` and
+        # persisted cleared profile requests as the JSON literal ``null``.
+        # Normalize those rows so they cannot be mistaken for active requests.
+        await conn.execute(text("UPDATE users SET pending_profile_changes = NULL WHERE pending_profile_changes = 'null'::jsonb"))
         await conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE"))
         await conn.execute(text("UPDATE news_items SET is_pinned = FALSE WHERE is_pinned IS NULL"))
         await conn.execute(text("ALTER TABLE news_items ALTER COLUMN is_pinned SET DEFAULT FALSE"))
