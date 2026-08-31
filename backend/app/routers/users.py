@@ -250,7 +250,14 @@ async def pending_users(request: Request, _: User = Depends(require_moder_plus),
         await session.execute(
             select(User, Team.name, Team.abbreviation)
             .outerjoin(Team, Team.id == User.team_id)
-            .where(or_(User.status == UserStatus.unapproved, User.pending_profile_changes.is_not(None)))
+            .where(
+                or_(
+                    User.status == UserStatus.unapproved,
+                    # JSONB may contain a literal ``null`` from older rows;
+                    # only an object represents an actual pending change set.
+                    func.jsonb_typeof(User.pending_profile_changes) == "object",
+                )
+            )
             .order_by(User.created_at)
         )
     ).all()
