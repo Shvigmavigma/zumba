@@ -169,6 +169,25 @@ class SteamBlacklistEntry(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
 
+class ModerationHistory(Base):
+    __tablename__ = "moderation_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    request_type: Mapped[str] = mapped_column(String(30), index=True)
+    resolution: Mapped[str] = mapped_column(String(30), index=True)
+    login: Mapped[str] = mapped_column(String(50))
+    first_name: Mapped[str] = mapped_column(String(50))
+    last_name: Mapped[str] = mapped_column(String(50))
+    nickname: Mapped[str] = mapped_column(String(80))
+    pilot_number: Mapped[int] = mapped_column(Integer)
+    steam_id: Mapped[str] = mapped_column(String(50), index=True)
+    pending_profile_changes: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+
+
 class Team(Base):
     __tablename__ = "teams"
     __table_args__ = (

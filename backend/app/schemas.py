@@ -132,6 +132,25 @@ class UserModerationRead(UserPublic):
     steam_blacklist_reason: str | None = None
 
 
+class ModerationHistoryRead(BaseModel):
+    id: int
+    user_id: int | None = None
+    request_type: Literal["registration", "profile"]
+    resolution: Literal["approved", "rejected", "deleted"]
+    login: str
+    first_name: str
+    last_name: str
+    nickname: str
+    pilot_number: int
+    steam_id: str
+    pending_profile_changes: dict | None = None
+    created_at: datetime
+    resolved_at: datetime
+    resolved_by: int | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class SteamBlacklistEntryRead(BaseModel):
     id: int
     steam_id: str

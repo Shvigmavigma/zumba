@@ -4771,6 +4771,101 @@ textarea {
   min-height: 82px;
 }
 
+.moderation-view-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  width: min(100%, 420px);
+  min-height: var(--input-height);
+  margin: 14px 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel-muted) 88%, var(--panel));
+}
+
+.moderation-view-switch button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: calc(var(--control-radius) - 2px);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.moderation-view-switch button:hover,
+.moderation-view-switch button:focus-visible {
+  color: var(--text);
+}
+
+.moderation-view-switch button.active {
+  background: var(--panel);
+  color: var(--primary-strong);
+  box-shadow: 0 1px 8px rgba(15, 23, 42, 0.08);
+}
+
+.moderation-view-switch button span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 13%, var(--panel-muted));
+  color: var(--primary-strong);
+  font-size: var(--tiny-text-size);
+}
+
+.moderation-history-card {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 82px;
+}
+
+.moderation-history-resolution {
+  min-width: 104px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.moderation-history-resolution.is-approved {
+  background: color-mix(in srgb, var(--success) 13%, var(--panel));
+  color: var(--success);
+}
+
+.moderation-history-resolution.is-rejected,
+.moderation-history-resolution.is-deleted {
+  background: color-mix(in srgb, var(--danger) 13%, var(--panel));
+  color: var(--danger);
+}
+
+.moderation-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .moderation-history-card {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .moderation-history-resolution {
+    justify-self: start;
+  }
+}
+
 .user-moderation-meta {
   min-width: 0;
 }
