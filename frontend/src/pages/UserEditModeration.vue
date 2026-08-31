@@ -115,7 +115,7 @@ watch([users, history, viewMode], () => {
         {{ t('moderation.current') }} <span>{{ users.length }}</span>
       </button>
       <button type="button" :class="{ active: viewMode === 'completed' }" :aria-selected="viewMode === 'completed'" role="tab" @click="switchMode('completed')">
-        {{ t('moderation.completed') }} <span>{{ history.length }}</span>
+        {{ t('moderation.completed') }}
       </button>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
