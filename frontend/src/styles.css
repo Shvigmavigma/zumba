@@ -15433,12 +15433,16 @@ body,
 }
 
 .standalone-bracket-match-meta {
+  width: 100%;
+  min-width: 0;
   align-items: flex-start;
   font-size: var(--tiny-text-size);
   line-height: 1.25;
 }
 
 .standalone-bracket-match-meta > span:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -15677,9 +15681,25 @@ body,
   border-color: color-mix(in srgb, var(--success) 48%, var(--border));
 }
 
+.standalone-bracket-column.is-semifinal .standalone-bracket-match.is-upper {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+}
+
+.standalone-bracket-column.is-semifinal .standalone-bracket-match.is-lower {
+  border-color: color-mix(in srgb, var(--success) 48%, var(--border));
+}
+
 .standalone-bracket-column.is-semifinal .standalone-bracket-column-head {
   padding-top: 8px;
   border-top: 2px solid var(--primary-strong);
+}
+
+.standalone-bracket-column.is-semifinal.is-upper .standalone-bracket-column-head {
+  border-top-color: var(--accent);
+}
+
+.standalone-bracket-column.is-semifinal.is-lower .standalone-bracket-column-head {
+  border-top-color: var(--success);
 }
 
 .standalone-bracket-column.is-third_place .standalone-bracket-match {
@@ -15760,19 +15780,21 @@ body,
   border-top-color: var(--success);
 }
 
-/* Double-elimination uses one wide canvas: opening, upper, and lower route sections
-   share the first horizontal parallel, with both semifinal pairs in the final column. */
+/* Double-elimination uses one wide canvas: the shared opening stage sits left,
+   the lower route is directly below the upper route, and both semifinal pairs
+   continue into the adjacent final column. */
 .standalone-bracket-routes.is-double {
   display: grid;
   position: relative;
-  grid-template-columns: max-content max-content max-content max-content;
+  grid-template-columns: max-content max-content max-content;
   grid-template-areas:
-    'opening upper lower final'
-    'opening upper lower final'
-    'third third third third';
+    'opening upper final'
+    'opening lower final'
+    'third third third';
   align-items: start;
   column-gap: clamp(34px, 4vw, 60px);
-  row-gap: clamp(28px, 4vw, 52px);
+  /* Keep upper/lower first-round blocks as one compact middle lane. */
+  row-gap: 0;
   min-width: max-content;
   padding: clamp(18px, 3vw, 30px);
   border: 1px solid var(--border);
@@ -15818,6 +15840,70 @@ body,
 
 .standalone-bracket-routes.is-double .standalone-bracket-route.is-lower {
   grid-area: lower;
+  /* The shared opening stage spans both rows and makes CSS Grid reserve an
+     extra row-sized gap. Pull the lower branch back into the upper branch's
+     lane so the two first-round blocks read as one connected section. */
+  margin-top: calc(-1 * clamp(36px, 4vw, 56px));
+}
+
+/* Both first-round branches share the same center lane. Removing the derived
+   round offset/gap here keeps the cards grouped instead of spreading them as
+   a regular single-elimination column would. */
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-upper,
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-lower {
+  gap: 8px;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-upper .standalone-bracket-column-matches,
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-lower .standalone-bracket-column-matches {
+  gap: clamp(12px, 1.2vw, 18px);
+  padding-top: 0;
+}
+
+/* Keep the branch names in the grouped lane, but make their headers compact so
+   they don't recreate the large gap from the original round layout. */
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-upper .standalone-bracket-route-head,
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-lower .standalone-bracket-route-head {
+  display: flex;
+  position: relative;
+  top: auto;
+  left: auto;
+  width: max-content;
+  min-width: 0;
+  padding: 0 0 4px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-upper .standalone-bracket-route-head > div,
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-lower .standalone-bracket-route-head > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-upper .standalone-bracket-route-head span,
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-lower .standalone-bracket-route-head span {
+  display: none;
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-upper .standalone-bracket-route-head strong,
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-lower .standalone-bracket-route-head strong {
+  font-size: var(--small-text-size);
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-upper .standalone-bracket-route-head strong {
+  color: var(--accent);
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-lower .standalone-bracket-route-head strong {
+  color: var(--success);
+}
+
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-upper .standalone-bracket-column-head,
+.standalone-bracket-routes.is-double .standalone-bracket-route.is-lower .standalone-bracket-column-head {
+  display: none;
 }
 
 .standalone-bracket-routes.is-double .standalone-bracket-route.is-final {
@@ -15860,6 +15946,14 @@ body,
 .standalone-bracket-routes.is-double .standalone-bracket-match {
   width: 100%;
   box-sizing: border-box;
+}
+
+/* Double-elimination links are rendered by the route SVG. Hide the generic
+   odd/even card connectors so upper and lower semifinals never get bridged by
+   an unrelated vertical stub. */
+.standalone-bracket-routes.is-double .standalone-bracket-match::before,
+.standalone-bracket-routes.is-double .standalone-bracket-match::after {
+  display: none;
 }
 
 .standalone-bracket-routes.is-double .standalone-bracket-route-head {
