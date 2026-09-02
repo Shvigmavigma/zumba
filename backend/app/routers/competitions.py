@@ -217,6 +217,82 @@ def match_loser(match: dict) -> str | None:
     return None
 
 
+def _round_number(match: dict) -> int:
+    try:
+        return int(match.get("round", 1))
+    except (TypeError, ValueError):
+        return 1
+
+
+def tournament_final_match(data: dict) -> dict | None:
+    """Return the final progression match for any tournament variant."""
+    matches = data.get("matches", [])
+    if data.get("settings", {}).get("variant") == "double_elimination":
+        return next(
+            (
+                match
+                for match in matches
+                if match.get("stage") == "playoff" and match.get("bracket") == "final"
+            ),
+            None,
+        )
+    progression = [
+        match
+        for match in matches
+        if match.get("stage") not in {"group", "third_place"}
+    ]
+    return max(progression, key=_round_number, default=None)
+
+
+def tournament_results_ready(data: dict) -> bool:
+    """Only expose final standings after every required match is resolved."""
+    final = tournament_final_match(data)
+    if final is None or final.get("status") == "open" or not final.get("winner"):
+        return False
+    third_place = next(
+        (match for match in data.get("matches", []) if match.get("stage") == "third_place"),
+        None,
+    )
+    return third_place is None or (
+        third_place.get("status") != "open" and bool(third_place.get("winner"))
+    )
+
+
+def build_tournament_results(data: dict) -> list[dict]:
+    """Build deterministic standings shared by close and match-finalization."""
+    final = tournament_final_match(data)
+    third_place = next(
+        (match for match in data.get("matches", []) if match.get("stage") == "third_place"),
+        None,
+    )
+    ordered_ids: list[str] = []
+    for match in (final, third_place):
+        if not match:
+            continue
+        for participant_id in (match.get("winner"), match_loser(match)):
+            if participant_id and participant_id not in ordered_ids:
+                ordered_ids.append(participant_id)
+    ordered_ids.extend(
+        entry.get("id")
+        for entry in data.get("participants", [])
+        if entry.get("id") not in ordered_ids
+    )
+    vote_totals: dict[str, int] = {}
+    for match in data.get("matches", []):
+        if match.get("a"):
+            vote_totals[match["a"]] = vote_totals.get(match["a"], 0) + int(match.get("votes_a", 0))
+        if match.get("b"):
+            vote_totals[match["b"]] = vote_totals.get(match["b"], 0) + int(match.get("votes_b", 0))
+    return [
+        {
+            "place": index + 1,
+            "participant_id": participant_id,
+            "votes": vote_totals.get(participant_id, 0),
+        }
+        for index, participant_id in enumerate(ordered_ids)
+    ]
+
+
 def normalize_advancing_places(value) -> list[int]:
     if not isinstance(value, (list, tuple, set)):
         return [1]
@@ -281,10 +357,10 @@ def build_matches(data: dict) -> None:
 def advance_double_elimination(data: dict) -> None:
     """Advance the fixed 8-participant upper/lower qualification bracket.
 
-    The format intentionally stops after four semifinal qualifiers: two come
-    from the upper bracket and two survive the lower bracket. This keeps the
-    requested Major-style split while making the stage deterministic and easy
-    to operate from the existing pair-closing controls.
+    The opening round is shared. Its winners continue through the upper
+    bracket and its losers through the lower bracket. Each route then gets its
+    own semifinal (upper-vs-upper and lower-vs-lower), after which those two
+    semifinal winners meet in the final and the losers play for third place.
     """
     matches = data.setdefault("matches", [])
     settings_data = data.setdefault("settings", {})
@@ -315,8 +391,8 @@ def advance_double_elimination(data: dict) -> None:
         lower_winners = [match.get("winner") for match in lower_round_one if match.get("winner")]
         if len(upper_winners) == 2 and len(lower_winners) == 2:
             matches.extend([
-                bracket_match(upper_winners[0], lower_winners[0], stage="semifinal", round_number=1, bracket="semifinal"),
-                bracket_match(upper_winners[1], lower_winners[1], stage="semifinal", round_number=1, bracket="semifinal"),
+                bracket_match(upper_winners[0], upper_winners[1], stage="semifinal", round_number=1, bracket="upper"),
+                bracket_match(lower_winners[0], lower_winners[1], stage="semifinal", round_number=1, bracket="lower"),
             ])
             settings_data["phase"] = "semifinal"
         return
@@ -621,37 +697,7 @@ async def close_competition(competition_id: int, request: Request, _: User = Dep
         if any(match.get("status") == "open" and not match.get("winner") for match in data.get("matches", [])):
             raise HTTPException(status_code=400, detail="Сначала завершите все пары")
     if item.kind == "tournament":
-        progression_matches = [
-            match for match in data.get("matches", [])
-            if match.get("stage") not in {"group", "third_place"}
-        ]
-        final_round = max((int(match.get("round", 1)) for match in progression_matches), default=1)
-        final = next(
-            (
-                match for match in progression_matches
-                if int(match.get("round", 1)) == final_round and match.get("b")
-            ),
-            None,
-        )
-        third_place = next(
-            (match for match in data.get("matches", []) if match.get("stage") == "third_place"),
-            None,
-        )
-        ordered_ids: list[str] = []
-        for match in (final, third_place):
-            if not match:
-                continue
-            for participant_id in (match.get("winner"), match_loser(match)):
-                if participant_id and participant_id not in ordered_ids:
-                    ordered_ids.append(participant_id)
-        ordered_ids.extend(entry.get("id") for entry in data.get("participants", []) if entry.get("id") not in ordered_ids)
-        vote_totals = {}
-        for match in data.get("matches", []):
-            if match.get("a"):
-                vote_totals[match["a"]] = vote_totals.get(match["a"], 0) + int(match.get("votes_a", 0))
-            if match.get("b"):
-                vote_totals[match["b"]] = vote_totals.get(match["b"], 0) + int(match.get("votes_b", 0))
-        data["results"] = [{"place": index + 1, "participant_id": participant_id, "votes": vote_totals.get(participant_id, 0)} for index, participant_id in enumerate(ordered_ids)]
+        data["results"] = build_tournament_results(data)
     else:
         participants = sorted(data.get("participants", []), key=lambda entry: (-int(entry.get("votes", 0)), str(entry.get("name", "")).lower()))
         data["results"] = [{"place": index + 1, "participant_id": entry.get("id"), "votes": int(entry.get("votes", 0))} for index, entry in enumerate(participants)]
@@ -678,6 +724,14 @@ async def close_match(competition_id: int, match_id: str, request: Request, _: U
     match["status"] = "closed"
     if match.get("stage") != "group":
         advance_bracket(data)
+    if tournament_results_ready(data):
+        data["results"] = build_tournament_results(data)
+    elif item.kind == "tournament":
+        # ``advance_bracket`` may produce a temporary winner as soon as the
+        # final closes. Keep standings empty until the required third-place
+        # match (when present) is also fixed, so public results never look
+        # complete too early.
+        data["results"] = []
     persist_data(item, data)
     await session.commit()
     return staff_payload(item)
@@ -721,6 +775,7 @@ async def public_competition(token: str, request: Request, voter_token: str = ""
             "public_path": f"{public_path(item)}?match={match.get('id')}" if match.get("id") else public_path(item),
             "round": match.get("round", 1),
             "stage": match.get("stage", "playoff"),
+            "bracket": match.get("bracket"),
             "group": match.get("group"),
             "a": participant_public(a) if a else None,
             "b": participant_public(b) if b else None,

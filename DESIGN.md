@@ -85,6 +85,13 @@
 - 2026-08-31 — admin collapsible zones: existing admin cards reuse the token-based icon-button and chevron pattern; every major zone can collapse to its title row, starts expanded, and remains keyboard accessible without adding dependencies.
 - 2026-08-31 — Steam blacklist: the admin settings page uses the existing collapsible card, table, input, upload, and danger-action tokens for numeric Steam ID/reason entries; the downloadable Excel example keeps IDs as text, and moderation exposes a hover reason while server-side approval remains admin-only.
 - 2026-08-31 — moderation history: the moderation page uses a two-state token-based switch for current and completed requests; resolved requests retain a compact user snapshot so rejected/deleted registrations remain visible without keeping the account.
+- 2026-09-02 — double-elimination results: upper and lower semifinals are separate upper-vs-upper and lower-vs-lower matches; final standings are persisted only after the final and bronze match are resolved, while the unified canvas stacks the lower route below the upper route with explicit SVG links.
+- 2026-09-02 — double-elimination spacing: upper/lower round headers are hidden in the compact route canvas, vertical row spacing is reduced without changing horizontal spacing, and SVG connectors target each route's own semifinal.
+- 2026-09-02 — double-elimination first-round grouping: upper and lower branch cards use a compact shared middle lane with their derived round offsets removed, while the opening and final lanes keep their existing alignment.
+- 2026-09-02 — bracket connector compatibility: legacy semifinal records without an upper/lower bracket now receive a deterministic visual branch class so their SVG links render too.
+- 2026-09-02 — double-elimination branch labels: upper/lower titles return as compact inline headers in their grouped card lanes without restoring the removed vertical spacing.
+- 2026-09-02 — double-elimination stage labels: each compact branch header includes its current round label (for example, «Верхняя сетка · Раунд 2»).
+- 2026-09-02 — bracket card metadata: long semifinal labels are constrained to the card width with flex shrink and ellipsis so status stays inside the card.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, browser title/favicon, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
