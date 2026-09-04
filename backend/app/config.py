@@ -8,9 +8,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "BMRL Race Control"
-    app_domain: str = "localhost"
-    public_base_url: str = "http://localhost"
-    cors_origins: str = "http://localhost,http://127.0.0.1"
+    app_domain: str = "xskynet.ru"
+    public_base_url: str = "http://xskynet.ru"
+    cors_origins: str = "http://xskynet.ru"
 
     database_url: str = "postgresql+asyncpg://bmrl:bmrl@postgres:5432/bmrl"
     db_pool_size: int = 20
