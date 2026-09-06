@@ -10,7 +10,7 @@ import PaginationControls from '../components/PaginationControls.vue'
 import TeamAvatar from '../components/TeamAvatar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { gameOptions } from '../i18nLabels'
-import { filterPilots, formatPilotNumber, formatRating, ratingForGame, sortPilots, teamShortName } from '../pilotDisplay'
+import { filterPilots, formatPilotNumber, formatRating, pilotName, ratingForGame, sortPilots, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
 
 const { t } = useI18n()
@@ -130,7 +130,7 @@ function setTeamAvatarFile(event) {
 }
 
 function memberTitle(member) {
-  return member.nickname || member.login
+  return pilotName(member, member.nickname || member.login)
 }
 
 function memberTeamName(member) {
