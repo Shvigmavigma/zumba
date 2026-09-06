@@ -22,10 +22,10 @@ cp .env.example .env
 2. В `.env` поменяйте пароли, `JWT_SECRET` и домен:
 
 ```env
-APP_DOMAIN=xskynet.ru
+APP_DOMAIN=bmrl.site
 WEB_PORT=8080
-PUBLIC_BASE_URL=http://xskynet.ru
-CORS_ORIGINS=http://xskynet.ru
+PUBLIC_BASE_URL=https://bmrl.site
+CORS_ORIGINS=https://bmrl.site
 ```
 
 3. Запустите сервис:
@@ -37,7 +37,7 @@ docker compose up --build -d
 4. Откройте:
 
 - Web локально: `http://localhost:8080`
-- Web на домене: `http://xskynet.ru`
+- Web на домене: `https://bmrl.site`
 - API healthcheck: `/health`
 - API docs: `/api/docs`
 
@@ -68,7 +68,7 @@ bash scripts/backup-project.sh
 3. В DNS домена создайте A-запись на белый IP:
 
 ```text
-xskynet.ru -> ваш белый IP
+bmrl.site -> Cloudflare Tunnel
 ```
 
 4. Скопируйте проект на этот ПК и создайте `.env`:
@@ -80,10 +80,10 @@ cp .env.example .env
 5. В `.env` укажите домен и публичный HTTP-адрес:
 
 ```env
-APP_DOMAIN=xskynet.ru
+APP_DOMAIN=bmrl.site
 WEB_PORT=8080
-PUBLIC_BASE_URL=http://xskynet.ru
-CORS_ORIGINS=http://xskynet.ru
+PUBLIC_BASE_URL=https://bmrl.site
+CORS_ORIGINS=https://bmrl.site
 ```
 
 Также обязательно замените `POSTGRES_PASSWORD`, `DATABASE_URL`, `JWT_SECRET` и `ADMIN_PASSWORD` на свои значения. Пароль в `DATABASE_URL` должен совпадать с `POSTGRES_PASSWORD`.
@@ -103,9 +103,9 @@ docker compose logs -f backend
 
 Адреса после успешного запуска:
 
-- сайт: `http://xskynet.ru`
-- healthcheck: `http://xskynet.ru/health`
-- API docs: `http://xskynet.ru/api/docs`
+- сайт: `https://bmrl.site`
+- healthcheck: `https://bmrl.site/health`
+- API docs: `https://bmrl.site/api/docs`
 
 ## Производительность
 
