@@ -31,6 +31,8 @@ const trackLoading = ref(false)
 const trackError = ref('')
 const trackImageInput = ref(null)
 const trackImageUploading = ref(false)
+const ACC_MAX_TIME_MS = 2147483647
+const ACC_MAX_TIME_ALIASES = new Set([ACC_MAX_TIME_MS, 4294967295])
 const trackGameOptions = computed(() => gameOptions(t))
 const canManageTrackImages = computed(() => state.user?.role === 'admin')
 
@@ -137,6 +139,17 @@ function numericValue(...values) {
   return null
 }
 
+function isAccMaxTime(value) {
+  const number = Number(value)
+  return Number.isFinite(number) && (ACC_MAX_TIME_ALIASES.has(number) || number >= ACC_MAX_TIME_MS)
+}
+
+function raceTimeValue(value, game) {
+  const number = Number(value)
+  if (!Number.isFinite(number) || number <= 0) return null
+  return game === 'ACC' && isAccMaxTime(number) ? null : number
+}
+
 function registrationForRow(race, row) {
   const userId = Number(row.user_id)
   const raceNumber = Number(row.race_number ?? row.pilot_number)
@@ -150,10 +163,11 @@ function trackRaceEntry(race, row) {
   if (row.status === 'missing') return null
   const registered = registrationForRow(race, row)
   const laps = numericValue(row.lap_count, row.laps)
-  const finishMs = numericValue(row.adjusted_finish_ms, row.finish_ms, row.driver_total_time_ms)
+  const rawFinishMs = row.adjusted_finish_ms ?? row.finish_ms ?? row.driver_total_time_ms
+  const finishMs = raceTimeValue(rawFinishMs, race.game)
   const lapCandidates = [
-    { value: numericValue(row.best_lap_ms), session: 'race' },
-    { value: numericValue(row.qualification_best_lap_ms), session: 'qualification' }
+    { value: raceTimeValue(row.best_lap_ms, race.game), session: 'race' },
+    { value: raceTimeValue(row.qualification_best_lap_ms, race.game), session: 'qualification' }
   ].filter((candidate) => candidate.value !== null)
   const bestLap = lapCandidates.sort((left, right) => left.value - right.value)[0] || { value: null, session: null }
   const bestLapMs = bestLap.value
@@ -176,6 +190,7 @@ function trackRaceEntry(race, row) {
     finishMs,
     averageLapMs,
     laps: laps || 0,
+    didNotFinish: race.game === 'ACC' && (isAccMaxTime(rawFinishMs) || row.status === 'dnf'),
     raceId: race.id,
     raceName: race.name,
     raceDate: race.datetime_start
@@ -282,6 +297,7 @@ const selectedTrackSummary = computed(() => trackSummaries.value.find((summary) 
 const selectedTrackRows = computed(() => selectedTrackSummary.value?.topRows || [])
 
 function trackRaceTime(row) {
+  if (row.didNotFinish) return t('raceDetails.didNotFinish')
   if (row.finishMs === null) return '-'
   const laps = row.laps ? `${row.laps} ${t('tracks.lapsShort')}` : t('tracks.noLaps')
   return `${formatDuration(row.finishMs)} · ${laps}`
@@ -398,9 +414,9 @@ async function deleteTrackImage() {
           <span v-else class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span>
         </span>
         <span class="pilot-roster-country" role="cell" :data-label="t('fields.country')">{{ pilotCountry(pilot) }}</span>
-        <span class="pilot-roster-metric" role="cell" data-label="RER"><strong>{{ formatRating(ratingForGame(pilot, ratingGame)) }}</strong><small>RER {{ ratingGame }}</small></span>
-        <span class="pilot-roster-metric" role="cell" data-label="SR"><strong>{{ pilot.sr }}</strong><small>SR</small></span>
-        <span class="pilot-roster-metric" role="cell" :data-label="t('fields.ratingRaces')"><strong>{{ ratingRaceCountForGame(pilot, ratingGame) }}</strong><small>{{ t('fields.ratingRaces') }}</small></span>
+        <span class="pilot-roster-metric pilot-roster-rer" role="cell" data-label="RER"><strong>{{ formatRating(ratingForGame(pilot, ratingGame)) }}</strong><small>RER {{ ratingGame }}</small></span>
+        <span class="pilot-roster-metric pilot-roster-sr" role="cell" data-label="SR"><strong>{{ pilot.sr }}</strong><small>SR</small></span>
+        <span class="pilot-roster-metric pilot-roster-races" role="cell" :data-label="t('fields.ratingRaces')"><strong>{{ ratingRaceCountForGame(pilot, ratingGame) }}</strong><small>{{ t('fields.ratingRaces') }}</small></span>
       </article>
 
       <div v-if="!pilots.length" class="pilot-roster-empty">{{ t('common.noMatches') }}</div>
@@ -484,8 +500,8 @@ async function deleteTrackImage() {
             </thead>
             <tbody>
               <tr v-for="(row, index) in selectedTrackRows" :key="`${row.raceId}-${row.pilotKey}`">
-                <td>{{ index + 1 }}</td>
-                <td>
+                <td data-label="#">{{ index + 1 }}</td>
+                <td :data-label="t('roles.pilot')">
                   <RouterLink v-if="row.user_id" class="track-pilot-link" :to="`/pilots/${row.user_id}`">
                     <span class="user-name-line">
                       <strong>{{ row.pilotName }}</strong>
@@ -501,13 +517,13 @@ async function deleteTrackImage() {
                     <small>#{{ formatPilotNumber(row.pilotNumber) }}</small>
                   </span>
                 </td>
-                <td class="track-best-lap-cell">
+                <td class="track-best-lap-cell" :data-label="t('tracks.bestLap')">
                   <strong>{{ formatDuration(row.bestLapMs) }}</strong>
                   <span v-if="row.bestLapSession" class="track-lap-source">{{ row.bestLapSession === 'qualification' ? t('tracks.lapSourceQualification') : t('tracks.lapSourceRace') }}</span>
                 </td>
-                <td>{{ carModelLabel(row.carModel) }}</td>
-                <td>{{ trackRaceTime(row) }}</td>
-                <td><RouterLink class="track-race-link" :to="`/races/${row.raceId}`">{{ row.raceName }}</RouterLink></td>
+                <td :data-label="t('common.car')">{{ carModelLabel(row.carModel) }}</td>
+                <td :data-label="t('tracks.raceTime')">{{ trackRaceTime(row) }}</td>
+                <td :data-label="t('fields.race')"><RouterLink class="track-race-link" :to="`/races/${row.raceId}`">{{ row.raceName }}</RouterLink></td>
               </tr>
             </tbody>
           </table>

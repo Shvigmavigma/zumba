@@ -93,6 +93,8 @@
 - 2026-09-02 — double-elimination stage labels: each compact branch header includes its current round label (for example, «Верхняя сетка · Раунд 2»).
 - 2026-09-02 — bracket card metadata: long semifinal labels are constrained to the card width with flex shrink and ellipsis so status stays inside the card.
 - 2026-09-06 — moderation clarity: pending-account notices use a shared status banner, while moderation requests open a structured user-change card instead of raw JSON.
+- 2026-09-06 — race results mobile layout: race podium cards expose best-lap times and collapse into ordered, readable phone cards; participant metrics and race actions wrap into touch-friendly rows.
+- 2026-09-06 — mobile race data pass: result rows, pilot roster rows, and track records become labeled phone cards; ACC maximum timing sentinels render as a localized "Did not finish" state.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, browser title/favicon, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
@@ -104,6 +106,8 @@
 - `frontend/src/pages/NewsManage.vue` — news editor with single-item pin controls and pinned-first management ordering.
 - `frontend/src/pages/RaceDetails.vue` — moderator-only pilot removal action in the individual registration list, with confirmation and refreshed pagination.
 - `frontend/src/pages/RaceDetails.vue` — admin-only force registration form for adding active pilots before a race starts.
+- `frontend/src/pages/RaceDetails.vue` — race-result podium cards show the best lap beside the result time and use a stacked mobile layout.
+- `frontend/src/pages/PilotList.vue` — pilot and track result tables expose mobile field labels for card layouts.
 - `frontend/src/pages/NewsManage.vue` — autoplay interval/pause settings plus single-pinned-news state reconciliation after saves.
 - `frontend/src/components/ProfileAnalytics.vue` — reusable profile statistics block with simulator filter, best-lap source labels, recent result links, and an SVG rating trend.
 - `frontend/src/pages/PilotList.vue` — track records table with the qualifying/race source for each selected best lap.

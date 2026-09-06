@@ -49,6 +49,8 @@ const fanVoteVoting = ref(false)
 const manualPilotSearch = ref('')
 const manualPilotResults = ref([])
 const manualPilotLoading = ref(false)
+const ACC_MAX_TIME_MS = 2147483647
+const ACC_MAX_TIME_ALIASES = new Set([ACC_MAX_TIME_MS, 4294967295])
 const myTeam = ref(null)
 const teamRaceNumber = ref(pilotNumberDraft(state.user?.pilot_number))
 const teamDriverIds = ref([])
@@ -261,6 +263,39 @@ function formatDuration(ms) {
   return `${minutes}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`
 }
 
+function resultBestLapMs(row) {
+  return row?.best_lap_ms ?? row?.bestLap ?? row?.timing?.bestLap ?? null
+}
+
+function resultFinishMs(row) {
+  return row?.adjusted_finish_ms ?? row?.finish_ms ?? row?.totalTime ?? row?.timing?.totalTime ?? null
+}
+
+function isAccMaxTime(value) {
+  const number = Number(value)
+  return Number.isFinite(number) && (ACC_MAX_TIME_ALIASES.has(number) || number >= ACC_MAX_TIME_MS)
+}
+
+function resultIsDidNotFinish(row, value) {
+  return Boolean(
+    race.value?.game === 'ACC'
+    && (isAccMaxTime(value) || row?.status === 'missing' || row?.status === 'dnf')
+  )
+}
+
+function resultTimeLabel(row, value) {
+  if (resultIsDidNotFinish(row, value)) return t('raceDetails.didNotFinish')
+  return formatDuration(value)
+}
+
+function resultBestLapLabel(row) {
+  return resultTimeLabel(row, resultBestLapMs(row))
+}
+
+function resultFinishLabel(row) {
+  return resultTimeLabel(row, resultFinishMs(row))
+}
+
 function parseDuration(value, required = true) {
   const raw = String(value || '').trim()
   if (!raw) {
@@ -470,6 +505,7 @@ function resultPodiumClass(row) {
 }
 
 function resultGap(row) {
+  if (resultIsDidNotFinish(row, resultFinishMs(row))) return t('raceDetails.didNotFinish')
   if (row.gap_ms === 0) return t('raceDetails.leaderGap')
   return Number.isFinite(Number(row.gap_ms)) ? `+${formatDuration(row.gap_ms)}` : '-'
 }
@@ -1491,7 +1527,7 @@ watch(visibleParticipants, () => {
           <div class="race-results-podium">
             <article v-for="row in activeResultRows.slice(0, 3)" :key="`podium-${resultsTab}-${row.user_id || row.player_id || row.position}`" class="result-podium-card" :class="resultPodiumClass(row)">
               <span class="result-position-badge" :class="resultPodiumClass(row)">{{ row.position || '-' }}</span>
-              <div>
+              <div class="result-podium-driver">
                 <span class="user-name-line">
                   <RouterLink v-if="resultPilotId(row)" class="result-pilot-link" :to="`/pilots/${resultPilotId(row)}`">
                     <strong>{{ resultPilotName(row) }}</strong>
@@ -1501,7 +1537,13 @@ watch(visibleParticipants, () => {
                 </span>
                 <span>{{ resultPilotSubtitle(row) }}</span>
               </div>
-              <strong class="result-podium-time">{{ resultsTab === 'qualification' ? formatDuration(row.best_lap_ms) : formatDuration(row.adjusted_finish_ms ?? row.finish_ms) }}</strong>
+              <div class="result-podium-times">
+                <strong class="result-podium-time">{{ resultsTab === 'qualification' ? resultBestLapLabel(row) : resultFinishLabel(row) }}</strong>
+                <span v-if="resultsTab === 'race'" class="result-podium-best-lap">
+                  <span class="result-podium-best-lap-label">{{ t('raceDetails.bestLap') }}</span>
+                  <strong>{{ resultBestLapLabel(row) }}</strong>
+                </span>
+              </div>
               <span v-if="resultsTab === 'race'" class="result-podium-rating-line">
                 <span class="result-podium-rating-label">{{ t('raceDetails.ratingDelta') }}</span>
                 <span class="rating-delta" :class="resultRatingDeltaClass(row)">{{ resultRatingDelta(row) }}</span>
@@ -1528,8 +1570,8 @@ watch(visibleParticipants, () => {
               </thead>
               <tbody>
                 <tr v-for="row in activeResultRows.slice(3)" :key="`${resultsTab}-${row.user_id || row.player_id || row.raw_position}-${row.position}`" :class="resultPodiumClass(row)">
-                  <td><span class="result-position-badge" :class="resultPodiumClass(row)">{{ row.position || '-' }}</span></td>
-                  <td>
+                  <td data-label="#"><span class="result-position-badge" :class="resultPodiumClass(row)">{{ row.position || '-' }}</span></td>
+                  <td :data-label="t('roles.pilot')">
                     <div class="result-driver-cell">
                       <UserAvatar mini :src="resultPilotAvatar(row)" :color="resultPilotColor(row)" :label="resultPilotName(row)" />
                       <div>
@@ -1551,11 +1593,11 @@ watch(visibleParticipants, () => {
                       </div>
                     </div>
                   </td>
-                  <td v-if="resultsTab === 'race'">{{ row.lap_count ?? '-' }}</td>
-                  <td v-else>{{ carModelLabel(row.car_model) }}</td>
-                  <td>{{ formatDuration(row.best_lap_ms) }}</td>
-                  <td v-if="resultsTab === 'race'">{{ formatDuration(row.finish_ms) }}</td>
-                  <td v-if="resultsTab === 'race'">
+                  <td v-if="resultsTab === 'race'" :data-label="t('raceDetails.laps')">{{ row.lap_count ?? '-' }}</td>
+                  <td v-else :data-label="t('common.car')">{{ carModelLabel(row.car_model) }}</td>
+                  <td :data-label="t('raceDetails.bestLap')">{{ resultBestLapLabel(row) }}</td>
+                  <td v-if="resultsTab === 'race'" :data-label="t('raceDetails.resultTime')">{{ resultFinishLabel(row) }}</td>
+                  <td v-if="resultsTab === 'race'" :data-label="t('raceDetails.timePenalty')">
                     <button
                       v-if="Number(row.time_penalty_ms || 0) > 0 && state.user"
                       class="result-penalty-link"
@@ -1568,7 +1610,7 @@ watch(visibleParticipants, () => {
                     <strong v-else-if="Number(row.time_penalty_ms || 0) > 0" class="result-penalty-value">{{ resultPenalty(row) }}</strong>
                     <span v-else>-</span>
                   </td>
-                  <td v-if="resultsTab === 'race'">
+                  <td v-if="resultsTab === 'race'" :data-label="t('raceDetails.srPenalty')">
                     <button
                       v-if="Number(row.sr_penalty || 0) > 0 && state.user"
                       class="result-penalty-link"
@@ -1581,9 +1623,9 @@ watch(visibleParticipants, () => {
                     <strong v-else-if="Number(row.sr_penalty || 0) > 0" class="result-penalty-value">{{ resultSrPenalty(row) }}</strong>
                     <span v-else>-</span>
                   </td>
-                  <td v-if="resultsTab === 'race'">{{ formatDuration(row.adjusted_finish_ms ?? row.finish_ms) }}</td>
-                  <td v-if="resultsTab === 'race'"><span class="rating-delta" :class="resultRatingDeltaClass(row)">{{ resultRatingDelta(row) }}</span></td>
-                  <td>{{ resultGap(row) }}</td>
+                  <td v-if="resultsTab === 'race'" :data-label="t('raceDetails.adjustedTime')">{{ resultTimeLabel(row, row.adjusted_finish_ms ?? row.finish_ms) }}</td>
+                  <td v-if="resultsTab === 'race'" :data-label="t('raceDetails.ratingDelta')"><span class="rating-delta" :class="resultRatingDeltaClass(row)">{{ resultRatingDelta(row) }}</span></td>
+                  <td :data-label="t('raceDetails.gap')">{{ resultGap(row) }}</td>
                 </tr>
               </tbody>
             </table>
