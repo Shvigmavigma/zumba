@@ -5563,6 +5563,36 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+.result-podium-times {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  min-width: 0;
+}
+
+.result-podium-best-lap {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 5px;
+  max-width: 100%;
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.result-podium-best-lap-label {
+  color: var(--muted);
+  font-size: inherit;
+  font-weight: 700;
+}
+
+.result-podium-best-lap strong {
+  color: var(--text);
+  font-size: inherit;
+}
+
 .manual-results-table {
   display: grid;
   gap: 6px;
@@ -16395,5 +16425,1034 @@ body,
   .standalone-bracket-phase-tab,
   .standalone-bracket-progress span {
     transition: none;
+  }
+}
+
+/* Final phone layout: stack information before controls and keep dense race data readable. */
+@media (max-width: 680px) {
+  :root {
+    --card-padding: 12px;
+  }
+
+  .page {
+    width: min(var(--page-width), calc(100vw - 20px));
+    margin-bottom: 28px;
+    padding: 16px 0 32px;
+  }
+
+  .section {
+    margin: 12px 0;
+  }
+
+  .topbar {
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .topbar > .toolbar {
+    gap: 4px;
+  }
+
+  .brand {
+    gap: 5px;
+    padding-inline: 6px;
+  }
+
+  .nav-links {
+    gap: 2px;
+    margin-inline: -4px;
+    padding-inline: 4px;
+  }
+
+  .nav-links a,
+  .nav-more-button {
+    max-width: 150px;
+    padding-inline: 8px;
+  }
+
+  .race-details-hero,
+  .race-registration-panel,
+  .race-participants-panel,
+  .race-video-panel,
+  .race-results-panel {
+    gap: 12px;
+  }
+
+  .race-details-hero .section-header {
+    align-items: stretch;
+  }
+
+  .race-details-title h1 {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .race-details-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    overflow: visible;
+  }
+
+  .race-details-actions .button {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 8px;
+    white-space: normal;
+  }
+
+  .race-details-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    align-items: stretch;
+  }
+
+  .race-details-meta > span {
+    display: flex;
+    min-width: 0;
+    min-height: 36px;
+    align-items: center;
+    padding: 6px 8px;
+  }
+
+  .race-track-image-control {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .race-track-image-display,
+  .race-track-image,
+  .race-track-image-control .button {
+    width: 100%;
+  }
+
+  .race-track-image {
+    height: auto;
+    aspect-ratio: 16 / 9;
+  }
+
+  .race-results-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .race-results-tabs .tab-button {
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .race-results-upload .form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-results-upload .button {
+    width: 100%;
+  }
+
+  .race-results-podium {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .race-results-podium .result-podium-card,
+  .race-results-podium .result-podium-card.is-gold,
+  .race-results-podium .result-podium-card.is-silver,
+  .race-results-podium .result-podium-card.is-bronze {
+    grid-template-columns: 36px minmax(0, 1fr) minmax(92px, auto);
+    grid-template-rows: auto;
+    align-items: center;
+    justify-items: stretch;
+    min-height: 0;
+    padding: 12px;
+    text-align: left;
+  }
+
+  .race-results-podium .result-podium-card.is-gold {
+    order: 1;
+  }
+
+  .race-results-podium .result-podium-card.is-silver {
+    order: 2;
+  }
+
+  .race-results-podium .result-podium-card.is-bronze {
+    order: 3;
+  }
+
+  .race-results-podium .result-podium-card > div {
+    justify-items: start;
+  }
+
+  .race-results-podium .result-podium-card .result-position-badge {
+    align-self: center;
+    width: 34px;
+    height: 34px;
+    font-size: 1rem;
+  }
+
+  .race-results-podium .result-podium-card .user-name-line {
+    font-size: 1rem;
+  }
+
+  .race-results-podium .result-podium-times {
+    justify-items: end;
+  }
+
+  .race-results-podium .result-podium-card .result-podium-time {
+    font-size: 1rem;
+    text-align: right;
+  }
+
+  .race-results-podium .result-podium-best-lap {
+    font-size: var(--tiny-text-size);
+  }
+
+  .race-results-podium .result-podium-card .result-podium-rating-line {
+    grid-column: 2 / -1;
+    justify-items: start;
+    width: auto;
+  }
+
+  .race-participant-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-height: 0;
+    padding: 10px;
+  }
+
+  .race-participant-row > .pilot-avatar-slot {
+    flex: 0 0 48px;
+  }
+
+  .race-participant-row > .race-participant-main {
+    flex: 1 1 calc(100% - 64px);
+  }
+
+  .race-participant-row > .race-participant-stat,
+  .race-participant-row > .race-participant-country,
+  .race-participant-row > .race-participant-car {
+    flex: 1 1 calc(25% - 8px);
+    min-width: 60px;
+    min-height: 42px;
+    padding: 7px 8px;
+    border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+    border-radius: var(--control-radius);
+    background: color-mix(in srgb, var(--panel-muted) 48%, var(--panel));
+  }
+
+  .race-participant-row.has-registration-action > .danger-icon {
+    flex: 0 0 36px;
+    margin-left: auto;
+  }
+
+  .force-pilot-registration-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-results-table-wrap,
+  .manual-results-table {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 420px) {
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .brand-text {
+    display: none;
+  }
+
+  .topbar > .toolbar {
+    gap: 2px;
+  }
+
+  .timezone-picker {
+    min-width: 96px;
+  }
+
+  .timezone-picker select {
+    width: 64px;
+  }
+
+  .race-details-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-details-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-results-tabs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-participant-row > .race-participant-stat,
+  .race-participant-row > .race-participant-country,
+  .race-participant-row > .race-participant-car {
+    flex-basis: calc(50% - 8px);
+  }
+}
+
+/* Site-wide phone pass: desktop grids become single-column touch layouts. */
+@media (max-width: 680px) {
+  .page .section-header {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .page .section-header > .toolbar,
+  .page > .toolbar,
+  .page .toolbar {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    max-width: 100%;
+    overflow: visible;
+  }
+
+  .page .section-header > .toolbar {
+    width: 100%;
+  }
+
+  .page .toolbar .button {
+    max-width: 100%;
+  }
+
+  .grid.cols-2,
+  .grid.cols-4,
+  .hall-summary-grid,
+  .fuel-layout,
+  .competition-layout,
+  .championship-hero,
+  .championship-stage-draft,
+  .championship-request-card,
+  .championship-participant-card,
+  .championship-add-pilot,
+  .admin-profile-edit-grid,
+  .admin-settings-card,
+  .admin-browser-branding-card,
+  .admin-logo-config-card,
+  .admin-weather-config-card,
+  .admin-system-config-card,
+  .admin-twitch-config-card,
+  .admin-license-config-card,
+  .admin-donation-config-card,
+  .admin-avatar-config-card,
+  .admin-race-assets-card,
+  .banner-editor-grid,
+  .news-settings-form,
+  .news-create-form,
+  .news-manage-card,
+  .race-admin-filters,
+  .team-form-grid,
+  .team-detail-hero,
+  .profile-rating-panel,
+  .profile-stat-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-profile-ratings-grid,
+  .championship-meta-grid,
+  .championship-class-grid,
+  .admin-weather-image-grid,
+  .admin-weather-theme-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .championship-card-strip {
+    grid-auto-flow: row;
+    grid-auto-columns: minmax(0, 1fr);
+    overflow-x: visible;
+  }
+
+  .championship-list-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .championship-list-card > :last-child {
+    grid-column: 2;
+  }
+
+  .championship-stage-edit-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hall-controls,
+  .calendar-controls,
+  .teams-toolbar,
+  .track-toolbar,
+  .pilot-list-controls,
+  .admin-steam-blacklist-tools,
+  .admin-steam-blacklist-add,
+  .admin-steam-blacklist-import,
+  .admin-steam-blacklist-actions,
+  .admin-audit-actions {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .hall-controls,
+  .calendar-controls {
+    display: grid;
+  }
+
+  .hall-tabs {
+    width: 100%;
+  }
+
+  .calendar-header .calendar-controls {
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .calendar-header .calendar-controls strong {
+    min-width: 0;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .fuel-results-head {
+    flex-direction: column;
+  }
+
+  .fuel-results-head span {
+    max-width: 100%;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .role-segment {
+    width: 100%;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .role-segment-option {
+    padding-inline: 4px;
+    font-size: var(--tiny-text-size);
+  }
+
+  .admin-profile-games,
+  .admin-profile-ratings,
+  .championship-stage-edit-form {
+    grid-column: 1;
+  }
+
+  .admin-race-assets-tabs {
+    overflow-x: auto;
+  }
+
+  .admin-race-assets-lap-row,
+  .admin-race-class-row,
+  .admin-car-model-mapping-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-race-assets-actions,
+  .admin-timeout-actions,
+  .news-form-actions,
+  .appeal-card-actions,
+  .team-detail-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .admin-race-assets-actions .button,
+  .admin-timeout-actions .button,
+  .news-form-actions .button,
+  .team-detail-actions .button {
+    flex: 1 1 150px;
+  }
+
+  .news-manage-card > img,
+  .news-manage-card > video {
+    width: 100%;
+    max-height: 220px;
+  }
+
+  .team-edit-panel,
+  .team-owner-panel,
+  .team-applications-section,
+  .team-members-section {
+    margin-inline: 12px;
+  }
+
+  .team-detail-hero {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .team-detail-hero .team-avatar {
+    width: 76px;
+    height: 76px;
+  }
+
+  .team-detail-title h2 {
+    font-size: 26px;
+  }
+
+  .team-list-open {
+    grid-template-columns: 38px 42px minmax(0, 1fr);
+  }
+
+  .team-list-side {
+    grid-column: 3;
+    justify-content: flex-start;
+  }
+
+  .team-list-meter {
+    grid-column: 3;
+  }
+
+  .profile-overview-header .toolbar,
+  .profile-analytics-head .toolbar {
+    width: 100%;
+  }
+
+  .profile-analytics-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-rating-history {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-admin-table-card,
+  .admin-users-card,
+  .hall-table-wrap,
+  .track-record-table-wrap,
+  .championship-table-scroll,
+  .race-results-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .race-admin-table,
+  .admin-users-table,
+  .hall-table,
+  .track-record-table,
+  .championship-results-table,
+  .race-results-table {
+    max-width: none;
+  }
+
+  .calendar-header h1,
+  .pilot-list-header h1,
+  .hall-header h1 {
+    white-space: normal;
+  }
+
+  .calendar-grid {
+    gap: 4px;
+  }
+
+  .calendar-day {
+    min-height: 86px;
+    padding: 6px;
+  }
+
+  .calendar-race-pill {
+    padding: 4px;
+    font-size: var(--tiny-text-size);
+  }
+
+  .competition-card-head,
+  .competition-viewer-title-row,
+  .competition-pair-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .competition-participant-grid,
+  .competition-public-roster-grid,
+  .competition-vote-list-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .competition-results-card,
+  .competition-participants-card,
+  .competition-settings-card {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .admin-profile-ratings-grid,
+  .championship-meta-grid,
+  .championship-class-grid,
+  .admin-weather-image-grid,
+  .admin-weather-theme-grid,
+  .profile-analytics-tabs,
+  .fuel-metrics-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hall-tabs {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .hall-tabs button {
+    min-height: 38px;
+  }
+
+  .calendar-grid {
+    gap: 2px;
+  }
+
+  .calendar-day {
+    min-height: 72px;
+    padding: 4px;
+  }
+
+  .calendar-race-pill {
+    padding: 3px;
+    font-size: 10px;
+  }
+
+  .page .button {
+    min-width: 0;
+  }
+}
+
+/* Phone cards: keep results, pilots, and track records readable without desktop overflow. */
+@media (max-width: 680px) {
+  .pilot-list-header {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .pilot-list-header h1 {
+    white-space: normal;
+  }
+
+  .pilot-page-tabs {
+    width: 100%;
+    grid-auto-flow: initial;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pilot-page-tabs .role-segment-option {
+    min-width: 0;
+  }
+
+  .pilot-roster {
+    gap: 8px;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .pilot-roster-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'driver driver'
+      'number team'
+      'country country'
+      'rer sr'
+      'races races';
+    gap: 8px;
+    min-height: 0;
+    padding: 12px;
+    border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+    border-radius: var(--card-radius);
+    background: var(--panel);
+  }
+
+  .pilot-roster-driver {
+    grid-area: driver;
+    min-width: 0;
+  }
+
+  .pilot-roster-number,
+  .pilot-roster-team,
+  .pilot-roster-country,
+  .pilot-roster-metric {
+    min-width: 0;
+  }
+
+  .pilot-roster-number {
+    grid-area: number;
+  }
+
+  .pilot-roster-team {
+    grid-area: team;
+  }
+
+  .pilot-roster-country {
+    grid-area: country;
+  }
+
+  .pilot-roster-rer {
+    grid-area: rer;
+  }
+
+  .pilot-roster-sr {
+    grid-area: sr;
+  }
+
+  .pilot-roster-races {
+    grid-area: races;
+  }
+
+  .pilot-roster-row .pilot-roster-number,
+  .pilot-roster-row .pilot-roster-team,
+  .pilot-roster-row .pilot-roster-country,
+  .pilot-roster-row .pilot-roster-metric {
+    display: grid;
+    grid-template-columns: minmax(70px, auto) minmax(0, 1fr);
+    align-items: center;
+    min-height: 40px;
+    padding: 7px 9px;
+    border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+    border-radius: var(--control-radius);
+    background: color-mix(in srgb, var(--panel-muted) 48%, transparent);
+  }
+
+  .pilot-roster-row .pilot-roster-number::before,
+  .pilot-roster-row .pilot-roster-team::before,
+  .pilot-roster-row .pilot-roster-country::before,
+  .pilot-roster-row .pilot-roster-metric::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: var(--tiny-text-size);
+    font-weight: 950;
+    text-transform: uppercase;
+  }
+
+  .pilot-roster-row .pilot-roster-metric {
+    justify-items: stretch;
+  }
+
+  .pilot-roster-row .pilot-roster-metric strong {
+    font-size: 17px;
+    text-align: right;
+  }
+
+  .pilot-roster-row .pilot-roster-metric small {
+    display: none;
+  }
+
+  .pilot-roster-row .pilot-roster-team .team-mini-chip {
+    justify-self: end;
+    max-width: 100%;
+  }
+
+  .race-results-podium .result-podium-card,
+  .race-results-podium .result-podium-card.is-gold,
+  .race-results-podium .result-podium-card.is-silver,
+  .race-results-podium .result-podium-card.is-bronze {
+    grid-template-columns: 36px minmax(0, 1fr);
+    grid-template-areas:
+      'position driver'
+      'position times'
+      'rating rating';
+    grid-template-rows: auto auto auto;
+    align-items: center;
+    justify-items: stretch;
+    min-height: 0 !important;
+    padding: 12px;
+    text-align: left;
+  }
+
+  .race-results-podium .result-position-badge {
+    grid-area: position;
+    align-self: center;
+  }
+
+  .race-results-podium .result-podium-driver {
+    grid-area: driver;
+    width: auto !important;
+    align-content: center;
+    justify-items: start !important;
+  }
+
+  .race-results-podium .result-podium-times {
+    grid-area: times;
+    width: auto !important;
+    justify-items: start;
+    align-items: start;
+  }
+
+  .race-results-podium .result-podium-time {
+    font-size: 1.05rem;
+    text-align: left;
+  }
+
+  .race-results-podium .result-podium-best-lap {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .race-results-podium .result-podium-rating-line {
+    grid-area: rating;
+    justify-items: start;
+    width: auto;
+    padding-top: 4px;
+  }
+
+  .race-results-table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .race-results-table,
+  .race-results-table thead,
+  .race-results-table tbody,
+  .race-results-table tr,
+  .race-results-table td {
+    display: block;
+  }
+
+  .race-results-table {
+    min-width: 0 !important;
+  }
+
+  .race-results-table thead {
+    display: none;
+  }
+
+  .race-results-table tbody {
+    display: grid;
+    gap: 8px;
+  }
+
+  .race-results-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 12px;
+    padding: 10px;
+    border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+    border-radius: var(--card-radius);
+    background: var(--panel);
+  }
+
+  .race-results-table tbody td {
+    display: grid;
+    grid-template-columns: minmax(78px, auto) minmax(0, 1fr);
+    align-items: center;
+    gap: 6px;
+    min-width: 0 !important;
+    padding: 6px 0;
+    border: 0;
+    white-space: normal;
+    text-align: right;
+  }
+
+  .race-results-table tbody td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: var(--tiny-text-size);
+    font-weight: 900;
+    text-align: left;
+  }
+
+  .race-results-table tbody td:nth-child(2) {
+    display: block;
+    grid-column: 1 / -1;
+    padding-bottom: 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+    text-align: left;
+  }
+
+  .race-results-table tbody td:nth-child(2)::before {
+    display: none;
+  }
+
+  .race-results-table .result-driver-cell {
+    min-width: 0;
+  }
+
+  .race-results-table .result-driver-cell span {
+    max-width: 100%;
+  }
+
+  .race-results-table tbody td:first-child {
+    align-items: center;
+  }
+
+  .track-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .track-toolbar-count {
+    justify-self: start;
+  }
+
+  .track-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .track-summary-card {
+    min-height: 0;
+    max-height: none;
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .track-summary-image {
+    width: 100%;
+    height: 84px;
+    max-height: none;
+    object-fit: cover;
+  }
+
+  .track-summary-card span {
+    min-height: 0;
+    font-size: 13px;
+  }
+
+  .track-summary-card strong {
+    font-size: 20px;
+  }
+
+  .track-summary-card small {
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
+  .track-record-card {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .track-record-card .section-header {
+    align-items: flex-start;
+  }
+
+  .track-record-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .track-record-actions .button {
+    flex: 1 1 140px;
+  }
+
+  .track-record-hero-image {
+    width: 100%;
+    max-height: none;
+    aspect-ratio: 16 / 7;
+    object-fit: cover;
+  }
+
+  .track-record-table-wrap {
+    overflow: visible;
+  }
+
+  .track-record-table,
+  .track-record-table thead,
+  .track-record-table tbody,
+  .track-record-table tr,
+  .track-record-table td {
+    display: block;
+  }
+
+  .track-record-table {
+    min-width: 0;
+  }
+
+  .track-record-table thead {
+    display: none;
+  }
+
+  .track-record-table tbody {
+    display: grid;
+    gap: 8px;
+  }
+
+  .track-record-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 12px;
+    padding: 10px;
+    border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+    border-radius: var(--card-radius);
+    background: var(--panel);
+  }
+
+  .track-record-table tbody td {
+    display: grid;
+    grid-template-columns: minmax(78px, auto) minmax(0, 1fr);
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 6px 0;
+    border: 0;
+    text-align: right;
+  }
+
+  .track-record-table tbody td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: var(--tiny-text-size);
+    font-weight: 900;
+    text-align: left;
+  }
+
+  .track-record-table tbody td:nth-child(2) {
+    display: block;
+    grid-column: 1 / -1;
+    padding-bottom: 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+    text-align: left;
+  }
+
+  .track-record-table tbody td:nth-child(2)::before {
+    display: none;
+  }
+
+  .track-record-table tbody td:first-child {
+    width: auto;
+    color: var(--text);
+    font-size: inherit;
+  }
+
+  .track-record-table .track-pilot-link,
+  .track-record-table .track-race-link {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 420px) {
+  .pilot-roster-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'driver driver'
+      'number team'
+      'country country'
+      'rer sr'
+      'races races';
+  }
+
+  .track-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .track-summary-image {
+    height: 108px;
+  }
+
+  .race-results-table tbody tr,
+  .track-record-table tbody tr {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-results-table tbody td,
+  .track-record-table tbody td {
+    grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
   }
 }
