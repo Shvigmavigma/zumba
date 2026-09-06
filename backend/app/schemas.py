@@ -278,6 +278,8 @@ class TeamOwnerTransfer(BaseModel):
 class TeamMemberRead(BaseModel):
     id: int
     login: str
+    first_name: str
+    last_name: str
     nickname: str
     pilot_number: int
     country: str | None
