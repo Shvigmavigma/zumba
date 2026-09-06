@@ -397,6 +397,25 @@ p {
   padding: 24px 0 48px;
 }
 
+.account-review-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--primary) 9%, var(--panel));
+  color: var(--text);
+  font-weight: 800;
+}
+
+.account-review-notice svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
 .section {
   margin: 22px 0;
 }
@@ -4856,6 +4875,15 @@ textarea {
 }
 
 @media (max-width: 720px) {
+  .user-moderation-card {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .moderation-profile-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .moderation-history-card {
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
@@ -4875,6 +4903,85 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.moderation-change-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--primary) 7%, var(--panel));
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.moderation-change-preview:hover,
+.moderation-change-preview:focus-visible {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+}
+
+.moderation-change-preview span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.moderation-change-preview small {
+  color: var(--muted);
+}
+
+.moderation-change-preview svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.moderation-user-dialog {
+  width: min(880px, calc(100vw - 32px));
+}
+
+.moderation-user-dialog h3 {
+  margin: 0 0 10px;
+}
+
+.moderation-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.moderation-profile-grid div {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel-muted) 62%, transparent);
+}
+
+.moderation-profile-grid dt {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-weight: 800;
+}
+
+.moderation-profile-grid dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.moderation-change-list {
+  padding-top: 2px;
+}
+
+.moderation-dialog-actions {
+  justify-content: flex-end;
 }
 
 .moderation-blacklist-badge {

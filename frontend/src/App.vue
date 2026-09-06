@@ -295,6 +295,10 @@ watch(navItems, () => {
     </header>
 
     <main class="page">
+      <div v-if="state.user?.status === 'unapproved'" class="account-review-notice" role="status">
+        <Shield :size="18" />
+        <span>{{ t('profile.accountUnderReview') }}</span>
+      </div>
       <RouterView />
     </main>
   </div>
