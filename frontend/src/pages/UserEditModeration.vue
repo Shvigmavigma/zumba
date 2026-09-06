@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Trash2 } from 'lucide-vue-next'
+import { Eye, Trash2, X } from 'lucide-vue-next'
 import { api } from '../api'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
@@ -15,6 +15,7 @@ const history = ref([])
 const error = ref('')
 const viewMode = ref('current')
 const page = ref(1)
+const selectedUser = ref(null)
 const pageSize = 8
 const visibleItems = computed(() => viewMode.value === 'current' ? users.value : history.value)
 const totalPages = computed(() => Math.max(1, Math.ceil(visibleItems.value.length / pageSize)))
@@ -22,9 +23,56 @@ const pagedUsers = computed(() => users.value.slice((page.value - 1) * pageSize,
 const pagedHistory = computed(() => history.value.slice((page.value - 1) * pageSize, page.value * pageSize))
 const isAdmin = computed(() => state.user?.role === 'admin')
 
-function visiblePendingChanges(value) {
-  if (!value || typeof value !== 'object') return String(value || '')
-  return JSON.stringify(Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'email')))
+function formatProfileValue(value) {
+  if (Array.isArray(value)) return value.length ? value.join(' / ') : t('common.none')
+  if (value === null || value === undefined || value === '') return t('common.none')
+  if (typeof value === 'object') return Object.entries(value).map(([key, item]) => `${key}: ${item}`).join(', ')
+  return String(value)
+}
+
+function profileFieldLabel(key) {
+  const labels = {
+    email: t('fields.email'),
+    first_name: t('fields.firstName'),
+    last_name: t('fields.lastName'),
+    nickname: t('fields.nickname'),
+    country: t('fields.country'),
+    discord: t('fields.discord'),
+    games: t('fields.games'),
+    favorite_car: t('profile.favoriteCar')
+  }
+  return labels[key] || key.replaceAll('_', ' ')
+}
+
+function pendingChangeRows(value) {
+  if (!value || typeof value !== 'object') return []
+  return Object.entries(value)
+    .filter(([key]) => key !== 'email')
+    .map(([key, item]) => ({ key, label: profileFieldLabel(key), value: formatProfileValue(item) }))
+}
+
+function moderationFields(user) {
+  return [
+    { label: t('fields.login'), value: user.login },
+    { label: t('fields.nickname'), value: user.nickname },
+    { label: t('fields.firstName'), value: user.first_name },
+    { label: t('fields.lastName'), value: user.last_name },
+    { label: t('fields.pilotNumber'), value: user.pilot_number === null || user.pilot_number === undefined ? null : `#${formatPilotNumber(user.pilot_number)}` },
+    { label: t('fields.country'), value: user.country },
+    { label: t('fields.discord'), value: user.discord },
+    { label: t('fields.steam'), value: user.steam_id },
+    { label: t('fields.games'), value: formatProfileValue(user.games) },
+    { label: t('profile.favoriteCar'), value: user.favorite_car },
+    { label: t('fields.team'), value: user.team_name }
+  ]
+}
+
+function openUserCard(user) {
+  selectedUser.value = user
+}
+
+function closeUserCard() {
+  selectedUser.value = null
 }
 
 async function loadCurrent() {
@@ -139,9 +187,24 @@ watch([users, history, viewMode], () => {
             :title="t('moderation.steamBlacklistReason', { reason: user.steam_blacklist_reason || t('moderation.steamBlacklistNoReason') })"
             :aria-label="t('moderation.steamBlacklistReason', { reason: user.steam_blacklist_reason || t('moderation.steamBlacklistNoReason') })"
           >{{ t('moderation.steamBlacklisted') }}</span>
-          <p v-if="user.pending_profile_changes" class="muted">{{ t('moderation.pendingProfileChanges', { changes: visiblePendingChanges(user.pending_profile_changes) }) }}</p>
+          <button v-if="user.pending_profile_changes" class="moderation-change-preview" type="button" @click="openUserCard(user)">
+            <span>
+              <strong>{{ t('moderation.pendingChangesCard') }}</strong>
+              <small>{{ t('moderation.pendingChangesCardHint', { count: pendingChangeRows(user.pending_profile_changes).length }) }}</small>
+            </span>
+            <Eye :size="17" />
+          </button>
         </div>
         <div class="toolbar">
+          <button
+            class="icon-button"
+            type="button"
+            :title="t('moderation.openUserCard')"
+            :aria-label="t('moderation.openUserCard')"
+            @click="openUserCard(user)"
+          >
+            <Eye :size="16" />
+          </button>
           <button
             class="button primary"
             :disabled="user.steam_blacklisted && !isAdmin"
@@ -183,5 +246,44 @@ watch([users, history, viewMode], () => {
       <p v-if="!history.length" class="muted moderation-empty">{{ t('moderation.historyEmpty') }}</p>
     </div>
     <PaginationControls v-model:page="page" :page-size="pageSize" :total-items="visibleItems.length" />
+
+    <div v-if="selectedUser" class="penalty-modal-backdrop" @click.self="closeUserCard">
+      <article class="card penalty-modal moderation-user-dialog" role="dialog" aria-modal="true" :aria-label="t('moderation.userCardTitle')">
+        <div class="section-header penalty-modal-head">
+          <div>
+            <h2>{{ t('moderation.userCardTitle') }}</h2>
+            <p class="muted">{{ selectedUser.first_name }} {{ selectedUser.last_name }} · @{{ selectedUser.login }}</p>
+          </div>
+          <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="closeUserCard">
+            <X :size="18" />
+          </button>
+        </div>
+
+        <section>
+          <h3>{{ t('moderation.profileData') }}</h3>
+          <dl class="moderation-profile-grid">
+            <div v-for="field in moderationFields(selectedUser)" :key="field.label">
+              <dt>{{ field.label }}</dt>
+              <dd>{{ formatProfileValue(field.value) }}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="moderation-change-list">
+          <h3>{{ t('moderation.requestedChanges') }}</h3>
+          <dl v-if="pendingChangeRows(selectedUser.pending_profile_changes).length" class="moderation-profile-grid">
+            <div v-for="change in pendingChangeRows(selectedUser.pending_profile_changes)" :key="change.key">
+              <dt>{{ change.label }}</dt>
+              <dd>{{ change.value }}</dd>
+            </div>
+          </dl>
+          <p v-else class="muted">{{ t('moderation.noRequestedChanges') }}</p>
+        </section>
+
+        <div class="toolbar moderation-dialog-actions">
+          <button class="button" type="button" @click="closeUserCard">{{ t('common.close') }}</button>
+        </div>
+      </article>
+    </div>
   </section>
 </template>

@@ -92,6 +92,7 @@
 - 2026-09-02 — double-elimination branch labels: upper/lower titles return as compact inline headers in their grouped card lanes without restoring the removed vertical spacing.
 - 2026-09-02 — double-elimination stage labels: each compact branch header includes its current round label (for example, «Верхняя сетка · Раунд 2»).
 - 2026-09-02 — bracket card metadata: long semifinal labels are constrained to the card width with flex shrink and ellipsis so status stays inside the card.
+- 2026-09-06 — moderation clarity: pending-account notices use a shared status banner, while moderation requests open a structured user-change card instead of raw JSON.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, browser title/favicon, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
@@ -115,6 +116,7 @@
 - `frontend/src/pages/CompetitionBracket.vue` — standalone public tournament bracket page with no application navigation or authentication controls.
 - `frontend/src/pages/UserEditModeration.vue` — moderation queue with a red Steam blacklist badge and admin-only approval affordance for blocked registrations.
 - `frontend/src/pages/UserEditModeration.vue` — moderation queue with current/completed request tabs and resolved-result cards.
+- `frontend/src/pages/UserEditModeration.vue` — moderation requests expose a structured user card and readable pending profile changes.
 
 ## Non-Goals
 - No Figma sync
