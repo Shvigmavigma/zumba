@@ -16,10 +16,10 @@ cp .env.example .env
 В `.env` замените:
 
 ```env
-APP_DOMAIN=xskynet.ru
+APP_DOMAIN=bmrl.site
 WEB_PORT=8080
-PUBLIC_BASE_URL=http://xskynet.ru
-CORS_ORIGINS=http://xskynet.ru
+PUBLIC_BASE_URL=https://bmrl.site
+CORS_ORIGINS=https://bmrl.site
 POSTGRES_PASSWORD=long-random-password
 JWT_SECRET=another-long-random-secret
 ADMIN_PASSWORD=strong-admin-password
@@ -61,9 +61,9 @@ docker compose logs -f backend
 
 Адреса:
 
-- сайт: `http://xskynet.ru`
-- API: `http://xskynet.ru/api/docs`
-- healthcheck: `http://xskynet.ru/health`
+- сайт: `https://bmrl.site`
+- API: `https://bmrl.site/api/docs`
+- healthcheck: `https://bmrl.site/health`
 
 ## Резервная копия PostgreSQL
 
