@@ -95,6 +95,7 @@
 - 2026-09-06 — moderation clarity: pending-account notices use a shared status banner, while moderation requests open a structured user-change card instead of raw JSON.
 - 2026-09-06 — race results mobile layout: race podium cards expose best-lap times and collapse into ordered, readable phone cards; participant metrics and race actions wrap into touch-friendly rows.
 - 2026-09-06 — mobile race data pass: result rows, pilot roster rows, and track records become labeled phone cards; ACC maximum timing sentinels render as a localized "Did not finish" state.
+- 2026-09-07 — team and calendar controls: team creation/edit forms expose the existing avatar background color, while the calendar lets each user choose registration start, registration end, or race time as the date used for placement; the selected-races section gains a layered surface to separate it from the calendar board.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, browser title/favicon, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
