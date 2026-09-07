@@ -3854,6 +3854,10 @@ textarea {
   min-width: 180px;
 }
 
+.profile-avatar-color-field {
+  max-width: 260px;
+}
+
 .team-avatar-color-control {
   display: flex;
   align-items: center;
@@ -3889,8 +3893,10 @@ textarea {
   }
 
   .calendar-display-field,
-  .team-avatar-color-field {
+  .team-avatar-color-field,
+  .profile-avatar-color-field {
     min-width: 0;
+    max-width: none;
   }
 }
 

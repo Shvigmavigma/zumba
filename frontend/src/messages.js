@@ -283,7 +283,8 @@ export const messages = {
       userTitle: 'Аватар профиля',
       userHint: 'PNG, JPG, WEBP или GIF до 5 МБ. Изменение аватарки доступно не чаще 3 раз в день.',
       teamTitle: 'Аватар команды',
-      teamHint: 'PNG, JPG, WEBP или GIF до 30 МБ. Изменение аватарки команды доступно не чаще 3 раз в день.'
+      teamHint: 'PNG, JPG, WEBP или GIF до 30 МБ. Изменение аватарки команды доступно не чаще 3 раз в день.',
+      backgroundColor: 'Цвет фона аватарки'
     },
     pagination: {
       label: 'Пагинация',
@@ -1093,7 +1094,8 @@ export const messages = {
       userTitle: 'Profile avatar',
       userHint: 'PNG, JPG, WEBP or GIF up to 5 MB. Avatar changes are limited to 3 times per day.',
       teamTitle: 'Team avatar',
-      teamHint: 'PNG, JPG, WEBP or GIF up to 30 MB. Team avatar changes are limited to 3 times per day.'
+      teamHint: 'PNG, JPG, WEBP or GIF up to 30 MB. Team avatar changes are limited to 3 times per day.',
+      backgroundColor: 'Avatar background color'
     },
     pagination: {
       label: 'Pagination',
