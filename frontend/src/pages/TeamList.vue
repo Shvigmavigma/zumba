@@ -530,6 +530,13 @@ watch(visibleTeamMembers, () => {
           <span>{{ t('teams.abbreviation') }}</span>
           <input :value="createForm.abbreviation" type="text" maxlength="3" minlength="3" :placeholder="t('teams.abbreviationPlaceholder')" required @input="setCreateAbbreviation" />
         </label>
+        <label class="field team-avatar-color-field">
+          <span>{{ t('teams.avatarColor') }}</span>
+          <span class="team-avatar-color-control">
+            <input v-model="createForm.avatar_color" type="color" :aria-label="t('teams.avatarColor')" />
+            <code>{{ createForm.avatar_color }}</code>
+          </span>
+        </label>
         <label class="field team-form-description">
           <span>{{ t('fields.description') }}</span>
           <textarea v-model="createForm.description" maxlength="1000" :placeholder="t('teams.descriptionPlaceholder')" />
@@ -655,6 +662,13 @@ watch(visibleTeamMembers, () => {
               <span>{{ t('teams.abbreviation') }}</span>
               <input :value="editForm.abbreviation" type="text" maxlength="3" minlength="3" :placeholder="t('teams.abbreviationPlaceholder')" required @input="setEditAbbreviation" />
             </label>
+            <label class="field team-avatar-color-field">
+              <span>{{ t('teams.avatarColor') }}</span>
+              <span class="team-avatar-color-control">
+                <input v-model="editForm.avatar_color" type="color" :aria-label="t('teams.avatarColor')" />
+                <code>{{ editForm.avatar_color }}</code>
+              </span>
+            </label>
             <label class="field team-form-description">
               <span>{{ t('fields.description') }}</span>
               <textarea v-model="editForm.description" maxlength="1000" />
@@ -662,7 +676,7 @@ watch(visibleTeamMembers, () => {
           </div>
           <div class="avatar-edit-panel team-avatar-upload-panel">
             <button class="avatar-open-button" type="button" :title="t('avatar.open')" @click="teamAvatarViewerOpen = true">
-              <TeamAvatar :src="selectedTeam.avatar_url" :color="selectedTeam.avatar_color" :label="selectedTeam.name" />
+              <TeamAvatar :src="selectedTeam.avatar_url" :color="editForm.avatar_color" :label="editForm.name || selectedTeam.name" />
             </button>
             <div class="avatar-edit-main">
               <strong>{{ t('avatar.teamTitle') }}</strong>

@@ -3824,6 +3824,76 @@ textarea {
   }
 }
 
+/* Calendar and team controls added after the shared theme layers so both
+   light and dark palettes inherit the same contrast and focus treatment. */
+.selected-races {
+  position: relative;
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+  border-radius: var(--card-radius);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 10%, transparent), transparent 48%),
+    color-mix(in srgb, var(--panel) 92%, var(--panel-muted));
+  box-shadow: var(--shadow);
+}
+
+.selected-races::before {
+  opacity: 0.78;
+}
+
+.selected-races .race-list {
+  min-width: 0;
+}
+
+.calendar-display-field {
+  min-width: 230px;
+}
+
+.team-avatar-color-field {
+  min-width: 180px;
+}
+
+.team-avatar-color-control {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: var(--input-height);
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--panel-muted);
+}
+
+.team-avatar-color-control input[type='color'] {
+  width: 42px;
+  min-width: 42px;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, var(--panel-shine));
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.team-avatar-color-control code {
+  color: var(--muted);
+  font-size: var(--small-text-size);
+  font-weight: 850;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 680px) {
+  .selected-races {
+    padding: 14px;
+  }
+
+  .calendar-display-field,
+  .team-avatar-color-field {
+    min-width: 0;
+  }
+}
+
 .admin-race-assets-card {
   grid-template-columns: minmax(220px, 0.55fr) minmax(260px, 0.75fr) minmax(320px, 1fr) auto;
   align-items: start;

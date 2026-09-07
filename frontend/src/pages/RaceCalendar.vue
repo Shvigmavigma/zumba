@@ -21,6 +21,9 @@ const statusFilter = ref('not_finished')
 const myGamesOnly = ref(false)
 const raceTypeFilters = ref(defaultRaceTypeFilters())
 const raceSource = ref('regular')
+const calendarDisplayModes = ['registration_start', 'registration_end', 'race_time']
+const storedCalendarDisplayMode = localStorage.getItem('bmrl.calendarDisplayMode')
+const calendarDisplayMode = ref(calendarDisplayModes.includes(storedCalendarDisplayMode) ? storedCalendarDisplayMode : 'race_time')
 const selectedPage = ref(1)
 const selectedPageSize = 6
 const gameCountMeta = [
@@ -61,6 +64,11 @@ const raceGameOptions = computed(() => gameOptions(t, true))
 const canFilterMyGames = computed(() => Boolean(state.user?.games?.length))
 const monthLabel = computed(() => cursor.value.toLocaleDateString(state.locale, { month: 'long', year: 'numeric' }))
 const selectedLabel = computed(() => new Date(`${selected.value}T00:00:00`).toLocaleDateString(state.locale, { day: 'numeric', month: 'long', year: 'numeric' }))
+const calendarDateField = computed(() => ({
+  registration_start: 'registration_start',
+  registration_end: 'datetime_end',
+  race_time: 'datetime_start'
+}[calendarDisplayMode.value] || 'datetime_start'))
 const calendarSources = computed(() => [
   {
     value: 'regular',
@@ -84,7 +92,7 @@ const weekdayLabels = computed(() => {
 const racesByDate = computed(() => {
   const map = new Map()
   races.value.forEach((race) => {
-    const key = dateKeyInTimeZone(race.datetime_start)
+    const key = dateKeyInTimeZone(race[calendarDateField.value] || race.datetime_start)
     const items = map.get(key) || []
     items.push(race)
     map.set(key, items)
@@ -188,6 +196,10 @@ watch([gameFilter, statusFilter, myGamesOnly, raceSource, raceTypeFilters], load
 watch([selected, gameFilter, statusFilter, myGamesOnly, raceSource, raceTypeFilters], () => {
   selectedPage.value = 1
 })
+watch(calendarDisplayMode, (value) => {
+  localStorage.setItem('bmrl.calendarDisplayMode', value)
+  selectedPage.value = 1
+})
 watch(selectedRaces, () => {
   if (selectedPage.value > selectedTotalPages.value) {
     selectedPage.value = selectedTotalPages.value
@@ -219,6 +231,14 @@ watch(selectedRaces, () => {
         <span>{{ t('fields.game') }}</span>
         <select v-model="gameFilter">
           <option v-for="option in raceGameOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
+      </label>
+      <label class="field calendar-display-field">
+        <span>{{ t('calendar.displayModeLabel') }}</span>
+        <select v-model="calendarDisplayMode">
+          <option value="registration_start">{{ t('calendar.displayRegistrationStart') }}</option>
+          <option value="registration_end">{{ t('calendar.displayRegistrationEnd') }}</option>
+          <option value="race_time">{{ t('calendar.displayRaceTime') }}</option>
         </select>
       </label>
       <label class="toggle-field">
@@ -294,7 +314,7 @@ watch(selectedRaces, () => {
       </aside>
     </div>
 
-    <section class="section selected-races">
+    <section class="section selected-races card">
       <div class="section-header">
         <h2>{{ selectedLabel }}</h2>
         <div class="calendar-selection-summary">
