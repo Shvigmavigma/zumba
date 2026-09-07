@@ -17532,3 +17532,41 @@ body,
     grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
   }
 }
+
+/* Race cards carry the accent; their surrounding sections keep the base surface. */
+:root .main-races-section .main-race-card,
+:root .selected-races .race-item {
+  --race-card-tint: 20%;
+  border-color: color-mix(in srgb, var(--brand-blue) 76%, var(--border));
+  background: linear-gradient(115deg,
+    color-mix(in srgb, var(--brand-blue) var(--race-card-tint), var(--panel)),
+    color-mix(in srgb, var(--brand-blue) 10%, var(--panel)));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--brand-blue) 18%, transparent),
+    0 2px 6px color-mix(in srgb, var(--brand-blue) 16%, transparent);
+}
+
+:root[data-theme='dark'] .main-races-section .main-race-card,
+:root[data-theme='dark'] .selected-races .race-item {
+  --race-card-tint: 42%;
+}
+
+:root .main-races-section .main-race-date-tile,
+:root .main-races-section .main-race-action-panel {
+  background: color-mix(in srgb, var(--brand-blue) var(--race-card-tint), var(--panel));
+  border-color: color-mix(in srgb, var(--brand-blue) 62%, var(--border));
+}
+
+:root .main-races-section .main-race-card:hover,
+:root .main-races-section .main-race-card:focus-visible,
+:root .selected-races .race-item:hover,
+:root .selected-races .race-item:focus-within {
+  border-color: var(--brand-blue);
+  box-shadow:
+    inset 0 0 0 1px var(--brand-blue),
+    0 2px 6px color-mix(in srgb, var(--brand-blue) 24%, transparent);
+}
+
+:root .main-races-section .main-race-card:active {
+  box-shadow: inset 0 0 0 2px var(--brand-blue);
+}
