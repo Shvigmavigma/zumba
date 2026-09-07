@@ -17548,7 +17548,7 @@ body,
 
 :root[data-theme='dark'] .main-races-section .main-race-card,
 :root[data-theme='dark'] .selected-races .race-item {
-  --race-card-tint: 24%;
+  --race-card-tint: 18%;
 }
 
 :root .main-races-section .main-race-date-tile,
