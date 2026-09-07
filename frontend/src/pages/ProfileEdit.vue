@@ -59,7 +59,8 @@ async function submit() {
         country: form.value.country || null,
         discord: form.value.discord || null,
         games: form.value.games,
-        favorite_car: form.value.favorite_car || null
+        favorite_car: form.value.favorite_car || null,
+        avatar_color: form.value.avatar_color
       }
     })
     setSession(state.token, user)
@@ -102,11 +103,18 @@ async function uploadAvatar() {
     <p v-if="state.user?.pending_profile_changes" class="pill">{{ t('profile.pendingChanges') }}</p>
     <div v-if="state.user" class="avatar-edit-panel">
       <button class="avatar-open-button" type="button" :title="t('avatar.open')" @click="avatarViewerOpen = true">
-        <UserAvatar :src="state.user.avatar_url" :color="state.user.avatar_color" :label="displayName" />
+        <UserAvatar :src="state.user.avatar_url" :color="form.avatar_color" :label="displayName" />
       </button>
       <div class="avatar-edit-main">
         <strong>{{ t('avatar.userTitle') }}</strong>
         <p class="muted">{{ t('avatar.userHint') }}</p>
+        <label class="field profile-avatar-color-field">
+          <span>{{ t('avatar.backgroundColor') }}</span>
+          <span class="team-avatar-color-control">
+            <input v-model="form.avatar_color" type="color" :aria-label="t('avatar.backgroundColor')" />
+            <code>{{ form.avatar_color }}</code>
+          </span>
+        </label>
         <div class="avatar-upload-row">
           <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="setAvatarFile" />
           <button class="button" type="button" :disabled="avatarSaving || !avatarFile" @click="uploadAvatar">
@@ -153,7 +161,7 @@ async function uploadAvatar() {
       :open="avatarViewerOpen"
       :src="state.user?.avatar_url"
       :label="displayName"
-      :fallback-color="state.user?.avatar_color"
+      :fallback-color="form.avatar_color"
       @close="avatarViewerOpen = false"
     />
   </section>
