@@ -81,10 +81,6 @@ onMounted(async () => {
 
         <dl class="pilot-public-grid">
           <div>
-            <dt>{{ t('fields.steam') }}</dt>
-            <dd>{{ pilot.steam_id }}</dd>
-          </div>
-          <div>
             <dt>{{ t('fields.discord') }}</dt>
             <dd>{{ pilot.discord || t('common.none') }}</dd>
           </div>

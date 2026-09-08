@@ -365,7 +365,6 @@ def registration_to_json(registration: RaceRegistration, user: User | None = Non
                 "last_name": user.last_name,
                 "nickname": user.nickname,
                 "pilot_number": registration.pilot_number,
-                "steam_id": user.steam_id,
                 "country": user.country,
                 "sr": float(user.sr),
                 "rating": int(round(float(user.rating))),
@@ -382,7 +381,14 @@ def registration_to_json(registration: RaceRegistration, user: User | None = Non
     return data
 
 
-def team_registration_to_json(registration: TeamRaceRegistration, team: Team | None = None) -> dict:
+def team_registration_to_json(
+    registration: TeamRaceRegistration,
+    team: Team | None = None,
+    include_steam_id: bool = False,
+) -> dict:
+    drivers = []
+    for driver in registration.drivers or []:
+        drivers.append(driver if include_steam_id else {key: value for key, value in driver.items() if key != "steam_id"})
     return {
         "id": registration.id,
         "race_id": registration.race_id,
@@ -393,7 +399,7 @@ def team_registration_to_json(registration: TeamRaceRegistration, team: Team | N
         "team_avatar_url": team.avatar_url if team else None,
         "car_model": registration.car_model,
         "race_number": registration.race_number,
-        "drivers": registration.drivers or [],
+        "drivers": drivers,
         "registered_by": registration.registered_by,
         "registered_at": registration.registered_at.isoformat(),
         "updated_at": registration.updated_at.isoformat(),
@@ -1226,6 +1232,8 @@ async def build_team_driver_payloads(session: AsyncSession, team: Team, driver_i
             "last_name": user.last_name,
             "nickname": user.nickname,
             "pilot_number": user.pilot_number,
+            # Kept in the database payload for ACC result matching. It is
+            # stripped by team_registration_to_json before public responses.
             "steam_id": user.steam_id,
             "country": user.country,
             "short_name": short_driver_name(user, user.pilot_number),
@@ -1267,9 +1275,9 @@ async def attach_registered_pilots(session: AsyncSession, races: list[Race]) -> 
             .order_by(TeamRaceRegistration.race_id, TeamRaceRegistration.registered_at, TeamRaceRegistration.id)
         )
     ).scalars().all()
-    grouped_team_rows: dict[int, list[TeamRaceRegistration]] = {race_id: [] for race_id in race_ids}
+    grouped_team_rows: dict[int, list[dict]] = {race_id: [] for race_id in race_ids}
     for registration in team_rows:
-        grouped_team_rows.setdefault(registration.race_id, []).append(registration)
+        grouped_team_rows.setdefault(registration.race_id, []).append(team_registration_to_json(registration, registration.team))
     for race in races:
         set_committed_value(race, "team_registrations", grouped_team_rows.get(race.id, []))
 
@@ -2124,7 +2132,7 @@ async def export_registered_pilots(
         return await build_acc_entrylist(session, race.id)
     if race.is_team_event:
         rows = await get_team_registration_rows(session, race.id)
-        return {"race_id": race.id, "team_registrations": [team_registration_to_json(registration, team) for registration, team in rows]}
+        return {"race_id": race.id, "team_registrations": [team_registration_to_json(registration, team, include_steam_id=True) for registration, team in rows]}
     return {"race_id": race.id, "registered_pilots": await get_registered_pilots(session, race.id)}
 
 

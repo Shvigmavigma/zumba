@@ -8,6 +8,7 @@ import RaceTypeFilters from '../components/RaceTypeFilters.vue'
 import { gameLabel, gameOptions, isExternalRace, raceOpenHref, statusLabel } from '../i18nLabels'
 import { appendRaceTypeFilters, defaultRaceTypeFilters } from '../raceFilters'
 import { formatDateTime } from '../timezone'
+import { state } from '../store'
 
 const { t } = useI18n()
 const races = ref([])
@@ -20,6 +21,7 @@ const busyRace = ref({})
 const page = ref(1)
 const pageSize = 25
 const raceGameOptions = computed(() => gameOptions(t, true))
+const canExportRegistrations = computed(() => ['admin', 'moder'].includes(state.user?.role))
 
 const statusOptions = computed(() => [
   { value: 'all', label: t('raceAdmin.allStatuses') },
@@ -233,7 +235,7 @@ watch(page, load)
                 >
                   <SquareCheckBig :size="16" />
                 </button>
-                <button class="icon-button" type="button" :title="t('raceAdmin.exportRegistrations')" :disabled="busyRace[race.id]" @click="exportRegistrations(race)">
+                <button v-if="canExportRegistrations" class="icon-button" type="button" :title="t('raceAdmin.exportRegistrations')" :disabled="busyRace[race.id]" @click="exportRegistrations(race)">
                   <Download :size="16" />
                 </button>
                 <button class="icon-button danger-icon" type="button" :title="t('common.delete')" :disabled="busyRace[race.id]" @click="deleteRace(race)">

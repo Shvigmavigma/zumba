@@ -1,15 +1,38 @@
 from datetime import datetime, timedelta, timezone
+import secrets
 from typing import Any
 
 import jwt
 from fastapi import HTTPException, status
 from passlib.context import CryptContext
+from redis import Redis
 
 from app.config import get_settings
 from app.models import User
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_STEAM_REGISTRATION_TTL_SECONDS = 15 * 60
+_steam_registration_store: Redis | None = None
+
+
+def _steam_registration_redis() -> Redis:
+    global _steam_registration_store
+    if _steam_registration_store is None:
+        uri = get_settings().rate_limit_storage_uri or ""
+        if not uri.startswith(("redis://", "rediss://")):
+            raise HTTPException(status_code=503, detail="Steam registration storage is unavailable")
+        _steam_registration_store = Redis.from_url(
+            uri,
+            decode_responses=True,
+            socket_connect_timeout=1,
+            socket_timeout=1,
+        )
+    try:
+        _steam_registration_store.ping()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Steam registration storage is unavailable") from exc
+    return _steam_registration_store
 
 
 def hash_password(password: str) -> str:
@@ -33,14 +56,15 @@ def create_access_token(user: User) -> str:
 
 
 def create_steam_registration_token(steam_id: str) -> str:
-    settings = get_settings()
-    expires = datetime.now(timezone.utc) + timedelta(minutes=15)
-    payload = {
-        "scope": "steam_registration",
-        "steam_id": steam_id,
-        "exp": expires,
-    }
-    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    # Use an opaque, one-time token.  A JWT containing the Steam ID would be
+    # readable by the registering browser even when it is signed correctly.
+    token = secrets.token_urlsafe(32)
+    store = _steam_registration_redis()
+    try:
+        store.setex(f"bmrl:steam-registration:{token}", _STEAM_REGISTRATION_TTL_SECONDS, steam_id)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Steam registration storage is unavailable") from exc
+    return token
 
 
 def decode_access_token(token: str) -> dict[str, Any]:
@@ -52,8 +76,13 @@ def decode_access_token(token: str) -> dict[str, Any]:
 
 
 def decode_steam_registration_token(token: str) -> str:
-    payload = decode_access_token(token)
-    steam_id = payload.get("steam_id")
-    if payload.get("scope") != "steam_registration" or not isinstance(steam_id, str) or not steam_id.isdigit():
+    if not token or len(token) > 200:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Steam authentication is required")
+    store = _steam_registration_redis()
+    try:
+        steam_id = store.getdel(f"bmrl:steam-registration:{token}")
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Steam registration storage is unavailable") from exc
+    if not isinstance(steam_id, str) or not steam_id.isdigit():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Steam authentication is required")
     return steam_id

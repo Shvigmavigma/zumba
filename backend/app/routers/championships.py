@@ -124,9 +124,31 @@ def race_registration_payload(registration: RaceRegistration, user: User, team_n
             "car_model": registration.car_model,
             "pilot_number": registration.pilot_number,
             "registered_at": registration.registered_at.isoformat(),
-            "steam_id": user.steam_id,
         }
     )
+    return data
+
+
+def public_team_registration_payload(registration: TeamRaceRegistration) -> dict:
+    """Serialize team registrations without exposing driver Steam IDs."""
+    data = {
+        "id": registration.id,
+        "race_id": registration.race_id,
+        "team_id": registration.team_id,
+        "team_name": registration.team.name if registration.team else None,
+        "team_abbreviation": registration.team.abbreviation if registration.team else None,
+        "team_avatar_color": registration.team.avatar_color if registration.team else None,
+        "team_avatar_url": registration.team.avatar_url if registration.team else None,
+        "car_model": registration.car_model,
+        "race_number": registration.race_number,
+        "drivers": [
+            {key: value for key, value in driver.items() if key != "steam_id"}
+            for driver in registration.drivers or []
+        ],
+        "registered_by": registration.registered_by,
+        "registered_at": registration.registered_at,
+        "updated_at": registration.updated_at,
+    }
     return data
 
 
@@ -149,7 +171,7 @@ async def attach_registered_pilots(session: AsyncSession, races: list[Race]) -> 
     for race in races:
         set_committed_value(race, "registered_pilots", grouped.get(race.id, []))
 
-    team_grouped: dict[int, list[TeamRaceRegistration]] = {race_id: [] for race_id in race_ids}
+    team_grouped: dict[int, list[dict]] = {race_id: [] for race_id in race_ids}
     team_rows = (
         await session.execute(
             select(TeamRaceRegistration)
@@ -159,7 +181,7 @@ async def attach_registered_pilots(session: AsyncSession, races: list[Race]) -> 
         )
     ).scalars().all()
     for registration in team_rows:
-        team_grouped.setdefault(registration.race_id, []).append(registration)
+        team_grouped.setdefault(registration.race_id, []).append(public_team_registration_payload(registration))
     for race in races:
         set_committed_value(race, "team_registrations", team_grouped.get(race.id, []))
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator, model_validator
 
@@ -101,7 +101,6 @@ class UserPublic(BaseModel):
     rating_race_count: int = Field(ge=0)
     game_ratings: dict[str, GameRatingRead] = Field(default_factory=dict)
     discord: str | None
-    steam_id: str
     role: Role
     is_system_admin: bool = False
     status: UserStatus
@@ -126,8 +125,17 @@ class UserPrivate(UserPublic):
     pending_profile_changes: dict | None = None
 
 
+class UserAdminRead(UserPrivate):
+    """Private user data returned only by administrator endpoints."""
+
+    steam_id: str
+
+
 class UserModerationRead(UserPublic):
     pending_profile_changes: dict | None = None
+    # Moderators can review a request, but only administrators receive the
+    # underlying Steam identifier.
+    steam_id: str | None = None
     steam_blacklisted: bool = False
     steam_blacklist_reason: str | None = None
 
@@ -142,7 +150,7 @@ class ModerationHistoryRead(BaseModel):
     last_name: str
     nickname: str
     pilot_number: int
-    steam_id: str
+    steam_id: str | None = None
     pending_profile_changes: dict | None = None
     created_at: datetime
     resolved_at: datetime
@@ -587,6 +595,26 @@ class RaceRead(RaceBase):
     team_registrations: list[TeamRaceRegistrationRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("results", mode="before")
+    @classmethod
+    def redact_steam_identifiers(cls, value: Any):
+        """Keep ACC/LMU result internals out of browser-facing race JSON.
+
+        Result payloads retain player IDs in the database for matching and
+        recalculation, but those identifiers are not needed by the public UI.
+        Admin-only entrylist/export endpoints still read the original data.
+        """
+        hidden_keys = {"steam_id", "steamId", "player_id", "playerID", "playerId"}
+
+        def scrub(item: Any):
+            if isinstance(item, dict):
+                return {key: scrub(child) for key, child in item.items() if key not in hidden_keys}
+            if isinstance(item, list):
+                return [scrub(child) for child in item]
+            return item
+
+        return scrub(value)
 
     model_config = {"from_attributes": True}
 

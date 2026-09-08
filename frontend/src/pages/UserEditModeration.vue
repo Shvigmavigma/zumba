@@ -52,7 +52,7 @@ function pendingChangeRows(value) {
 }
 
 function moderationFields(user) {
-  return [
+  const fields = [
     { label: t('fields.login'), value: user.login },
     { label: t('fields.nickname'), value: user.nickname },
     { label: t('fields.firstName'), value: user.first_name },
@@ -60,11 +60,12 @@ function moderationFields(user) {
     { label: t('fields.pilotNumber'), value: user.pilot_number === null || user.pilot_number === undefined ? null : `#${formatPilotNumber(user.pilot_number)}` },
     { label: t('fields.country'), value: user.country },
     { label: t('fields.discord'), value: user.discord },
-    { label: t('fields.steam'), value: user.steam_id },
     { label: t('fields.games'), value: formatProfileValue(user.games) },
     { label: t('profile.favoriteCar'), value: user.favorite_car },
     { label: t('fields.team'), value: user.team_name }
   ]
+  if (isAdmin.value) fields.splice(7, 0, { label: t('fields.steam'), value: user.steam_id })
+  return fields
 }
 
 function openUserCard(user) {
@@ -180,7 +181,7 @@ watch([users, history, viewMode], () => {
           </div>
         </div>
         <div class="user-moderation-meta">
-          <p class="muted">#{{ formatPilotNumber(user.pilot_number) }} - RER {{ formatRating(user.rating) }} - {{ teamShortName(user.team_name, user.team_abbreviation) }} - {{ t('fields.steam') }} {{ user.steam_id }}</p>
+          <p class="muted">#{{ formatPilotNumber(user.pilot_number) }} - RER {{ formatRating(user.rating) }} - {{ teamShortName(user.team_name, user.team_abbreviation) }}<template v-if="isAdmin"> - {{ t('fields.steam') }} {{ user.steam_id }}</template></p>
           <span
             v-if="user.steam_blacklisted"
             class="status-badge status-banned moderation-blacklist-badge"
@@ -236,7 +237,7 @@ watch([users, history, viewMode], () => {
           </div>
         </div>
         <div class="user-moderation-meta">
-          <p class="muted">#{{ formatPilotNumber(request.pilot_number) }} - {{ t('fields.steam') }} {{ request.steam_id }}</p>
+          <p v-if="isAdmin" class="muted">#{{ formatPilotNumber(request.pilot_number) }} - {{ t('fields.steam') }} {{ request.steam_id }}</p>
           <p class="muted">{{ t(`moderation.requestTypes.${request.request_type}`) }} · {{ t('moderation.resolvedAt', { date: formatHistoryDate(request.resolved_at) }) }}</p>
         </div>
         <div class="moderation-history-resolution" :class="`is-${request.resolution}`">
