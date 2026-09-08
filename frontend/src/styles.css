@@ -12146,6 +12146,110 @@ textarea::placeholder {
   margin: 0;
 }
 
+.fuel-car-search {
+  position: relative;
+  min-width: 0;
+}
+
+.fuel-car-search .input-with-icon {
+  position: relative;
+}
+
+.fuel-car-search .input-with-icon svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.fuel-car-results {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 4px;
+  max-height: 280px;
+  padding: 6px;
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
+  border-radius: var(--control-radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.fuel-car-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.fuel-car-option:hover,
+.fuel-car-option:focus-visible {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
+  background: color-mix(in srgb, var(--primary) 10%, var(--panel-muted));
+  outline: none;
+}
+
+.fuel-car-option span {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fuel-car-option small {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-weight: 900;
+}
+
+.fuel-car-empty {
+  padding: 12px 10px;
+  color: var(--muted);
+  font-size: var(--small-text-size);
+}
+
+.race-mods-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.race-mod-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.race-mod-links a,
+.race-participant-link {
+  color: var(--primary-strong);
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.race-mod-links a:hover,
+.race-mod-links a:focus-visible,
+.race-participant-link:hover,
+.race-participant-link:focus-visible {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 @media (max-width: 980px) {
   .fuel-layout,
   .fuel-mode-switch,
@@ -17569,4 +17673,117 @@ body,
 
 :root .main-races-section .main-race-card:active {
   box-shadow: inset 0 0 0 2px var(--brand-blue);
+}
+
+/* Teams and fuel search: compact touch-first overrides. */
+@media (max-width: 680px) {
+  .teams-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teams-list {
+    max-height: none;
+  }
+
+  .team-list-open {
+    grid-template-columns: 30px 42px minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    height: auto;
+    row-gap: 7px;
+    padding: 4px 2px;
+  }
+
+  .team-list-open .team-avatar.is-mini {
+    display: grid;
+    width: 42px;
+    height: 42px;
+  }
+
+  .team-list-main span {
+    overflow: hidden;
+    line-height: 1.25;
+    white-space: normal;
+  }
+
+  .team-list-side {
+    grid-column: 3;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .team-list-meter {
+    grid-column: 1 / -1;
+  }
+
+  .team-detail-hero {
+    grid-template-columns: 64px minmax(0, 1fr);
+    align-items: start;
+    padding: 14px;
+  }
+
+  .team-detail-hero .team-avatar {
+    width: 64px;
+    height: 64px;
+  }
+
+  .team-detail-title {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .team-detail-title h2 {
+    max-width: 100%;
+    font-size: 22px;
+    white-space: normal;
+  }
+
+  .team-detail-actions {
+    grid-column: 1 / -1;
+  }
+
+  .team-edit-panel,
+  .team-owner-panel,
+  .team-applications-section,
+  .team-members-section {
+    margin-inline: 0;
+    padding-inline: 14px;
+  }
+
+  .team-owner-tools,
+  .team-application-row,
+  .team-member-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .team-application-row,
+  .team-member-row {
+    align-items: start;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .team-application-main,
+  .team-member-main,
+  .team-member-games {
+    width: 100%;
+  }
+
+  .team-application-main span,
+  .team-member-main span,
+  .team-member-games {
+    white-space: normal;
+  }
+
+  .team-application-actions,
+  .team-member-actions {
+    justify-content: flex-start;
+  }
+
+  .pilot-inline-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fuel-car-results {
+    max-height: 240px;
+  }
 }

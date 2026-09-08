@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { Calculator, Fuel, Gauge, TimerReset } from 'lucide-vue-next'
+import { Calculator, Fuel, Gauge, Search, TimerReset } from 'lucide-vue-next'
 import { api } from '../api'
 import { state } from '../store'
 
@@ -194,6 +194,8 @@ const fuelCars = {
 
 const sim = ref('ACC')
 const car = ref('Ferrari 296 GT3 2023')
+const carSearch = ref(car.value)
+const carSearchOpen = ref(false)
 const assetFuelCars = ref({})
 const presetIndex = ref(0)
 const mode = ref('time')
@@ -215,6 +217,8 @@ const copy = computed(() => state.locale === 'en' ? {
 
   sim: 'Simulator',
   car: 'Car',
+  carSearch: 'Search car by name or class',
+  noCars: 'No matching cars',
   preset: 'Class / preset',
   unit: 'Units',
   timeRace: 'Timed race',
@@ -248,6 +252,8 @@ const copy = computed(() => state.locale === 'en' ? {
   subtitle: 'Выбери симулятор и машину; расход за круг уточняй после боевого отрезка.',
   sim: 'Симулятор',
   car: 'Машина',
+  carSearch: 'Найди машину по названию или классу',
+  noCars: 'Машины не найдены',
   preset: 'Класс / пресет',
   unit: 'Единицы',
   timeRace: 'Гонка по времени',
@@ -280,6 +286,13 @@ const copy = computed(() => state.locale === 'en' ? {
 
 const simPresets = computed(() => presets[sim.value] || [])
 const carOptions = computed(() => mergeCarLists(fuelCars[sim.value] || [], assetFuelCars.value[sim.value] || []))
+const filteredCarOptions = computed(() => {
+  const needle = carSearch.value.trim().toLowerCase()
+  const filtered = needle
+    ? carOptions.value.filter((item) => `${item.label} ${item.class}`.toLowerCase().includes(needle))
+    : carOptions.value
+  return filtered.slice(0, 24)
+})
 const selectedPreset = computed(() => simPresets.value[Number(presetIndex.value)] || simPresets.value[0])
 const selectedCarPreset = computed(() => carOptions.value.find((item) => item.label === car.value))
 const lapSecondsTotal = computed(() => Math.max(0, Number(lapMinutes.value) * 60 + Number(lapSeconds.value)))
@@ -313,7 +326,25 @@ function formatFuel(value) {
 function handleSimChange() {
   presetIndex.value = 0
   car.value = carOptions.value[0]?.label || ''
+  carSearch.value = car.value
   if (!applyCarPreset()) applyPreset()
+}
+
+function openCarSearch(event) {
+  carSearchOpen.value = true
+  event?.target?.select?.()
+}
+
+function closeCarSearch() {
+  window.setTimeout(() => {
+    carSearchOpen.value = false
+  }, 120)
+}
+
+function selectCar(item) {
+  car.value = item.label
+  carSearch.value = item.label
+  carSearchOpen.value = false
 }
 
 function mergeCarLists(...lists) {
@@ -372,6 +403,10 @@ watch(car, () => {
   applyCarPreset()
 })
 
+watch(carSearch, (value) => {
+  car.value = value
+})
+
 onMounted(async () => {
   try {
     assetFuelCars.value = carsFromRaceAssets(await api('/race-assets'))
@@ -401,10 +436,36 @@ onMounted(async () => {
           </label>
           <label class="field">
             <span>{{ copy.car }}</span>
-            <input v-model="car" list="fuel-car-options" maxlength="120" />
-            <datalist id="fuel-car-options">
-              <option v-for="item in carOptions" :key="item.label" :value="item.label">{{ item.class }}</option>
-            </datalist>
+            <div class="fuel-car-search">
+              <div class="input-with-icon">
+                <Search :size="16" aria-hidden="true" />
+                <input
+                  v-model="carSearch"
+                  type="search"
+                  maxlength="120"
+                  autocomplete="off"
+                  :placeholder="copy.carSearch"
+                  @focus="openCarSearch"
+                  @blur="closeCarSearch"
+                  @keydown.esc="carSearchOpen = false"
+                />
+              </div>
+              <div v-if="carSearchOpen" class="fuel-car-results" role="listbox">
+                <button
+                  v-for="item in filteredCarOptions"
+                  :key="item.label"
+                  class="fuel-car-option"
+                  type="button"
+                  role="option"
+                  :aria-selected="item.label === car"
+                  @mousedown.prevent="selectCar(item)"
+                >
+                  <span>{{ item.label }}</span>
+                  <small>{{ item.class }}</small>
+                </button>
+                <span v-if="!filteredCarOptions.length" class="fuel-car-empty">{{ copy.noCars }}</span>
+              </div>
+            </div>
           </label>
         </div>
 
