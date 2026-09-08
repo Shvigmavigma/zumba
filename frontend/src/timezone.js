@@ -4,11 +4,26 @@ const baseTimeZoneOptions = [
   { value: 'UTC', shortLabel: 'UTC' },
   { value: 'Europe/Kyiv', shortLabel: 'Kyiv' },
   { value: 'Europe/Moscow', shortLabel: 'MSK' },
+  { value: 'Asia/Yekaterinburg', shortLabel: 'YEKT' },
+  { value: 'Asia/Almaty', shortLabel: 'ALM' },
+  { value: 'Asia/Tashkent', shortLabel: 'TAS' },
   { value: 'Europe/London', shortLabel: 'LON' },
   { value: 'Europe/Berlin', shortLabel: 'BER' },
+  { value: 'Africa/Cairo', shortLabel: 'CAI' },
+  { value: 'Africa/Johannesburg', shortLabel: 'JNB' },
   { value: 'America/New_York', shortLabel: 'NYC' },
+  { value: 'America/Chicago', shortLabel: 'CHI' },
+  { value: 'America/Denver', shortLabel: 'DEN' },
+  { value: 'America/Los_Angeles', shortLabel: 'LAX' },
+  { value: 'America/Sao_Paulo', shortLabel: 'SAO' },
   { value: 'Asia/Dubai', shortLabel: 'DXB' },
-  { value: 'Asia/Tokyo', shortLabel: 'TYO' }
+  { value: 'Asia/Kolkata', shortLabel: 'DEL' },
+  { value: 'Asia/Shanghai', shortLabel: 'SHA' },
+  { value: 'Asia/Singapore', shortLabel: 'SIN' },
+  { value: 'Asia/Tokyo', shortLabel: 'TYO' },
+  { value: 'Asia/Seoul', shortLabel: 'SEL' },
+  { value: 'Australia/Sydney', shortLabel: 'SYD' },
+  { value: 'Pacific/Auckland', shortLabel: 'AKL' }
 ]
 
 function offsetLabel(timeZone) {

@@ -98,6 +98,7 @@
 - 2026-09-07 — team/profile and calendar controls: team and profile forms expose the avatar background color, while the calendar lets each user choose registration start, registration end, or race time as the date used for placement; the selected-races section gains a layered surface to separate it from the calendar board.
 - 2026-09-07 — individual race-card emphasis: home and calendar cards use a restrained theme-aware blue tint and border, including the date/action panels and hover/focus states; the surrounding sections retain their base appearance.
 - 2026-09-07 — dark race-card balance: reduced only the dark-theme card tint so the blue accent remains visible without overpowering the dark surface.
+- 2026-09-08 — navigation and mobile polish: expanded the shared IANA timezone picker, made team cards and member controls stack cleanly on phones, replaced the fuel datalist with a searchable touch-friendly listbox, and exposed safe external mod and participant-profile links.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, browser title/favicon, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).

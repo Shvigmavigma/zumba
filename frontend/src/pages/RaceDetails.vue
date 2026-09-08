@@ -322,6 +322,19 @@ function participantSubtitle(item) {
   return item.nickname ? `${number} - ${item.nickname}` : number
 }
 
+function participantHref(item) {
+  const userId = Number(item?.user_id || item?.id)
+  return Number.isInteger(userId) && userId > 0 ? `/pilots/${userId}` : ''
+}
+
+function modHref(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return '#'
+  if (/^https?:\/\//i.test(raw)) return raw
+  if (/^\/\//.test(raw)) return `https:${raw}`
+  return `https://${raw}`
+}
+
 function fanVotePilotName(item) {
   const fullName = [item.first_name, item.last_name].filter(Boolean).join(' ')
   return fullName || item.nickname || item.login || `${t('roles.pilot')} ${item.user_id}`
@@ -1071,7 +1084,13 @@ watch(visibleParticipants, () => {
         </div>
         <p class="race-details-weather-summary"><strong>{{ t('raceCard.weather') }}:</strong> {{ weatherSummary(race) }} · {{ t('weather.trackTemperature') }}: {{ weatherTemperature(race) }}</p>
         <p>{{ t('fields.server') }}: <a :href="race.server_link" target="_blank" rel="noopener noreferrer">{{ race.server_link }}</a></p>
-        <p>{{ t('fields.mods') }}: {{ race.mods_pack?.join(', ') || t('common.none') }}</p>
+        <p class="race-mods-line">
+          <span>{{ t('fields.mods') }}:</span>
+          <span v-if="race.mods_pack?.length" class="race-mod-links">
+            <a v-for="mod in race.mods_pack" :key="mod" :href="modHref(mod)" target="_blank" rel="noopener noreferrer">{{ mod }}</a>
+          </span>
+          <span v-else>{{ t('common.none') }}</span>
+        </p>
         <button v-if="raceTrackImage" class="race-track-image-display race-track-image-trigger" type="button" :aria-label="race.track" @click="openTrackImage">
           <img class="race-track-image" :src="raceTrackImage" :alt="race.track" />
         </button>
@@ -1404,7 +1423,10 @@ watch(visibleParticipants, () => {
             <UserAvatar class="pilot-avatar-slot" :src="item.avatar_url" :color="item.avatar_color" :label="participantName(item)" />
             <div class="race-participant-main">
               <span class="user-name-line">
-                <strong>{{ participantName(item) }}</strong>
+                <RouterLink v-if="participantHref(item)" class="race-participant-link" :to="participantHref(item)">
+                  <strong>{{ participantName(item) }}</strong>
+                </RouterLink>
+                <strong v-else>{{ participantName(item) }}</strong>
                 <LicenseBadge :user="item" :game="raceRatingGame" />
               </span>
               <span>{{ participantSubtitle(item) }} · RER {{ formatRating(ratingForGame(item, raceRatingGame)) }} · {{ pilotTeamChip(item) }}</span>
