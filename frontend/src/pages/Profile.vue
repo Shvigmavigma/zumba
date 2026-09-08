@@ -45,7 +45,6 @@ const profileFields = computed(() => {
     { label: t('fields.pilotNumber'), value: user.value.pilot_number !== null && user.value.pilot_number !== undefined ? `#${formatPilotNumber(user.value.pilot_number)}` : null },
     { label: t('fields.country'), value: countryLabel(t, user.value.country) },
     { label: t('fields.team'), value: user.value.team_name || t('common.none') },
-    { label: t('fields.steam'), value: user.value.steam_id },
     { label: t('fields.discord'), value: user.value.discord },
     { label: t('fields.games'), value: gameList.value },
     { label: t('profile.favoriteCar'), value: user.value.favorite_car },

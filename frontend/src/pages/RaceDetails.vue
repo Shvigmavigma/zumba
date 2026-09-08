@@ -134,11 +134,11 @@ const raceRowsByPlayer = computed(() => {
   })
   return rows
 })
-const participantsBySteam = computed(() => {
+const raceRowsByNumber = computed(() => {
   const rows = new Map()
-  participants.value.forEach((item) => {
-    const key = normalizeAccPlayerId(item.steam_id)
-    if (key) rows.set(key, item)
+  resultRows.value.forEach((row) => {
+    const key = Number(row.race_number)
+    if (Number.isFinite(key)) rows.set(key, row)
   })
   return rows
 })
@@ -156,8 +156,11 @@ const qualificationRows = computed(() => {
     const driver = accLineDriver(line)
     const playerId = accPlayerId(driver.playerId || driver.playerID)
     const normalized = normalizeAccPlayerId(playerId)
-    const participant = participantsBySteam.value.get(normalized)
-    const raceRow = raceRowsByPlayer.value.get(normalized)
+    // Steam/player IDs are intentionally redacted from the browser response.
+    // ACC race numbers provide the safe fallback link to the stored result.
+    const raceNumber = Number(line.car?.raceNumber)
+    const raceRow = raceRowsByPlayer.value.get(normalized) || raceRowsByNumber.value.get(raceNumber)
+    const participant = raceRow?.user_id ? participants.value.find((item) => item.user_id === raceRow.user_id) : null
     const timing = line.timing || {}
     return {
       position: index + 1,
@@ -172,7 +175,7 @@ const qualificationRows = computed(() => {
       team_name: participant?.team_name || raceRow?.team_name,
       team_abbreviation: participant?.team_abbreviation || raceRow?.team_abbreviation,
       driver_name: accDriverName(driver),
-      player_id: playerId,
+      player_id: null,
       race_number: line.car?.raceNumber ?? raceRow?.race_number ?? null,
       car_model: line.car?.carModel ?? line.carModel ?? line.forcedCarModel ?? raceRow?.car_model ?? null,
       lap_count: timing.lapCount ?? null,

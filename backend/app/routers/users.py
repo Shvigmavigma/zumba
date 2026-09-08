@@ -18,7 +18,7 @@ from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, is_
 from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamRaceRegistration, User, UserStatus, default_game_ratings
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
-from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
+from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminRead, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
 from app.security import verify_password
 from app.services import recalculate_all_ratings, result_rows
 
@@ -120,12 +120,20 @@ def add_moderation_history(session: AsyncSession, user: User, request_type: str,
     )
 
 
-def user_response(user: User, team_name: str | None = None, team_abbreviation: str | None = None, private: bool = False) -> dict:
+def user_response(
+    user: User,
+    team_name: str | None = None,
+    team_abbreviation: str | None = None,
+    private: bool = False,
+    include_steam_id: bool = False,
+) -> dict:
     schema = UserPrivate if private else UserPublic
     data = schema.model_validate(user).model_dump()
     data["team_name"] = team_name
     data["team_abbreviation"] = team_abbreviation
     data["is_system_admin"] = is_system_admin(user)
+    if include_steam_id:
+        data["steam_id"] = user.steam_id
     return data
 
 
@@ -245,7 +253,7 @@ async def list_pilots(
 
 @router.get("/moderation/pending", response_model=list[UserModerationRead])
 @limiter.limit("3/minute")
-async def pending_users(request: Request, _: User = Depends(require_moder_plus), session: AsyncSession = Depends(get_session)):
+async def pending_users(request: Request, moderator: User = Depends(require_moder_plus), session: AsyncSession = Depends(get_session)):
     rows = (
         await session.execute(
             select(User, Team.name, Team.abbreviation)
@@ -271,6 +279,8 @@ async def pending_users(request: Request, _: User = Depends(require_moder_plus),
     result = []
     for user, team_name, team_abbreviation in rows:
         data = user_response(user, team_name, team_abbreviation)
+        if moderator.role == Role.admin:
+            data["steam_id"] = user.steam_id
         pending_changes = user.pending_profile_changes
         data["pending_profile_changes"] = (
             {key: value for key, value in pending_changes.items() if key != "email"}
@@ -288,19 +298,26 @@ async def pending_users(request: Request, _: User = Depends(require_moder_plus),
 @limiter.limit("60/minute")
 async def moderation_history(
     request: Request,
-    _: User = Depends(require_moder_plus),
+    moderator: User = Depends(require_moder_plus),
     session: AsyncSession = Depends(get_session),
 ):
-    return list(
+    rows = list(
         (
             await session.scalars(
                 select(ModerationHistory).order_by(ModerationHistory.resolved_at.desc(), ModerationHistory.id.desc()).limit(500)
             )
         ).all()
     )
+    result = []
+    for row in rows:
+        data = ModerationHistoryRead.model_validate(row).model_dump()
+        if moderator.role != Role.admin:
+            data["steam_id"] = None
+        result.append(data)
+    return result
 
 
-@router.get("/admin", response_model=list[UserPrivate])
+@router.get("/admin", response_model=list[UserAdminRead])
 @limiter.limit("600/minute")
 async def admin_user_list(
     request: Request,
@@ -344,7 +361,7 @@ async def admin_user_list(
         await session.commit()
         for user in users:
             await session.refresh(user)
-    return [user_response(user, team_name, team_abbreviation, private=True) for user, team_name, team_abbreviation in rows]
+    return [user_response(user, team_name, team_abbreviation, private=True, include_steam_id=True) for user, team_name, team_abbreviation in rows]
 
 
 @router.get("/admin/steam-blacklist", response_model=list[SteamBlacklistEntryRead])

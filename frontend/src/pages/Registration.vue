@@ -12,7 +12,6 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const error = ref('')
-const steamId = ref('')
 const form = ref({
   login: '',
   email: '',
@@ -28,7 +27,7 @@ const form = ref({
   avatar_color: '#2563eb',
   games: ['ACC']
 })
-const steamConnected = computed(() => Boolean(form.value.steam_auth_token && steamId.value))
+const steamConnected = computed(() => Boolean(form.value.steam_auth_token))
 const countries = computed(() => countryOptionsWithCurrent(state.locale, form.value.country))
 
 function connectSteam() {
@@ -52,7 +51,6 @@ async function submit() {
       }
     })
     sessionStorage.removeItem('registrationDraft')
-    sessionStorage.removeItem('registrationSteamId')
     router.push('/login')
   } catch (err) {
     error.value = err.message
@@ -60,6 +58,9 @@ async function submit() {
 }
 
 onMounted(() => {
+  // Remove the legacy raw Steam ID cache. Registration now uses an opaque
+  // server-side token and never needs to keep the identifier in the browser.
+  sessionStorage.removeItem('registrationSteamId')
   const draft = sessionStorage.getItem('registrationDraft')
   if (draft) {
     try {
@@ -68,19 +69,14 @@ onMounted(() => {
       sessionStorage.removeItem('registrationDraft')
     }
   }
-  steamId.value = sessionStorage.getItem('registrationSteamId') || ''
-
   if (route.query.steam_error) {
     error.value = Array.isArray(route.query.steam_error) ? route.query.steam_error[0] : route.query.steam_error
   }
 
   const token = Array.isArray(route.query.steam_auth_token) ? route.query.steam_auth_token[0] : route.query.steam_auth_token
-  const linkedSteamId = Array.isArray(route.query.steam_id) ? route.query.steam_id[0] : route.query.steam_id
-  if (token && linkedSteamId) {
+  if (token) {
     form.value.steam_auth_token = token
-    steamId.value = linkedSteamId
     sessionStorage.setItem('registrationDraft', JSON.stringify(form.value))
-    sessionStorage.setItem('registrationSteamId', linkedSteamId)
     router.replace('/register')
   }
 })
@@ -112,7 +108,7 @@ onMounted(() => {
       <section class="steam-connect">
         <div>
           <strong>{{ t('fields.steam') }}<span class="required-mark">*</span></strong>
-          <p class="muted">{{ steamConnected ? t('auth.steamConnected', { id: steamId }) : t('auth.steamRequired') }}</p>
+          <p class="muted">{{ steamConnected ? t('auth.steamConnected') : t('auth.steamRequired') }}</p>
         </div>
         <button class="button" type="button" @click="connectSteam">{{ steamConnected ? t('auth.reconnectSteam') : t('auth.connectSteam') }}</button>
       </section>

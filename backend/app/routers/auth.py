@@ -158,7 +158,8 @@ async def finish_steam_callback(request: Request, flow: str, session: AsyncSessi
     if flow == "register":
         if user is not None:
             return register_redirect(steam_error="Steam account is already linked")
-        return register_redirect(steam_id=steam_id, steam_auth_token=create_steam_registration_token(steam_id))
+        # Keep the raw Steam identifier out of the browser URL.
+        return register_redirect(steam_auth_token=create_steam_registration_token(steam_id))
 
     if user is None:
         return login_redirect(steam_error="Steam account is not linked")
