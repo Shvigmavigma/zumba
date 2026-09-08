@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
+import PilotRoles from '../components/PilotRoles.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, gameOptions } from '../i18nLabels'
 import { formatPilotNumber, formatRating, pilotName, ratingForGame, ratingRaceCountForGame, teamHref, teamShortName } from '../pilotDisplay'
@@ -184,6 +185,7 @@ function trackRaceEntry(race, row) {
     pilotNumber: row.race_number ?? row.pilot_number ?? registered?.pilot_number,
     rating: row.rating ?? registered?.rating,
     game_ratings: row.game_ratings ?? registered?.game_ratings,
+    pilot_roles: row.pilot_roles ?? registered?.pilot_roles ?? [],
     carModel: row.car_model ?? registered?.car_model ?? t('common.none'),
     bestLapMs,
     bestLapSession: bestLap.session,
@@ -401,6 +403,7 @@ async function deleteTrackImage() {
           <RouterLink class="user-list-main" :to="`/pilots/${pilot.id}`">
             <span class="user-name-line">
               <strong>{{ pilotName(pilot, pilot.login) }}</strong>
+              <PilotRoles :roles="pilot.pilot_roles" />
               <LicenseBadge :user="pilot" :game="ratingGame" />
             </span>
             <span>{{ pilot.nickname || pilot.login }} - {{ pilotGames(pilot) }}</span>
@@ -505,6 +508,7 @@ async function deleteTrackImage() {
                   <RouterLink v-if="row.user_id" class="track-pilot-link" :to="`/pilots/${row.user_id}`">
                     <span class="user-name-line">
                       <strong>{{ row.pilotName }}</strong>
+                      <PilotRoles :roles="row.pilot_roles" />
                       <LicenseBadge :user="row" :game="trackGame" />
                     </span>
                     <small>#{{ formatPilotNumber(row.pilotNumber) }}</small>
@@ -512,6 +516,7 @@ async function deleteTrackImage() {
                   <span v-else class="track-pilot-link">
                     <span class="user-name-line">
                       <strong>{{ row.pilotName }}</strong>
+                      <PilotRoles :roles="row.pilot_roles" />
                       <LicenseBadge :user="row" :game="trackGame" />
                     </span>
                     <small>#{{ formatPilotNumber(row.pilotNumber) }}</small>

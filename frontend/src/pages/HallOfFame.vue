@@ -5,6 +5,7 @@ import { Medal, RefreshCw, Search, Trophy, Users } from 'lucide-vue-next'
 import { api } from '../api'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
+import PilotRoles from '../components/PilotRoles.vue'
 import TeamAvatar from '../components/TeamAvatar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { gameOptions } from '../i18nLabels'
@@ -243,6 +244,7 @@ watch(visibleTeams, () => {
                   <span class="user-name-line">
                     <strong>{{ pilotTitle(pilot) }}</strong>
                     <LicenseBadge :user="pilot" :game="ratingGame" />
+                    <PilotRoles :roles="pilot.pilot_roles" />
                   </span>
                   <span>{{ pilotLine(pilot) }}</span>
                 </RouterLink>
@@ -307,6 +309,7 @@ watch(visibleTeams, () => {
                   <span class="user-name-line">
                     <strong>{{ pilotTitle(bestPilotFor(team)) }}</strong>
                     <LicenseBadge :user="bestPilotFor(team)" :game="ratingGame" />
+                    <PilotRoles :roles="bestPilotFor(team)?.pilot_roles" />
                   </span>
                   <small>#{{ formatPilotNumber(bestPilotFor(team).pilot_number) }} - {{ teamShortName(bestPilotFor(team).team_name, bestPilotFor(team).team_abbreviation) }}</small>
                 </span>

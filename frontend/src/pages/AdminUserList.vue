@@ -11,6 +11,7 @@ import GameCheckboxGroup from '../components/GameCheckboxGroup.vue'
 import ImageCropper from '../components/ImageCropper.vue'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
+import PilotRoles from '../components/PilotRoles.vue'
 import RaceAssetsEditor from '../components/RaceAssetsEditor.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryOptionsWithCurrent } from '../countries'
@@ -73,6 +74,16 @@ const steamBlacklistSaving = ref(false)
 const steamBlacklistImporting = ref(false)
 const steamBlacklistSaved = ref(false)
 const steamBlacklistRowSaving = ref({})
+const pilotRoles = ref([])
+const pilotRoleForm = ref({ name: '', display_mode: 'text', border_color: '#2563eb' })
+const pilotRoleImageFile = ref(null)
+const pilotRoleImagePreview = ref('')
+const pilotRoleCropper = ref(null)
+const pilotRoleSaving = ref(false)
+const pilotRoleDeleting = ref({})
+const pilotRoleDialogUser = ref(null)
+const pilotRoleSelection = ref([])
+const pilotRoleAssignSaving = ref(false)
 const weatherImages = ref({
   clear_light_url: '', clear_dark_url: '',
   partly_cloudy_light_url: '', partly_cloudy_dark_url: '',
@@ -188,7 +199,7 @@ async function load() {
       rating_game: userRatingGame.value
     })
     if (userSearch.value.trim()) params.set('search', userSearch.value.trim())
-    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedDonationSettings, loadedLicenseSettings, loadedBrandingSettings, loadedSystemSettings, loadedWeatherImages, loadedSteamBlacklist] = await Promise.all([
+    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedDonationSettings, loadedLicenseSettings, loadedBrandingSettings, loadedSystemSettings, loadedWeatherImages, loadedSteamBlacklist, loadedPilotRoles] = await Promise.all([
       api(`/users/admin?${params.toString()}`),
       api('/teams/config'),
       api('/races/fan-vote/config'),
@@ -205,7 +216,8 @@ async function load() {
         heavy_rain_light_url: '', heavy_rain_dark_url: '',
         storm_light_url: '', storm_dark_url: ''
       })),
-      api('/users/admin/steam-blacklist')
+      api('/users/admin/steam-blacklist'),
+      api('/users/admin/pilot-roles').catch(() => [])
     ])
     users.value = loadedUsers
     teamLimit.value = teamConfig.member_limit
@@ -227,6 +239,7 @@ async function load() {
     }
     weatherImages.value = loadedWeatherImages
     steamBlacklist.value = loadedSteamBlacklist
+    pilotRoles.value = loadedPilotRoles
   } catch (err) {
     error.value = err.message
   }
@@ -930,10 +943,136 @@ onBeforeUnmount(() => {
   closeLogoCropper()
   closeBrowserIconCropper()
   closeDefaultAvatarCropper()
+  closePilotRoleCropper()
+  revokePilotRolePreview()
 })
 
 function isAdminZoneCollapsed(key) {
   return collapsedAdminZones.value[key] === true
+}
+
+function setPilotRoleFile(event) {
+  const file = event.target.files?.[0] || null
+  event.target.value = ''
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    error.value = 'Выберите файл изображения.'
+    return
+  }
+  closePilotRoleCropper()
+  pilotRoleImageFile.value = null
+  revokePilotRolePreview()
+  pilotRoleCropper.value = { sourceUrl: URL.createObjectURL(file), error: '' }
+}
+
+function revokePilotRolePreview() {
+  if (pilotRoleImagePreview.value) URL.revokeObjectURL(pilotRoleImagePreview.value)
+  pilotRoleImagePreview.value = ''
+}
+
+function uploadCroppedPilotRole(blob) {
+  revokePilotRolePreview()
+  pilotRoleImageFile.value = new File([blob], 'pilot-role.webp', { type: 'image/webp' })
+  pilotRoleImagePreview.value = URL.createObjectURL(pilotRoleImageFile.value)
+  closePilotRoleCropper()
+}
+
+function closePilotRoleCropper() {
+  if (!pilotRoleCropper.value || pilotRoleSaving.value) return
+  URL.revokeObjectURL(pilotRoleCropper.value.sourceUrl)
+  pilotRoleCropper.value = null
+}
+
+function pilotRoleModeLabel(mode) {
+  return {
+    text: 'Текст',
+    text_image: 'Текст + изображение',
+    image: 'Изображение'
+  }[mode] || 'Текст'
+}
+
+async function createPilotRole() {
+  const name = String(pilotRoleForm.value.name || '').trim()
+  if (!name) return
+  const displayMode = pilotRoleForm.value.display_mode || 'text'
+  if (displayMode !== 'text' && !pilotRoleImageFile.value) {
+    error.value = displayMode === 'image' ? 'Для роли-изображения выберите файл.' : 'Для роли «Текст + изображение» выберите файл.'
+    return
+  }
+  pilotRoleSaving.value = true
+  error.value = ''
+  try {
+    let role = await api('/users/admin/pilot-roles', {
+      method: 'POST',
+      body: {
+        name,
+        display_mode: displayMode,
+        border_color: pilotRoleForm.value.border_color || '#2563eb'
+      }
+    })
+    if (pilotRoleImageFile.value && displayMode !== 'text') {
+      const body = new FormData()
+      body.append('file', pilotRoleImageFile.value, pilotRoleImageFile.value.name)
+      role = await api(`/users/admin/pilot-roles/${role.id}/image`, { method: 'POST', body })
+    }
+    pilotRoles.value = [...pilotRoles.value.filter((item) => item.id !== role.id), role].sort((left, right) => left.name.localeCompare(right.name))
+    pilotRoleForm.value = { name: '', display_mode: 'text', border_color: '#2563eb' }
+    pilotRoleImageFile.value = null
+    revokePilotRolePreview()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    pilotRoleSaving.value = false
+  }
+}
+
+async function deletePilotRole(role) {
+  if (!window.confirm(`Удалить роль «${role.name}» у всех пилотов?`)) return
+  pilotRoleDeleting.value = { ...pilotRoleDeleting.value, [role.id]: true }
+  try {
+    await api(`/users/admin/pilot-roles/${role.id}`, { method: 'DELETE' })
+    pilotRoles.value = pilotRoles.value.filter((item) => item.id !== role.id)
+    users.value = users.value.map((user) => ({ ...user, pilot_roles: (user.pilot_roles || []).filter((item) => item.id !== role.id) }))
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    pilotRoleDeleting.value = { ...pilotRoleDeleting.value, [role.id]: false }
+  }
+}
+
+function openPilotRoleDialog(user) {
+  pilotRoleDialogUser.value = user
+  pilotRoleSelection.value = (user.pilot_roles || []).map((role) => role.id)
+}
+
+function closePilotRoleDialog() {
+  if (pilotRoleAssignSaving.value) return
+  pilotRoleDialogUser.value = null
+  pilotRoleSelection.value = []
+}
+
+function togglePilotRole(roleId) {
+  const id = Number(roleId)
+  pilotRoleSelection.value = pilotRoleSelection.value.includes(id)
+    ? pilotRoleSelection.value.filter((item) => item !== id)
+    : [...pilotRoleSelection.value, id]
+}
+
+async function savePilotRoles() {
+  if (!pilotRoleDialogUser.value) return
+  pilotRoleAssignSaving.value = true
+  try {
+    const updated = await api(`/users/${pilotRoleDialogUser.value.id}/pilot-roles`, {
+      method: 'PUT',
+      body: { role_ids: pilotRoleSelection.value }
+    })
+    updateUserInList(updated)
+    pilotRoleDialogUser.value = updated
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    pilotRoleAssignSaving.value = false
+  }
 }
 
 function toggleAdminZone(key) {
@@ -944,6 +1083,13 @@ function toggleAdminZone(key) {
 }
 watch(page, load)
 watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
+watch(() => pilotRoleForm.value.display_mode, (mode) => {
+  if (mode === 'text') {
+    pilotRoleImageFile.value = null
+    revokePilotRolePreview()
+    closePilotRoleCropper()
+  }
+})
 </script>
 
 <template>
@@ -1196,6 +1342,50 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
       <span v-if="steamBlacklistSaved" class="pill">{{ t('common.saved') }}</span>
     </section>
 
+    <section class="admin-settings-card admin-pilot-roles-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('pilot-roles') }">
+      <div class="admin-zone-head">
+        <div>
+          <h2>Роли пилотов</h2>
+          <p class="muted">Создайте текстовую или графическую роль и назначайте её пилотам из списка ниже.</p>
+        </div>
+        <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isAdminZoneCollapsed('pilot-roles')" @click="toggleAdminZone('pilot-roles')"><ChevronDown :size="18" /></button>
+      </div>
+      <form class="admin-pilot-role-create" @submit.prevent="createPilotRole">
+        <label class="field"><span>Название роли</span><input v-model="pilotRoleForm.name" maxlength="80" placeholder="Например, Комментатор" required /></label>
+        <label class="field admin-pilot-role-type"><span>Вариант отображения</span><select v-model="pilotRoleForm.display_mode"><option value="text">Текст</option><option value="text_image">Текст + изображение</option><option value="image">Только изображение</option></select></label>
+        <label v-if="pilotRoleForm.display_mode !== 'text'" class="field admin-pilot-role-image-field">
+          <span>Изображение роли</span>
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-describedby="pilot-role-image-hint" @change="setPilotRoleFile" />
+          <small id="pilot-role-image-hint" class="muted">Выберите файл — откроется обрезка.</small>
+          <span v-if="pilotRoleImageFile" class="admin-pilot-role-image-ready"><img v-if="pilotRoleImagePreview" :src="pilotRoleImagePreview" alt="" />Готово к загрузке</span>
+        </label>
+        <label v-if="pilotRoleForm.display_mode !== 'image'" class="field admin-pilot-role-color"><span>Цвет рамки</span><input v-model="pilotRoleForm.border_color" type="color" aria-label="Цвет рамки роли" /></label>
+        <button class="button primary" type="submit" :disabled="pilotRoleSaving"><Plus :size="16" />Добавить роль</button>
+      </form>
+      <div v-if="pilotRoles.length" class="admin-pilot-role-list">
+        <div v-for="role in pilotRoles" :key="role.id" class="admin-pilot-role-row">
+          <PilotRoles :roles="[role]" />
+          <span class="muted">{{ pilotRoleModeLabel(role.display_mode || (role.image_url ? 'text_image' : 'text')) }}</span>
+          <span v-if="role.display_mode !== 'image'" class="admin-pilot-role-color-swatch" :style="{ backgroundColor: role.border_color || 'var(--primary)' }" :title="role.border_color || 'Цвет рамки'" aria-hidden="true"></span>
+          <button class="icon-button danger-icon" type="button" :disabled="pilotRoleDeleting[role.id]" title="Удалить роль" aria-label="Удалить роль" @click="deletePilotRole(role)"><Trash2 :size="16" /></button>
+        </div>
+      </div>
+      <p v-else class="muted">Роли ещё не созданы.</p>
+    </section>
+
+    <ImageCropper
+      v-if="pilotRoleCropper"
+      :source-url="pilotRoleCropper.sourceUrl"
+      title="Обрезка изображения роли"
+      hint="Настройте квадратный фрагмент — он будет показан рядом с именем и не превысит его высоту."
+      :target-width="256"
+      :target-height="256"
+      :saving="pilotRoleSaving"
+      :error="pilotRoleCropper.error"
+      @close="closePilotRoleCropper"
+      @crop="uploadCroppedPilotRole"
+    />
+
     <form class="admin-settings-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('team-limit') }" @submit.prevent="saveTeamLimit">
       <div class="admin-zone-head">
         <h2>{{ t('adminUsers.teamLimitTitle') }}</h2>
@@ -1398,6 +1588,7 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
                 <div class="admin-user-info">
                   <span class="user-name-line">
                     <strong>{{ user.login }}</strong>
+                    <PilotRoles :roles="user.pilot_roles" />
                     <LicenseBadge :user="user" :game="userRatingGame" />
                   </span>
                   <span>#{{ formatPilotNumber(user.pilot_number) }} · RER {{ formatRating(ratingForGame(user, userRatingGame)) }} · {{ teamShortName(user.team_name, user.team_abbreviation) }}</span>
@@ -1431,6 +1622,7 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
             </td>
             <td>
               <div class="admin-actions">
+                <button class="button small" type="button" :disabled="user.is_system_admin" @click="openPilotRoleDialog(user)">Роль</button>
                 <button
                   class="icon-button"
                   type="button"
@@ -1561,6 +1753,29 @@ watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
             <Timer :size="16" />
             {{ t('adminUsers.issueTimeout') }}
           </button>
+        </div>
+      </form>
+    </div>
+
+    <div v-if="pilotRoleDialogUser" class="penalty-modal-backdrop" @click.self="closePilotRoleDialog">
+      <form class="penalty-modal admin-pilot-role-modal card" @submit.prevent="savePilotRoles">
+        <div class="penalty-modal-head section-header">
+          <div>
+            <h2>Роли пилота</h2>
+            <p>{{ pilotRoleDialogUser.first_name }} {{ pilotRoleDialogUser.last_name }} · @{{ pilotRoleDialogUser.login }}</p>
+          </div>
+          <button class="icon-button" type="button" title="Закрыть" aria-label="Закрыть" @click="closePilotRoleDialog"><X :size="18" /></button>
+        </div>
+        <div v-if="pilotRoles.length" class="admin-pilot-role-options">
+          <label v-for="role in pilotRoles" :key="role.id" class="admin-pilot-role-option" :class="{ selected: pilotRoleSelection.includes(role.id) }">
+            <input type="checkbox" :checked="pilotRoleSelection.includes(role.id)" @change="togglePilotRole(role.id)" />
+            <PilotRoles :roles="[role]" />
+          </label>
+        </div>
+        <p v-else class="muted">Сначала создайте роль выше.</p>
+        <div class="admin-timeout-actions">
+          <button class="button" type="button" :disabled="pilotRoleAssignSaving" @click="closePilotRoleDialog">Отмена</button>
+          <button class="button primary" type="submit" :disabled="pilotRoleAssignSaving">Сохранить</button>
         </div>
       </form>
     </div>

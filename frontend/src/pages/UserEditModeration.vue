@@ -5,6 +5,7 @@ import { Eye, Trash2, X } from 'lucide-vue-next'
 import { api } from '../api'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
+import PilotRoles from '../components/PilotRoles.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
@@ -176,6 +177,7 @@ watch([users, history, viewMode], () => {
             <span class="user-name-line">
               <strong>{{ user.first_name }} {{ user.last_name }}</strong>
               <LicenseBadge :user="user" />
+              <PilotRoles :roles="user.pilot_roles" />
             </span>
             <span>{{ user.nickname }}</span>
           </div>
@@ -232,7 +234,7 @@ watch([users, history, viewMode], () => {
         <div class="user-list-cell">
           <UserAvatar :label="request.nickname || request.login" />
           <div class="user-moderation-main">
-            <span class="user-name-line"><strong>{{ request.first_name }} {{ request.last_name }}</strong></span>
+            <span class="user-name-line"><strong>{{ request.first_name }} {{ request.last_name }}</strong><PilotRoles :roles="request.pilot_roles" /></span>
             <span>{{ request.nickname || request.login }}</span>
           </div>
         </div>

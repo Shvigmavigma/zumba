@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
 import ProfileAnalytics from '../components/ProfileAnalytics.vue'
+import PilotRoles from '../components/PilotRoles.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
 import { DEFAULT_LICENSE_TIERS, RATING_GAMES, formatPilotNumber, formatRating, licenseBadgeStyle, normalizeLicenseTiers, ratingForGame, ratingLicenseTier, ratingRaceCountForGame, teamShortName } from '../pilotDisplay'
@@ -61,7 +62,7 @@ onMounted(async () => {
       <div class="pilot-profile-main">
         <div class="section-header pilot-profile-head">
           <div>
-            <h1>{{ pilot.first_name }} {{ pilot.last_name }}</h1>
+            <h1>{{ pilot.first_name }} {{ pilot.last_name }} <PilotRoles :roles="pilot.pilot_roles" /></h1>
             <p class="muted">{{ pilot.nickname }} - {{ pilot.login }}</p>
           </div>
           <div class="toolbar">

@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, Film, Heart, ImageUp, Scale, Trash2, Upload, Us
 import { api } from '../api'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
+import PilotRoles from '../components/PilotRoles.vue'
 import RacePenaltyListModal from '../components/RacePenaltyListModal.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, isExternalRace, statusLabel } from '../i18nLabels'
@@ -424,6 +425,10 @@ function resultPilotName(row) {
   const participant = participantById(row.user_id)
   if (participant) return participantName(participant)
   return row.driver_name || row.nickname || row.login || `${t('roles.pilot')} ${row.user_id || ''}`.trim()
+}
+
+function resultPilotRoles(row) {
+  return participantById(row.user_id)?.pilot_roles || row.pilot_roles || participants.value.find((item) => item.user_id === row.user_id)?.pilot_roles || []
 }
 
 function resultPilotId(row) {
@@ -1166,7 +1171,7 @@ watch(visibleParticipants, () => {
                 <span></span>
               </div>
               <div v-for="member in myTeam.members" :key="member.id" class="manual-results-row">
-                <span>{{ teamMemberName(member) }}</span>
+                <span class="user-name-line"><span>{{ teamMemberName(member) }}</span><PilotRoles :roles="member.pilot_roles" /></span>
                 <label class="toggle-field">
                   <input :checked="isTeamDriverSelected(member.id)" type="checkbox" @change="toggleTeamDriver(member.id)" />
                   <span>{{ isTeamDriverSelected(member.id) ? 'Да' : 'Нет' }}</span>
@@ -1182,7 +1187,7 @@ watch(visibleParticipants, () => {
               <article v-for="member in selectedTeamDriverMembers()" :key="`selected-team-driver-${member.id}`" class="race-participant-row">
                 <UserAvatar class="pilot-avatar-slot" :src="member.avatar_url" :color="member.avatar_color" :label="teamMemberName(member)" />
                 <div class="race-participant-main">
-                  <strong>{{ teamMemberName(member) }}</strong>
+                  <span class="user-name-line"><strong>{{ teamMemberName(member) }}</strong><PilotRoles :roles="member.pilot_roles" /></span>
                   <span>#{{ formatPilotNumber(member.pilot_number) }}</span>
                 </div>
               </article>
@@ -1280,6 +1285,7 @@ watch(visibleParticipants, () => {
                     <span class="user-name-line">
                       <strong>{{ fanVotePilotName(option) }}</strong>
                       <LicenseBadge :user="option" :game="raceRatingGame" />
+                      <PilotRoles :roles="option.pilot_roles" />
                     </span>
                     <span>{{ fanVotePilotSubtitle(option) }}</span>
                   </div>
@@ -1326,6 +1332,7 @@ watch(visibleParticipants, () => {
                     <span class="user-name-line">
                       <span>{{ participantName(item) }}</span>
                       <LicenseBadge :user="item" :game="raceRatingGame" />
+                      <PilotRoles :roles="item.pilot_roles" />
                     </span>
                     <small>{{ fanVotePilotSubtitle(item) }}</small>
                   </button>
@@ -1408,7 +1415,7 @@ watch(visibleParticipants, () => {
             <UserAvatar class="pilot-avatar-slot" :src="item.team_avatar_url" :color="item.team_avatar_color" :label="item.team_name" />
             <div class="race-participant-main">
               <strong>{{ item.team_name }} <span v-if="item.team_abbreviation">({{ item.team_abbreviation }})</span></strong>
-              <span>{{ (item.drivers || []).map((driver) => participantName(driver)).join(' → ') }}</span>
+              <span class="user-name-line"><template v-for="(driver, index) in item.drivers || []" :key="driver.user_id || index"><span>{{ participantName(driver) }}</span><PilotRoles :roles="driver.pilot_roles" /><span v-if="index < (item.drivers || []).length - 1"> → </span></template></span>
             </div>
             <div class="race-participant-stat">
               <span>#</span>
@@ -1431,6 +1438,7 @@ watch(visibleParticipants, () => {
                 </RouterLink>
                 <strong v-else>{{ participantName(item) }}</strong>
                 <LicenseBadge :user="item" :game="raceRatingGame" />
+                <PilotRoles :roles="item.pilot_roles" />
               </span>
               <span>{{ participantSubtitle(item) }} · RER {{ formatRating(ratingForGame(item, raceRatingGame)) }} · {{ pilotTeamChip(item) }}</span>
             </div>
@@ -1511,6 +1519,7 @@ watch(visibleParticipants, () => {
               <span class="user-name-line">
                 <span>{{ participantName({ ...pilot, user_id: pilot.id }) }}</span>
                 <LicenseBadge :user="pilot" :game="raceRatingGame" />
+                <PilotRoles :roles="pilot.pilot_roles" />
               </span>
               <small>#{{ formatPilotNumber(pilot.pilot_number) }} - RER {{ formatRating(ratingForGame(pilot, raceRatingGame)) }}</small>
             </button>
@@ -1559,6 +1568,7 @@ watch(visibleParticipants, () => {
                   </RouterLink>
                   <strong v-else>{{ resultPilotName(row) }}</strong>
                   <LicenseBadge :rating="resultPilotRatingValue(row)" />
+                  <PilotRoles :roles="resultPilotRoles(row)" />
                 </span>
                 <span>{{ resultPilotSubtitle(row) }}</span>
               </div>
@@ -1606,6 +1616,7 @@ watch(visibleParticipants, () => {
                           </RouterLink>
                           <strong v-else>{{ resultPilotName(row) }}</strong>
                           <LicenseBadge :rating="resultPilotRatingValue(row)" />
+                          <PilotRoles :roles="resultPilotRoles(row)" />
                         </span>
                         <span class="result-driver-meta">
                           <span>{{ resultPilotSubtitle(row) }}</span>
