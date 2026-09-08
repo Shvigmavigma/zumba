@@ -15,10 +15,10 @@ from app.config import get_settings
 from app.database_backup import create_database_backup
 from app.db import get_session
 from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, is_system_admin, require_admin, require_moder_plus, require_pilot_plus, require_system_admin
-from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamRaceRegistration, User, UserStatus, default_game_ratings
+from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, PilotRoleBadge, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamRaceRegistration, User, UserStatus, default_game_ratings
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
-from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminRead, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
+from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, PilotRoleAssignmentUpdate, PilotRoleCreate, PilotRoleRead, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminRead, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
 from app.security import verify_password
 from app.services import recalculate_all_ratings, result_rows
 
@@ -372,6 +372,106 @@ async def list_steam_blacklist(
     session: AsyncSession = Depends(get_session),
 ):
     return list((await session.scalars(select(SteamBlacklistEntry).order_by(SteamBlacklistEntry.created_at.desc(), SteamBlacklistEntry.id.desc()))).all())
+
+
+@router.get("/admin/pilot-roles", response_model=list[PilotRoleRead])
+@limiter.limit("120/minute")
+async def list_pilot_roles(
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    return list((await session.scalars(select(PilotRoleBadge).order_by(func.lower(PilotRoleBadge.name), PilotRoleBadge.id))).all())
+
+
+@router.post("/admin/pilot-roles", response_model=PilotRoleRead, status_code=status.HTTP_201_CREATED)
+@limiter.limit("60/minute")
+async def create_pilot_role(
+    payload: PilotRoleCreate,
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    role = PilotRoleBadge(
+        name=payload.name.strip(),
+        display_mode=payload.display_mode,
+        border_color=payload.border_color,
+    )
+    session.add(role)
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="Такая роль уже существует") from exc
+    await session.refresh(role)
+    return role
+
+
+@router.post("/admin/pilot-roles/{role_id}/image", response_model=PilotRoleRead)
+@limiter.limit("60/minute")
+async def upload_pilot_role_image(
+    role_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    role = await session.get(PilotRoleBadge, role_id)
+    if role is None:
+        raise HTTPException(status_code=404, detail="Роль не найдена")
+    previous_image_url = role.image_url
+    role.image_url = await save_avatar_file(file, "pilot-roles", role.id, settings.max_user_avatar_upload_mb)
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        remove_avatar_file(role.image_url)
+        raise
+    await session.refresh(role)
+    remove_avatar_file(previous_image_url)
+    return role
+
+
+@router.delete("/admin/pilot-roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("60/minute")
+async def delete_pilot_role(
+    role_id: int,
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    role = await session.get(PilotRoleBadge, role_id)
+    if role is None:
+        raise HTTPException(status_code=404, detail="Роль не найдена")
+    image_url = role.image_url
+    role.pilots = []
+    await session.delete(role)
+    await session.commit()
+    remove_avatar_file(image_url)
+
+
+@router.put("/{user_id}/pilot-roles", response_model=UserAdminRead)
+@limiter.limit("60/minute")
+async def set_user_pilot_roles(
+    user_id: int,
+    payload: PilotRoleAssignmentUpdate,
+    request: Request,
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    ensure_not_system_admin(user)
+    role_ids = list(dict.fromkeys(int(role_id) for role_id in payload.role_ids))
+    roles = list((await session.scalars(select(PilotRoleBadge).where(PilotRoleBadge.id.in_(role_ids)))).all()) if role_ids else []
+    if len(roles) != len(role_ids):
+        raise HTTPException(status_code=400, detail="Одна или несколько ролей не найдены")
+    user.pilot_roles = sorted(roles, key=lambda role: (role.name.lower(), role.id))
+    await session.commit()
+    await session.refresh(user)
+    team_name, team_abbreviation = await user_team_info(session, user)
+    return user_response(user, team_name, team_abbreviation, private=True, include_steam_id=True)
 
 
 @router.post("/admin/steam-blacklist", response_model=SteamBlacklistEntryRead)

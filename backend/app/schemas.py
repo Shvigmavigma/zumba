@@ -16,6 +16,7 @@ from app.models import (
     ChampionshipScoringSystem,
     PenaltyStatus,
     PenaltyType,
+    PilotRoleDisplayMode,
     RaceStatus,
     Role,
     TeamApplicationStatus,
@@ -31,6 +32,36 @@ TRACK_ID_RE = re.compile(r"[^a-z0-9_-]+")
 class GameRatingRead(BaseModel):
     rating: int = Field(ge=int(MIN_RATING), le=int(MAX_RATING))
     race_count: int = Field(ge=0)
+
+
+class PilotRoleRead(BaseModel):
+    id: int
+    name: str
+    image_url: str | None = None
+    display_mode: PilotRoleDisplayMode = PilotRoleDisplayMode.text
+    border_color: str = Field(default="#2563eb", pattern=r"^#[0-9A-Fa-f]{6}$")
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PilotRoleCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    display_mode: PilotRoleDisplayMode = PilotRoleDisplayMode.text
+    border_color: str = Field(default="#2563eb", pattern=r"^#[0-9A-Fa-f]{6}$")
+
+    @field_validator("name")
+    @classmethod
+    def clean_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Role name is required")
+        return value
+
+
+class PilotRoleAssignmentUpdate(BaseModel):
+    role_ids: list[int] = Field(default_factory=list, max_length=50)
 
 
 def normalize_team_abbreviation(value: str) -> str:
@@ -111,6 +142,7 @@ class UserPublic(BaseModel):
     team_id: int | None = None
     team_name: str | None = None
     team_abbreviation: str | None = None
+    pilot_roles: list[PilotRoleRead] = Field(default_factory=list)
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -301,6 +333,7 @@ class TeamMemberRead(BaseModel):
     avatar_color: str
     avatar_url: str | None = None
     games: list[str] = Field(default_factory=list)
+    pilot_roles: list[PilotRoleRead] = Field(default_factory=list)
     created_at: datetime
 
     model_config = {"from_attributes": True}

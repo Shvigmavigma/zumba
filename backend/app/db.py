@@ -45,6 +45,14 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("ALTER TABLE pilot_role_badges ADD COLUMN IF NOT EXISTS display_mode VARCHAR(20) DEFAULT 'text'"))
+        await conn.execute(text("ALTER TABLE pilot_role_badges ADD COLUMN IF NOT EXISTS border_color VARCHAR(7) DEFAULT '#2563eb'"))
+        await conn.execute(text("UPDATE pilot_role_badges SET display_mode = CASE WHEN image_url IS NOT NULL THEN 'text_image' ELSE 'text' END WHERE display_mode IS NULL OR display_mode NOT IN ('text', 'text_image', 'image')"))
+        await conn.execute(text("UPDATE pilot_role_badges SET border_color = '#2563eb' WHERE border_color IS NULL OR border_color !~ '^#[0-9A-Fa-f]{6}$'"))
+        await conn.execute(text("ALTER TABLE pilot_role_badges ALTER COLUMN display_mode SET DEFAULT 'text'"))
+        await conn.execute(text("ALTER TABLE pilot_role_badges ALTER COLUMN display_mode SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE pilot_role_badges ALTER COLUMN border_color SET DEFAULT '#2563eb'"))
+        await conn.execute(text("ALTER TABLE pilot_role_badges ALTER COLUMN border_color SET NOT NULL"))
         # Older deployments used JSONB's default ``none_as_null=False`` and
         # persisted cleared profile requests as the JSON literal ``null``.
         # Normalize those rows so they cannot be mistaken for active requests.

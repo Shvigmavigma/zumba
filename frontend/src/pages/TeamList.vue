@@ -6,6 +6,7 @@ import { Bell, Check, Crown, LogOut, Plus, Save, Search, Send, Trash2, Upload, U
 import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
 import LicenseBadge from '../components/LicenseBadge.vue'
+import PilotRoles from '../components/PilotRoles.vue'
 import PaginationControls from '../components/PaginationControls.vue'
 import TeamAvatar from '../components/TeamAvatar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
@@ -731,6 +732,7 @@ watch(visibleTeamMembers, () => {
                 <span class="user-name-line">
                   <strong>{{ memberTitle(application.user) }}</strong>
                   <LicenseBadge :user="application.user" :game="memberRatingGame" />
+                  <PilotRoles :roles="application.user.pilot_roles" />
                 </span>
                 <span>{{ application.user.login }} · #{{ formatPilotNumber(application.user.pilot_number) }} · RER {{ formatRating(memberRating(application.user)) }} · {{ teamShortName(application.user.team_name, application.user.team_abbreviation) }}</span>
               </span>
@@ -777,6 +779,7 @@ watch(visibleTeamMembers, () => {
                 <span class="user-name-line">
                   <strong>{{ memberTitle(member) }}</strong>
                   <LicenseBadge :user="member" :game="memberRatingGame" />
+                  <PilotRoles :roles="member.pilot_roles" />
                 </span>
                 <span>{{ member.login }} · #{{ formatPilotNumber(member.pilot_number) }} · {{ teamShortName(memberTeamName(member), memberTeamAbbreviation(member)) }}</span>
               </RouterLink>

@@ -16,6 +16,7 @@ from app.models import AppSetting, RaceFanVote
 from app.models import Championship, ChampionshipRegistration, RACE_GAMES, Penalty, Race, RaceRegistration, RaceStatus, Role, Setup, Team, TeamApplicationStatus, TeamRaceRegistration, User, UserStatus
 from app.race_assets import DEFAULT_ACC_CAR_MODEL_IDS, get_race_assets, normalize_race_create_assets, normalize_race_update_assets
 from app.race_videos import remove_race_video_file, save_race_video_file
+from app.pilot_roles import pilot_roles_payload
 from app.rate_limit import limiter
 from app.schemas import FanVoteCast, FanVoteConfigRead, FanVoteConfigUpdate, FanVoteRead, FanVoteSetup
 from app.schemas import AccResultsUpload, ManualResultsUpload, RaceCreate, RaceManageRead, RaceRead, RaceRegisterRequest, RaceUpdate, ResultsUpload, TeamRaceRegisterRequest
@@ -309,6 +310,7 @@ async def build_fan_vote_payload(session: AsyncSession, race: Race, current_user
                 "team_abbreviation": team_abbreviation,
                 "avatar_color": user.avatar_color,
                 "avatar_url": user.avatar_url,
+                "pilot_roles": pilot_roles_payload(user),
                 "rating": int(round(float(user.rating))),
                 "game_ratings": user.game_ratings or {},
                 "sr": float(user.sr),
@@ -376,6 +378,7 @@ def registration_to_json(registration: RaceRegistration, user: User | None = Non
                 "avatar_color": user.avatar_color,
                 "avatar_url": user.avatar_url,
                 "games": user.games or [],
+                "pilot_roles": pilot_roles_payload(user),
             }
         )
     return data
@@ -815,6 +818,7 @@ async def build_lmu_results_payload(session: AsyncSession, race: Race, qualifica
                 "pilot_number": user.pilot_number if user else None,
                 "avatar_color": user.avatar_color if user else "#2563eb",
                 "avatar_url": user.avatar_url if user else None,
+                "pilot_roles": pilot_roles_payload(user) if user else [],
                 "team_id": user.team_id if user else None,
                 "team_name": team_name,
                 "team_abbreviation": team_abbreviation,
@@ -1239,6 +1243,7 @@ async def build_team_driver_payloads(session: AsyncSession, team: Team, driver_i
             "short_name": short_driver_name(user, user.pilot_number),
             "avatar_color": user.avatar_color,
             "avatar_url": user.avatar_url,
+            "pilot_roles": pilot_roles_payload(user),
             "rating": int(round(float(user.rating))),
             "game_ratings": user.game_ratings or {},
             "sr": float(user.sr),

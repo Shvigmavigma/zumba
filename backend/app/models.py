@@ -4,12 +4,14 @@ from enum import StrEnum
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Column,
     DateTime,
     ForeignKey,
     Index,
     Integer,
     Numeric,
     String,
+    Table,
     Text,
     UniqueConstraint,
     text,
@@ -59,6 +61,12 @@ class Role(StrEnum):
     marshall = "marshall"
     smm = "smm"
     pilot = "pilot"
+
+
+class PilotRoleDisplayMode(StrEnum):
+    text = "text"
+    text_image = "text_image"
+    image = "image"
 
 
 class UserStatus(StrEnum):
@@ -112,6 +120,14 @@ class BannerPosition(StrEnum):
     right = "right"
 
 
+pilot_role_assignments = Table(
+    "pilot_role_assignments",
+    Base.metadata,
+    Column("user_id", ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("role_id", ForeignKey("pilot_role_badges.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (
@@ -160,6 +176,31 @@ class User(Base):
     created_races: Mapped[list["Race"]] = relationship(back_populates="creator", foreign_keys="Race.creator_id")
     team: Mapped["Team | None"] = relationship(back_populates="members", foreign_keys=[team_id])
     owned_teams: Mapped[list["Team"]] = relationship(back_populates="owner", foreign_keys="Team.owner_id")
+    pilot_roles: Mapped[list["PilotRoleBadge"]] = relationship(
+        secondary=pilot_role_assignments,
+        back_populates="pilots",
+        lazy="selectin",
+    )
+
+
+class PilotRoleBadge(Base):
+    """A small public badge that can be attached to one or more pilots."""
+
+    __tablename__ = "pilot_role_badges"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    image_url: Mapped[str | None] = mapped_column(String(255))
+    display_mode: Mapped[PilotRoleDisplayMode] = enum_column(PilotRoleDisplayMode, length=20, default=PilotRoleDisplayMode.text, server_default=PilotRoleDisplayMode.text.value)
+    border_color: Mapped[str] = mapped_column(String(7), default="#2563eb", server_default="#2563eb")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    pilots: Mapped[list[User]] = relationship(
+        secondary=pilot_role_assignments,
+        back_populates="pilot_roles",
+        lazy="selectin",
+    )
 
 
 class SteamBlacklistEntry(Base):

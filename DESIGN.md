@@ -99,6 +99,9 @@
 - 2026-09-07 — individual race-card emphasis: home and calendar cards use a restrained theme-aware blue tint and border, including the date/action panels and hover/focus states; the surrounding sections retain their base appearance.
 - 2026-09-07 — dark race-card balance: reduced only the dark-theme card tint so the blue accent remains visible without overpowering the dark surface.
 - 2026-09-08 — navigation and mobile polish: expanded the shared IANA timezone picker, made team cards and member controls stack cleanly on phones, replaced the fuel datalist with a searchable touch-friendly listbox, and exposed safe external mod and participant-profile links.
+- 2026-09-08 — pilot role variants: the admin role editor uses one contained layout with text, text-plus-image, and image-only modes; text-bearing badges accept a native border-colour picker, while image badges stay capped to the adjacent name line.
+- 2026-09-08 — pilot role styling and crop flow: text-bearing role badges reuse the selected colour for their border, text, and tinted interior; role images open the shared cropper before upload and show a compact ready preview in the admin form.
+- 2026-09-08 — pilot role separation: text and artwork render as independent inline elements; only the text gets the colour frame, while artwork uses a ratio-preserving contain box with no border.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, browser title/favicon, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
@@ -125,8 +128,14 @@
 - `frontend/src/pages/UserEditModeration.vue` — moderation queue with a red Steam blacklist badge and admin-only approval affordance for blocked registrations.
 - `frontend/src/pages/UserEditModeration.vue` — moderation queue with current/completed request tabs and resolved-result cards.
 - `frontend/src/pages/UserEditModeration.vue` — moderation requests expose a structured user card and readable pending profile changes.
+- `frontend/src/components/PilotRoles.vue` — compact text/image pilot-role badges sized to the adjacent name line.
+- `frontend/src/pages/AdminUserList.vue` — admin role catalog and per-pilot multi-select assignment controls.
+
+- 2026-09-08 — sponsor banner display: the top advertising slot keeps the uploaded 1280x230 aspect ratio, uses contain rendering, and removes the decorative overlay so sponsor artwork is shown without distortion or tint.
+- 2026-09-08 — banner upload quality: raster uploads keep their original file and resolution; the cropper is used only when an administrator explicitly selects it.
 
 ## Non-Goals
 - No Figma sync
 - No image generation
 - No framework or styling migration
+- No separate permissions system for visual pilot badges; existing administrator authorization is reused.

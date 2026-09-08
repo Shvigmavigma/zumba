@@ -5,6 +5,7 @@ import { CalendarDays, Check, Flag, Pencil, Plus, RefreshCw, Search, Trash2, Use
 import { api } from '../api'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
+import PilotRoles from '../components/PilotRoles.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { gameOptions } from '../i18nLabels'
 import { formatPilotNumber, formatRating, pilotName, ratingForGame, teamHref, teamShortName } from '../pilotDisplay'
@@ -1165,6 +1166,7 @@ watch(standings, () => {
                         <span class="user-name-line">
                           <strong>{{ pilotTitle(pilot) }}</strong>
                           <LicenseBadge :user="pilot" :game="selected.game" />
+                          <PilotRoles :roles="pilot.pilot_roles" />
                         </span>
                         <span>#{{ formatPilotNumber(pilot.pilot_number) }} - {{ pilot.nickname || pilot.login }}</span>
                       </RouterLink>

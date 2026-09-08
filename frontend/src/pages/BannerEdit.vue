@@ -91,7 +91,8 @@ async function uploadToPosition(banner, event) {
     return
   }
 
-  openCropper(banner, URL.createObjectURL(file), file)
+  // Preserve the uploaded raster file; cropping remains an explicit action.
+  await uploadOriginal(banner, file)
 }
 
 function isAnimatedBanner(banner) {

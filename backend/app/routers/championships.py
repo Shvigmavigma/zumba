@@ -27,6 +27,7 @@ from app.models import (
 from app.rate_limit import limiter
 from app.race_assets import RACE_ASSET_GAMES, asset_track_id, assets_for_game, get_race_assets
 from app.race_videos import remove_race_video_file
+from app.pilot_roles import pilot_roles_payload
 from app.schemas import (
     ChampionshipApplyRequest,
     ChampionshipCarUpdate,
@@ -112,6 +113,7 @@ def user_payload(user: User, team_name: str | None = None, team_abbreviation: st
         "avatar_color": user.avatar_color,
         "avatar_url": user.avatar_url,
         "games": user.games or [],
+        "pilot_roles": pilot_roles_payload(user),
         "created_at": user.created_at,
     }
 
@@ -227,6 +229,7 @@ def build_standings(championship: Championship, stages: list[Race], registration
             "team_abbreviation": team_abbreviation,
             "avatar_color": user.avatar_color,
             "avatar_url": user.avatar_url,
+            "pilot_roles": pilot_roles_payload(user),
             "rating": int(round(float(user.rating))),
             "game_ratings": user.game_ratings or {},
             "sr": float(user.sr),
