@@ -1,4 +1,6 @@
 def pilot_roles_payload(user) -> list[dict]:
+    if getattr(user, "show_pilot_roles", True) is False:
+        return []
     return [
         {
             "id": role.id,

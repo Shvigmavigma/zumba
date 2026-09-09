@@ -14,6 +14,7 @@ const { t } = useI18n()
 const form = ref({
   ...state.user,
   country: state.user?.country || '',
+  show_pilot_roles: state.user?.show_pilot_roles !== false,
   games: state.user?.games?.length ? [...state.user.games] : ['ACC']
 })
 const error = ref('')
@@ -60,7 +61,8 @@ async function submit() {
         discord: form.value.discord || null,
         games: form.value.games,
         favorite_car: form.value.favorite_car || null,
-        avatar_color: form.value.avatar_color
+        avatar_color: form.value.avatar_color,
+        show_pilot_roles: form.value.show_pilot_roles !== false
       }
     })
     setSession(state.token, user)
@@ -151,6 +153,11 @@ async function uploadAvatar() {
           <option v-for="car in favoriteCarOptions" :key="car" :value="car">{{ car }}</option>
         </select>
       </label>
+      <label class="toggle-field profile-role-visibility-field">
+        <input v-model="form.show_pilot_roles" type="checkbox" />
+        <span>{{ t('profile.showRoles') }}</span>
+      </label>
+      <p class="muted profile-role-visibility-hint">{{ t('profile.showRolesHint') }}</p>
       <p v-if="error" class="error">{{ error }}</p>
       <p v-if="saved" class="pill">{{ t('common.saved') }}</p>
       <p v-if="saved && savedKind === 'profile' && state.user?.role !== 'admin'" class="muted">{{ t('profile.changesAfterModeration') }}</p>

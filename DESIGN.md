@@ -102,6 +102,7 @@
 - 2026-09-08 — pilot role variants: the admin role editor uses one contained layout with text, text-plus-image, and image-only modes; text-bearing badges accept a native border-colour picker, while image badges stay capped to the adjacent name line.
 - 2026-09-08 — pilot role styling and crop flow: text-bearing role badges reuse the selected colour for their border, text, and tinted interior; role images open the shared cropper before upload and show a compact ready preview in the admin form.
 - 2026-09-08 — pilot role separation: text and artwork render as independent inline elements; only the text gets the colour frame, while artwork uses a ratio-preserving contain box with no border.
+- 2026-09-09 — pilot role privacy and Moscow default: profile owners can hide assigned roles from public pilot/race views; timezone storage migrates the old implicit UTC default to Europe/Moscow while preserving an explicit user choice.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, browser title/favicon, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).

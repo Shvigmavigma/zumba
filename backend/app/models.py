@@ -160,6 +160,7 @@ class User(Base):
     timeout_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     avatar_color: Mapped[str] = mapped_column(String(7), default="#2563eb")
     avatar_url: Mapped[str | None] = mapped_column(String(255))
+    show_pilot_roles: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     avatar_upload_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     avatar_upload_window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     games: Mapped[list[str]] = mapped_column(JSONB, default=lambda: list(DEFAULT_USER_GAMES), server_default=text("""'["ACC", "AC", "iRacing", "LMU"]'::jsonb"""))

@@ -3,13 +3,17 @@ import { reactive } from 'vue'
 const savedLocale = localStorage.getItem('locale')
 const initialLocale = savedLocale === 'en' ? 'en' : 'ru'
 const savedTimeZone = localStorage.getItem('timeZone')
+const savedTimeZoneVersion = localStorage.getItem('timeZonePreferenceVersion')
+const initialTimeZone = savedTimeZone && (savedTimeZone !== 'UTC' || savedTimeZoneVersion === '2')
+  ? savedTimeZone
+  : 'Europe/Moscow'
 
 export const state = reactive({
   token: localStorage.getItem('token') || '',
   user: JSON.parse(localStorage.getItem('user') || 'null'),
   theme: localStorage.getItem('theme') || 'light',
   locale: initialLocale,
-  timeZone: savedTimeZone || 'UTC',
+  timeZone: initialTimeZone,
   licenseTiers: null,
   licenseTiersLoaded: false
 })

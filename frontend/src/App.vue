@@ -82,12 +82,13 @@ watch(
 watch(
   () => state.timeZone,
   (value) => {
-    const nextTimeZone = timeZoneOptions.some((item) => item.value === value) ? value : 'UTC'
+    const nextTimeZone = timeZoneOptions.some((item) => item.value === value) ? value : 'Europe/Moscow'
     if (nextTimeZone !== value) {
       state.timeZone = nextTimeZone
       return
     }
     localStorage.setItem('timeZone', nextTimeZone)
+    localStorage.setItem('timeZonePreferenceVersion', '2')
   },
   { immediate: true }
 )
@@ -101,7 +102,7 @@ function setLocale(value) {
 }
 
 function setTimeZone(value) {
-  state.timeZone = timeZoneOptions.some((item) => item.value === value) ? value : 'UTC'
+  state.timeZone = timeZoneOptions.some((item) => item.value === value) ? value : 'Europe/Moscow'
 }
 
 function sameKeys(left, right) {

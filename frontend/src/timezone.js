@@ -48,7 +48,7 @@ export function localeCode() {
 }
 
 export function activeTimeZone() {
-  return state.timeZone || 'UTC'
+  return state.timeZone || 'Europe/Moscow'
 }
 
 export function formatInTimeZone(value, options = {}) {
