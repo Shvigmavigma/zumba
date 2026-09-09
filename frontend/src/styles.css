@@ -17965,6 +17965,15 @@ body,
   margin-inline-start: 0;
 }
 
+.profile-role-visibility-field {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.profile-role-visibility-hint {
+  margin: -4px 0 0;
+}
+
 @media (max-width: 720px) {
   .admin-pilot-role-create {
     grid-template-columns: 1fr;

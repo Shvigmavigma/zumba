@@ -296,10 +296,13 @@ async def build_team_detail(
         my_applications.get(team.id),
         len(pending_applications),
     )
-    payload["members"] = [
-        TeamMemberRead(**{**TeamMemberRead.model_validate(member).model_dump(), "team_name": team.name, "team_abbreviation": team.abbreviation})
-        for member in members
-    ]
+    payload["members"] = []
+    for member in members:
+        member_payload = TeamMemberRead.model_validate(member).model_dump()
+        if member.show_pilot_roles is False:
+            member_payload["pilot_roles"] = []
+        member_payload.update(team_name=team.name, team_abbreviation=team.abbreviation)
+        payload["members"].append(TeamMemberRead(**member_payload))
     payload["applications"] = pending_applications
     return TeamDetailRead(**payload)
 

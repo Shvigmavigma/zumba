@@ -155,6 +155,7 @@ class UserPrivate(UserPublic):
     timeout_start: datetime | None
     timeout_end: datetime | None
     pending_profile_changes: dict | None = None
+    show_pilot_roles: bool = True
 
 
 class UserAdminRead(UserPrivate):
@@ -218,6 +219,7 @@ class UserUpdate(BaseModel):
     country: str | None = Field(default=None, max_length=50)
     discord: str | None = Field(default=None, max_length=100)
     avatar_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    show_pilot_roles: bool | None = None
     games: list[GameCode] | None = Field(default=None, min_length=1, max_length=4)
     favorite_car: str | None = Field(default=None, max_length=80)
 

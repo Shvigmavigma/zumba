@@ -45,6 +45,10 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS show_pilot_roles BOOLEAN DEFAULT TRUE"))
+        await conn.execute(text("UPDATE users SET show_pilot_roles = TRUE WHERE show_pilot_roles IS NULL"))
+        await conn.execute(text("ALTER TABLE users ALTER COLUMN show_pilot_roles SET DEFAULT TRUE"))
+        await conn.execute(text("ALTER TABLE users ALTER COLUMN show_pilot_roles SET NOT NULL"))
         await conn.execute(text("ALTER TABLE pilot_role_badges ADD COLUMN IF NOT EXISTS display_mode VARCHAR(20) DEFAULT 'text'"))
         await conn.execute(text("ALTER TABLE pilot_role_badges ADD COLUMN IF NOT EXISTS border_color VARCHAR(7) DEFAULT '#2563eb'"))
         await conn.execute(text("UPDATE pilot_role_badges SET display_mode = CASE WHEN image_url IS NOT NULL THEN 'text_image' ELSE 'text' END WHERE display_mode IS NULL OR display_mode NOT IN ('text', 'text_image', 'image')"))

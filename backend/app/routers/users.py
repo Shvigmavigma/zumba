@@ -131,6 +131,8 @@ def user_response(
     data = schema.model_validate(user).model_dump()
     data["team_name"] = team_name
     data["team_abbreviation"] = team_abbreviation
+    if not private and user.show_pilot_roles is False:
+        data["pilot_roles"] = []
     data["is_system_admin"] = is_system_admin(user)
     if include_steam_id:
         data["steam_id"] = user.steam_id
@@ -805,15 +807,21 @@ async def update_me(
         raise HTTPException(status_code=400, detail="Required profile fields cannot be null")
     await ensure_unique_user_fields(session, data, user.id)
     favorite_car_marker = object()
+    show_roles_marker = object()
     favorite_car = data.pop("favorite_car", favorite_car_marker)
+    show_pilot_roles = data.pop("show_pilot_roles", show_roles_marker)
     if user.role == Role.admin:
         for field, value in data.items():
             setattr(user, field, value)
         if favorite_car is not favorite_car_marker:
             user.favorite_car = favorite_car
+        if show_pilot_roles is not show_roles_marker:
+            user.show_pilot_roles = show_pilot_roles
     else:
         if favorite_car is not favorite_car_marker:
             user.favorite_car = favorite_car
+        if show_pilot_roles is not show_roles_marker:
+            user.show_pilot_roles = show_pilot_roles
         if data:
             user.pending_profile_changes = data
     await session.commit()
