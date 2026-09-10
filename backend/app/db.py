@@ -45,6 +45,9 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Promote the supplied sponsor artwork for installations that still
+        # use the stock top banner. Custom admin-selected banners are kept.
+        await conn.execute(text("UPDATE banners SET image_url = '/assets/getpc-racing-banner.jpg' WHERE position = 'top' AND image_url = '/assets/banner-top.svg'"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS show_pilot_roles BOOLEAN DEFAULT TRUE"))
         await conn.execute(text("UPDATE users SET show_pilot_roles = TRUE WHERE show_pilot_roles IS NULL"))
         await conn.execute(text("ALTER TABLE users ALTER COLUMN show_pilot_roles SET DEFAULT TRUE"))

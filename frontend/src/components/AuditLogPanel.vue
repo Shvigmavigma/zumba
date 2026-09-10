@@ -1,15 +1,18 @@
 <script setup>
-import { onMounted, ref } from 'vue'
-import { ChevronDown, RefreshCw } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
+import { ChevronDown, RefreshCw, Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
+import { state } from '../store'
 import { formatDateTime } from '../timezone'
 
 const { t } = useI18n()
+const emit = defineEmits(['clear'])
 const entries = ref([])
 const loading = ref(false)
 const error = ref('')
 const isCollapsed = ref(false)
+const canClear = computed(() => state.user?.is_system_admin === true)
 
 async function load() {
   loading.value = true
@@ -23,6 +26,7 @@ async function load() {
   }
 }
 
+defineExpose({ load })
 onMounted(load)
 </script>
 
@@ -37,6 +41,10 @@ onMounted(load)
         <button class="button small" type="button" :disabled="loading" @click="load">
           <RefreshCw :size="14" />
           {{ t('adminUsers.auditRefresh') }}
+        </button>
+        <button v-if="canClear" class="button danger small" type="button" :disabled="loading" @click="emit('clear')">
+          <Trash2 :size="14" />
+          {{ t('adminUsers.auditClear') }}
         </button>
         <button class="icon-button admin-zone-toggle" type="button" :aria-expanded="!isCollapsed" :aria-label="isCollapsed ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" :title="isCollapsed ? t('adminUsers.expandZone') : t('adminUsers.collapseZone')" @click="isCollapsed = !isCollapsed">
           <ChevronDown :size="18" />

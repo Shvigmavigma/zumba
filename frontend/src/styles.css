@@ -26,7 +26,7 @@
   --layout-gap: 20px;
   --side-banner-width: 220px;
   --main-menu-side-width: clamp(220px, 18vw, 320px);
-  --main-menu-top-height: 302px;
+  --main-menu-top-height: 230px;
   --content-column-width: calc(var(--page-width) - (var(--side-banner-width) * 2) - (var(--layout-gap) * 2));
   --topbar-height: 70px;
   --control-height: 40px;
@@ -17808,10 +17808,13 @@ body,
 .pilot-role-text {
   display: inline-flex;
   align-items: center;
+  flex: 0 1 auto;
   width: fit-content;
-  max-width: min(24ch, 100%);
+  max-width: 100%;
+  min-width: 0;
   min-height: 1.35em;
   padding: 2px 7px;
+  box-sizing: border-box;
   overflow: hidden;
   border: 1px solid var(--pilot-role-border, color-mix(in srgb, var(--primary) 35%, var(--border)));
   border-radius: 999px;
@@ -17826,10 +17829,10 @@ body,
 
 .pilot-role-image-wrap {
   display: grid;
-  flex: 0 0 2em;
+  flex: 0 0 1.67em;
   place-items: center;
-  width: 2em;
-  height: 2em;
+  width: 1.67em;
+  height: 1.67em;
   min-width: 0;
 }
 
@@ -17991,9 +17994,10 @@ body,
   }
 }
 
-/* Keep the sponsor artwork at its native 1280x230 ratio without a tint overlay. */
+/* Keep the sponsor artwork at the exact source ratio so the browser never
+   adds a fractional letterbox/crop while scaling the JPEG. */
 :root {
-  --main-top-banner-ratio: 1280 / 230;
+  --main-top-banner-ratio: 2400 / 432;
 }
 
 .main-menu-top-banner {
@@ -18010,4 +18014,99 @@ body,
 .main-menu-top-banner img,
 .main-menu-top-banner video {
   object-fit: contain;
+}
+
+.main-menu-top-banner:not(.is-video) {
+  aspect-ratio: auto;
+}
+
+.main-menu-top-banner:not(.is-video) img {
+  width: 100%;
+  height: auto;
+  object-fit: initial;
+}
+
+/* Role badges must be allowed to shrink inside the pilot name line.  Long
+   labels stay on one line, keep their frame, and are ellipsized instead of
+   pushing the rest of the row or overflowing over the next badge. */
+.user-name-line > .pilot-roles {
+  display: inline-flex;
+  flex: 0 1 auto;
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.pilot-role-badge {
+  box-sizing: border-box;
+  flex: 0 1 auto;
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.pilot-role-text {
+  display: block;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Race results use nested grid/flex cells.  Let the driver column consume
+   only the space that the card/table cell actually has so a long role cannot
+   push the podium or the result table outside its layout. */
+.race-results-podium .result-podium-card,
+.race-results-podium .result-podium-driver,
+.race-results-podium .result-podium-driver > .user-name-line,
+.race-results-table .result-driver-cell,
+.race-results-table .result-driver-cell > div,
+.race-results-table .result-driver-cell .user-name-line {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.race-results-podium .result-podium-driver,
+.race-results-table .result-driver-cell > div {
+  overflow: hidden;
+}
+
+.race-results-podium .result-podium-driver > .user-name-line,
+.race-results-table .result-driver-cell .user-name-line {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+/* A podium name line may use a second flex line for a role that cannot fit
+   beside the name and licence.  The role keeps its one-line badge/ellipsis;
+   only the whole badge moves, so it never splits or pushes the card wider. */
+.race-results-podium .result-podium-driver > .user-name-line {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.race-results-podium .result-podium-driver > .user-name-line > .result-pilot-link,
+.race-results-podium .result-podium-driver > .user-name-line > strong,
+.race-results-table .result-driver-cell .user-name-line > .result-pilot-link,
+.race-results-table .result-driver-cell .user-name-line > strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.race-results-podium .result-podium-driver > .user-name-line > .pilot-roles,
+.race-results-table .result-driver-cell .user-name-line > .pilot-roles {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }

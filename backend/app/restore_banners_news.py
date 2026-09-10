@@ -10,7 +10,7 @@ from app.models import Banner, BannerPosition, NewsItem, User
 
 
 DEFAULT_BANNERS = {
-    BannerPosition.top: ("/assets/banner-top.svg", "#"),
+    BannerPosition.top: ("/assets/getpc-racing-banner.jpg", "#"),
     BannerPosition.bottom: ("/assets/banner-bottom.svg", "#"),
     BannerPosition.left: ("/assets/banner-side.svg", "#"),
     BannerPosition.right: ("/assets/banner-side.svg", "#"),

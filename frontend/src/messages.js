@@ -313,6 +313,10 @@ export const messages = {
       auditTitle: 'Журнал аудита',
       auditHint: 'Изменения сотрудников записываются, действия пилотов не записываются.',
       auditRefresh: 'Обновить',
+      auditClear: 'Очистить логи',
+      auditClearTitle: 'Очистить журнал аудита',
+      auditClearHint: 'Все записи журнала аудита будут удалены. Действие нельзя отменить.',
+      auditClearSuccess: 'Журнал очищен: {count}',
       auditEmpty: 'Записей пока нет',
       auditSystem: 'Система',
       deleteAllPilots: 'Удалить всех гонщиков',
@@ -490,7 +494,7 @@ export const messages = {
         top: {
           title: 'Верхний баннер',
           description: 'Горизонтальная реклама над главным меню',
-          sizeHint: 'Рекомендовано: 1280x230 px, пропорция 5.6:1',
+          sizeHint: 'Рекомендовано: 2400x432 px, пропорция 5.56:1',
           badge: 'TOP'
         },
         left: {
@@ -1126,6 +1130,10 @@ export const messages = {
       auditTitle: 'Audit log',
       auditHint: 'Changes by staff are recorded; pilot actions are excluded.',
       auditRefresh: 'Refresh',
+      auditClear: 'Clear logs',
+      auditClearTitle: 'Clear audit log',
+      auditClearHint: 'All audit log entries will be deleted. This action cannot be undone.',
+      auditClearSuccess: 'Audit log cleared: {count}',
       auditEmpty: 'No entries yet',
       auditSystem: 'System',
       deleteAllPilots: 'Delete all pilots',
@@ -1303,7 +1311,7 @@ export const messages = {
         top: {
           title: 'Top banner',
           description: 'Horizontal ad above the main menu',
-          sizeHint: 'Recommended: 1280x230 px, 5.6:1 ratio',
+          sizeHint: 'Recommended: 2400x432 px, 5.56:1 ratio',
           badge: 'TOP'
         },
         left: {
