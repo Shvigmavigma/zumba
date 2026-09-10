@@ -174,13 +174,23 @@ async function refreshSession() {
   try {
     const user = await api('/auth/me')
     setSession(state.token, user)
+    // Associate an account that was restored from local storage with the
+    // current browser marker as soon as the session is confirmed.
+    prepareDevice()
   } catch {
     // Keep the cached session on transient startup failures.
   }
 }
 
+function prepareDevice() {
+  // Set the anonymous marker for every visitor and associate it with the
+  // current account when an access token is available.
+  api('/auth/device').catch(() => {})
+}
+
 onMounted(() => {
   ensureBrandingSettings().catch(() => {})
+  prepareDevice()
   refreshSession()
   navResizeObserver = new ResizeObserver(queueNavReflow)
   if (navContainer.value) navResizeObserver.observe(navContainer.value)

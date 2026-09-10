@@ -163,6 +163,8 @@ class User(Base):
     show_pilot_roles: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     avatar_upload_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     avatar_upload_window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    device_fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
+    device_label: Mapped[str | None] = mapped_column(String(120))
     games: Mapped[list[str]] = mapped_column(JSONB, default=lambda: list(DEFAULT_USER_GAMES), server_default=text("""'["ACC", "AC", "iRacing", "LMU"]'::jsonb"""))
     favorite_car: Mapped[str | None] = mapped_column(String(80), index=True)
     team_id: Mapped[int | None] = mapped_column(
@@ -227,6 +229,8 @@ class ModerationHistory(Base):
     nickname: Mapped[str] = mapped_column(String(80))
     pilot_number: Mapped[int] = mapped_column(Integer)
     steam_id: Mapped[str] = mapped_column(String(50), index=True)
+    device_fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
+    device_label: Mapped[str | None] = mapped_column(String(120))
     pending_profile_changes: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

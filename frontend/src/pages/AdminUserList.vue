@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Ban, ChevronDown, Download, Edit3, Plus, Save, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
+import { Ban, ChevronDown, Download, Edit3, Eye, Monitor, Plus, Save, Shield, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
 import { api, apiDownload } from '../api'
 import { brandingSettings, setBrandingSettings } from '../brandingSettings'
 import AvatarViewer from '../components/AvatarViewer.vue'
@@ -29,6 +29,7 @@ const busyUsers = ref({})
 const timeoutDialogUser = ref(null)
 const timeoutUntil = ref('')
 const timeoutSaving = ref(false)
+const detailDialogUser = ref(null)
 const editDialogUser = ref(null)
 const editForm = ref({})
 const editSaving = ref(false)
@@ -102,11 +103,28 @@ const dangerSaving = ref(false)
 const dangerResult = ref('')
 const auditLogPanel = ref(null)
 const userSearch = ref('')
+const userSearchBy = ref('all')
 const userSort = ref('rating_desc')
 const userRatingGame = ref('ACC')
 const page = ref(1)
 const pageSize = 25
 const visibleUsers = computed(() => users.value)
+const userSearchOptions = computed(() => [
+  { value: 'all', label: t('adminUsers.searchAll') },
+  { value: 'id', label: t('adminUsers.searchAccountId') },
+  { value: 'login', label: t('adminUsers.searchLogin') },
+  { value: 'email', label: t('adminUsers.searchEmail') },
+  { value: 'name', label: t('adminUsers.searchName') },
+  { value: 'nickname', label: t('adminUsers.searchNickname') },
+  { value: 'pilot_number', label: t('adminUsers.searchPilotNumber') },
+  { value: 'steam_id', label: t('adminUsers.searchSteamId') },
+  { value: 'device_id', label: t('adminUsers.searchDeviceId') },
+  { value: 'device', label: t('adminUsers.searchDevice') },
+  { value: 'team', label: t('adminUsers.searchTeam') },
+  { value: 'country', label: t('adminUsers.searchCountry') },
+  { value: 'role', label: t('adminUsers.searchRole') },
+  { value: 'status', label: t('adminUsers.searchStatus') }
+])
 const hasNextPage = computed(() => users.value.length === pageSize)
 const canUseDangerZone = computed(() => state.user?.is_system_admin === true)
 const editCountries = computed(() => countryOptionsWithCurrent(state.locale, editForm.value.country || ''))
@@ -206,7 +224,8 @@ async function load() {
       limit: String(pageSize),
       offset: String((page.value - 1) * pageSize),
       sort: userSort.value,
-      rating_game: userRatingGame.value
+      rating_game: userRatingGame.value,
+      search_by: userSearchBy.value
     })
     if (userSearch.value.trim()) params.set('search', userSearch.value.trim())
     const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedDonationSettings, loadedLicenseSettings, loadedBrandingSettings, loadedSystemSettings, loadedWeatherImages, loadedSteamBlacklist, loadedPilotRoles] = await Promise.all([
@@ -967,6 +986,62 @@ function isAdminZoneCollapsed(key) {
   return collapsedAdminZones.value[key] === true
 }
 
+function openUserDetails(user) {
+  detailDialogUser.value = user
+}
+
+function closeUserDetails() {
+  detailDialogUser.value = null
+}
+
+function detailValue(value) {
+  if (Array.isArray(value)) return value.length ? value.join(', ') : t('common.none')
+  if (value === null || value === undefined || value === '') return t('common.none')
+  return String(value)
+}
+
+function detailRows(user) {
+  if (!user) return []
+  const ratings = Object.entries(user.game_ratings || {})
+    .map(([game, value]) => `${game}: ${value?.rating ?? t('common.none')} (${value?.race_count ?? 0})`)
+    .join(' · ')
+  const linkedLogins = user.same_device_logins || []
+  return [
+    { label: t('adminUsers.accountId'), value: user.id },
+    { label: t('fields.login'), value: user.login },
+    { label: t('fields.email'), value: user.email },
+    { label: t('fields.firstName'), value: user.first_name },
+    { label: t('fields.lastName'), value: user.last_name },
+    { label: t('fields.nickname'), value: user.nickname },
+    { label: t('fields.pilotNumber'), value: `#${formatPilotNumber(user.pilot_number)}` },
+    { label: t('fields.country'), value: user.country },
+    { label: t('fields.discord'), value: user.discord },
+    { label: t('common.role'), value: roleLabel(t, user.role) },
+    { label: t('common.status'), value: statusLabel(t, user.status) },
+    { label: t('adminUsers.systemAdmin'), value: user.is_system_admin ? t('common.yes') : t('common.no') },
+    { label: t('fields.games'), value: user.games },
+    { label: t('adminUsers.teamId'), value: user.team_id },
+    { label: t('fields.team'), value: teamShortName(user.team_name, user.team_abbreviation) },
+    { label: t('fields.sr'), value: user.sr },
+    { label: t('fields.rating'), value: formatRating(user.rating) },
+    { label: t('adminUsers.simulatorRatings'), value: ratings },
+    { label: t('fields.ratingRaces'), value: user.rating_race_count },
+    { label: t('profile.favoriteCar'), value: user.favorite_car },
+    { label: t('adminUsers.avatarColor'), value: user.avatar_color },
+    { label: t('adminUsers.rolesVisible'), value: user.show_pilot_roles ? t('common.yes') : t('common.no') },
+    { label: t('fields.joinedAt'), value: formatDateTime(user.created_at) },
+    { label: t('profile.updatedAt'), value: formatDateTime(user.updated_at) },
+    { label: t('adminUsers.steamBlacklistSteamId'), value: user.steam_id },
+    { label: t('adminUsers.device'), value: user.device_label },
+    { label: t('adminUsers.deviceId'), value: user.device_id },
+    { label: t('adminUsers.linkedAccounts'), value: linkedLogins.length ? `${user.same_device_account_count || linkedLogins.length + 1}: ${linkedLogins.join(', ')}` : t('common.none') },
+    { label: t('profile.banEnd'), value: formatDateTime(user.ban_end) },
+    { label: t('profile.timeoutStart'), value: formatDateTime(user.timeout_start) },
+    { label: t('profile.timeoutEnd'), value: formatDateTime(user.timeout_end) },
+    { label: t('profile.pendingChanges'), value: user.pending_profile_changes ? JSON.stringify(user.pending_profile_changes) : t('common.none') }
+  ]
+}
+
 function setPilotRoleFile(event) {
   const file = event.target.files?.[0] || null
   event.target.value = ''
@@ -1098,7 +1173,7 @@ function toggleAdminZone(key) {
   }
 }
 watch(page, load)
-watch([userSearch, userSort, userRatingGame], resetUserPageAndLoad)
+watch([userSearch, userSearchBy, userSort, userRatingGame], resetUserPageAndLoad)
 watch(() => pilotRoleForm.value.display_mode, (mode) => {
   if (mode === 'text') {
     pilotRoleImageFile.value = null
@@ -1575,6 +1650,9 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
       </div>
       <div class="pilot-inline-controls admin-users-controls">
         <input v-model="userSearch" type="search" :placeholder="t('common.search')" />
+        <select v-model="userSearchBy" :aria-label="t('adminUsers.searchBy')">
+          <option v-for="option in userSearchOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
         <select v-model="userSort" :aria-label="t('common.sort')">
           <option value="rating_desc">{{ t('sort.ratingDesc') }}</option>
           <option value="rating_asc">{{ t('sort.ratingAsc') }}</option>
@@ -1597,7 +1675,7 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="user in visibleUsers" :key="user.id">
+          <tr v-for="user in visibleUsers" :key="user.id" :class="{ 'has-device-match': user.same_device_account_count > 1 }">
             <td>
               <div class="admin-user-cell">
                 <UserAvatar mini :src="user.avatar_url" :color="user.avatar_color" :label="user.login" />
@@ -1608,6 +1686,12 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
                     <LicenseBadge :user="user" :game="userRatingGame" />
                   </span>
                   <span>#{{ formatPilotNumber(user.pilot_number) }} · RER {{ formatRating(ratingForGame(user, userRatingGame)) }} · {{ teamShortName(user.team_name, user.team_abbreviation) }}</span>
+                  <span
+                    v-if="user.device_label"
+                    class="admin-user-device"
+                    :title="user.same_device_account_count > 1 ? t('adminUsers.sameDeviceTooltip', { logins: user.same_device_logins?.join(', ') || t('common.none') }) : ''"
+                  ><Monitor :size="13" /> {{ t('adminUsers.device') }}: {{ user.device_label }}<small v-if="user.same_device_account_count > 1">{{ t('adminUsers.sameDeviceAccounts', { count: user.same_device_account_count }) }}</small></span>
+                  <span v-if="user.device_id" class="admin-user-device-id">{{ t('adminUsers.deviceIdShort') }}: {{ user.device_id }}</span>
                 </div>
               </div>
             </td>
@@ -1638,6 +1722,15 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
             </td>
             <td>
               <div class="admin-actions">
+                <button
+                  class="icon-button"
+                  type="button"
+                  :title="t('adminUsers.viewUser')"
+                  :aria-label="t('adminUsers.viewUser')"
+                  @click="openUserDetails(user)"
+                >
+                  <Eye :size="16" />
+                </button>
                 <button class="button small" type="button" :disabled="user.is_system_admin" @click="openPilotRoleDialog(user)">Роль</button>
                 <button
                   class="icon-button"
@@ -1711,6 +1804,48 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
       </table>
     </div>
     <PaginationControls v-model:page="page" :page-size="pageSize" :loaded-count="visibleUsers.length" :has-next="hasNextPage" />
+
+    <div v-if="detailDialogUser" class="penalty-modal-backdrop" @click.self="closeUserDetails">
+      <section class="penalty-modal admin-user-details-modal card" role="dialog" aria-modal="true" :aria-label="t('adminUsers.userDetailsTitle')">
+        <div class="penalty-modal-head section-header">
+          <div>
+            <h2>{{ t('adminUsers.userDetailsTitle') }}</h2>
+            <p>{{ detailDialogUser.login }} · #{{ formatPilotNumber(detailDialogUser.pilot_number) }}</p>
+          </div>
+          <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="closeUserDetails">
+            <X :size="18" />
+          </button>
+        </div>
+
+        <div class="admin-user-details-hero">
+          <UserAvatar :src="detailDialogUser.avatar_url" :color="detailDialogUser.avatar_color" :label="detailDialogUser.nickname || detailDialogUser.login" />
+          <div>
+            <h3>{{ detailDialogUser.first_name }} {{ detailDialogUser.last_name }}</h3>
+            <p class="muted">@{{ detailDialogUser.login }} · {{ detailDialogUser.nickname }}</p>
+            <PilotRoles :roles="detailDialogUser.pilot_roles" />
+          </div>
+        </div>
+
+        <div class="admin-user-details-grid">
+          <div v-for="item in detailRows(detailDialogUser)" :key="item.label" class="admin-user-detail-item">
+            <span>{{ item.label }}</span>
+            <strong>{{ detailValue(item.value) }}</strong>
+          </div>
+        </div>
+
+        <p class="admin-user-details-security">
+          <Shield :size="15" />
+          {{ t('adminUsers.passwordHashHidden') }}
+        </p>
+
+        <div class="admin-timeout-actions">
+          <button class="button" type="button" @click="closeUserDetails">
+            <X :size="16" />
+            {{ t('common.close') }}
+          </button>
+        </div>
+      </section>
+    </div>
 
     <div v-if="activeDangerAction" class="penalty-modal-backdrop" @click.self="closeDangerDialog">
       <form class="penalty-modal admin-danger-modal card" @submit.prevent="runDangerAction">

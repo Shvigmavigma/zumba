@@ -3,6 +3,7 @@
 import csv
 import io
 import zipfile
+from collections import defaultdict
 from xml.etree import ElementTree as ET
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
@@ -114,10 +115,39 @@ def add_moderation_history(session: AsyncSession, user: User, request_type: str,
             nickname=user.nickname,
             pilot_number=user.pilot_number,
             steam_id=user.steam_id,
+            device_fingerprint=user.device_fingerprint,
+            device_label=user.device_label,
             pending_profile_changes=dict(user.pending_profile_changes) if isinstance(user.pending_profile_changes, dict) else None,
             resolved_by=resolved_by,
         )
     )
+
+
+async def device_group_logins(session: AsyncSession, fingerprints: set[str]) -> dict[str, list[str]]:
+    if not fingerprints:
+        return {}
+    rows = await session.execute(
+        select(User.device_fingerprint, User.login)
+        .where(User.device_fingerprint.in_(fingerprints))
+        .order_by(User.device_fingerprint, User.created_at, User.id)
+    )
+    groups: dict[str, list[str]] = defaultdict(list)
+    for fingerprint, login in rows.all():
+        if fingerprint:
+            groups[fingerprint].append(login)
+    return dict(groups)
+
+
+def device_group_data(user: User, groups: dict[str, list[str]]) -> tuple[int, list[str]]:
+    if not user.device_fingerprint:
+        return 1, []
+    logins = groups.get(user.device_fingerprint, [])
+    return max(len(logins), 1), [login for login in logins if login != user.login]
+
+
+def device_id_preview(fingerprint: str | None) -> str | None:
+    """Return a lookup-safe prefix, never the raw browser cookie."""
+    return fingerprint[:16] if fingerprint else None
 
 
 def user_response(
@@ -278,11 +308,18 @@ async def pending_users(request: Request, moderator: User = Depends(require_mode
             await session.scalars(select(SteamBlacklistEntry).where(SteamBlacklistEntry.steam_id.in_(steam_ids)))
         ).all()
         blocked_by_steam = {entry.steam_id: entry.reason for entry in blocked_entries}
+    device_groups = await device_group_logins(
+        session,
+        {user.device_fingerprint for user, _, _ in rows if user.device_fingerprint},
+    ) if moderator.role == Role.admin else {}
     result = []
     for user, team_name, team_abbreviation in rows:
         data = user_response(user, team_name, team_abbreviation)
         if moderator.role == Role.admin:
             data["steam_id"] = user.steam_id
+            data["device_label"] = user.device_label
+            data["device_id"] = device_id_preview(user.device_fingerprint)
+            data["same_device_account_count"], data["same_device_logins"] = device_group_data(user, device_groups)
         pending_changes = user.pending_profile_changes
         data["pending_profile_changes"] = (
             {key: value for key, value in pending_changes.items() if key != "email"}
@@ -310,11 +347,20 @@ async def moderation_history(
             )
         ).all()
     )
+    device_groups = await device_group_logins(
+        session,
+        {row.device_fingerprint for row in rows if row.device_fingerprint},
+    ) if moderator.role == Role.admin else {}
     result = []
     for row in rows:
         data = ModerationHistoryRead.model_validate(row).model_dump()
         if moderator.role != Role.admin:
             data["steam_id"] = None
+        else:
+            data["device_label"] = row.device_label
+            data["device_id"] = device_id_preview(row.device_fingerprint)
+            data["same_device_account_count"] = max(len(device_groups.get(row.device_fingerprint, [])), 1) if row.device_fingerprint else 1
+            data["same_device_logins"] = [login for login in device_groups.get(row.device_fingerprint, []) if login != row.login]
         result.append(data)
     return result
 
@@ -325,6 +371,7 @@ async def admin_user_list(
     request: Request,
     _: User = Depends(require_admin),
     search: str | None = None,
+    search_by: str = "all",
     sort: str = "rating_desc",
     rating_game: str = RACE_GAMES[0],
     offset: int = 0,
@@ -334,18 +381,30 @@ async def admin_user_list(
     stmt = select(User, Team.name, Team.abbreviation).outerjoin(Team, Team.id == User.team_id)
     if search:
         like = f"%{search}%"
-        stmt = stmt.where(
-            or_(
-                User.login.ilike(like),
-                User.email.ilike(like),
-                User.nickname.ilike(like),
+        search_fields = {
+            "id": cast(User.id, String).ilike(like),
+            "login": User.login.ilike(like),
+            "email": User.email.ilike(like),
+            "name": or_(
                 User.first_name.ilike(like),
                 User.last_name.ilike(like),
-                cast(User.pilot_number, String).ilike(like),
-                Team.name.ilike(like),
-                Team.abbreviation.ilike(like),
-            )
-        )
+                func.concat(User.first_name, " ", User.last_name).ilike(like),
+                func.concat(User.last_name, " ", User.first_name).ilike(like),
+            ),
+            "nickname": User.nickname.ilike(like),
+            "pilot_number": cast(User.pilot_number, String).ilike(like),
+            "steam_id": User.steam_id.ilike(like),
+            "device_id": User.device_fingerprint.ilike(like),
+            "device": User.device_label.ilike(like),
+            "team": or_(Team.name.ilike(like), Team.abbreviation.ilike(like)),
+            "country": User.country.ilike(like),
+            "role": cast(User.role, String).ilike(like),
+            "status": cast(User.status, String).ilike(like),
+        }
+        condition = search_fields.get(search_by)
+        if condition is None:
+            condition = or_(*search_fields.values())
+        stmt = stmt.where(condition)
     rows = (
         await session.execute(
             stmt
@@ -363,7 +422,18 @@ async def admin_user_list(
         await session.commit()
         for user in users:
             await session.refresh(user)
-    return [user_response(user, team_name, team_abbreviation, private=True, include_steam_id=True) for user, team_name, team_abbreviation in rows]
+    device_groups = await device_group_logins(
+        session,
+        {user.device_fingerprint for user in users if user.device_fingerprint},
+    )
+    result = []
+    for user, team_name, team_abbreviation in rows:
+        data = user_response(user, team_name, team_abbreviation, private=True, include_steam_id=True)
+        data["device_label"] = user.device_label
+        data["device_id"] = device_id_preview(user.device_fingerprint)
+        data["same_device_account_count"], data["same_device_logins"] = device_group_data(user, device_groups)
+        result.append(data)
+    return result
 
 
 @router.get("/admin/steam-blacklist", response_model=list[SteamBlacklistEntryRead])
