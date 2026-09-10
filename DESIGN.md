@@ -103,6 +103,8 @@
 - 2026-09-08 — pilot role styling and crop flow: text-bearing role badges reuse the selected colour for their border, text, and tinted interior; role images open the shared cropper before upload and show a compact ready preview in the admin form.
 - 2026-09-08 — pilot role separation: text and artwork render as independent inline elements; only the text gets the colour frame, while artwork uses a ratio-preserving contain box with no border.
 - 2026-09-09 — pilot role privacy and Moscow default: profile owners can hide assigned roles from public pilot/race views; timezone storage migrates the old implicit UTC default to Europe/Moscow while preserving an explicit user choice.
+- 2026-09-09 — pilot role fit: artwork badges are reduced to 1.67em, while text badges stay on one line and use an in-frame ellipsis when a narrow layout cannot fit the full name.
+- 2026-09-10 — pilot role simulation: `backend/app/simulate_roles.py` seeds nine idempotent display-role variants and adds every variant to all pilot accounts without removing existing assignments.
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, browser title/favicon, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
@@ -132,8 +134,13 @@
 - `frontend/src/components/PilotRoles.vue` — compact text/image pilot-role badges sized to the adjacent name line.
 - `frontend/src/pages/AdminUserList.vue` — admin role catalog and per-pilot multi-select assignment controls.
 
-- 2026-09-08 — sponsor banner display: the top advertising slot keeps the uploaded 1280x230 aspect ratio, uses contain rendering, and removes the decorative overlay so sponsor artwork is shown without distortion or tint.
+- 2026-09-08 — sponsor banner display: the top advertising slot keeps the uploaded 5.56:1 aspect ratio, uses contain rendering, and removes the decorative overlay so sponsor artwork is shown without distortion or tint.
 - 2026-09-08 — banner upload quality: raster uploads keep their original file and resolution; the cropper is used only when an administrator explicitly selects it.
+- 2026-09-10 — banner and role fit: the sponsor slot uses the uploaded artwork's exact 2400x432 ratio with priority decoding, while role text is a shrinkable one-line flex item with an in-frame ellipsis so long labels cannot expand or break their badge.
+- 2026-09-10 — role text width: role labels now use all remaining inline space next to the pilot name and license before ellipsizing, without a fixed character cap.
+- 2026-09-10 — race result role fit: podium and result-table driver cells now explicitly allow nested flex/grid items to shrink, keeping long role labels inside their card/cell while preserving one-line ellipsis.
+- 2026-09-10 — podium role wrapping: a role that cannot fit beside the podium driver's name moves as a whole to the next flex line, while its badge text remains one-line and ellipsized inside the card.
+- 2026-09-10 — audit administration: the audit panel exposes a clear action only to the system administrator; the backend repeats that authorization and requires the existing danger-zone password plus the `CLEAR AUDIT LOGS` confirmation phrase.
 
 ## Non-Goals
 - No Figma sync

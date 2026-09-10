@@ -547,9 +547,9 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="main-menu">
-    <a v-if="banner('top')" class="banner main-menu-top-banner" :href="banner('top').link_url" target="_blank" rel="noopener noreferrer">
+    <a v-if="banner('top')" class="banner main-menu-top-banner" :class="{ 'is-video': isVideoUrl(banner('top').image_url) }" :href="banner('top').link_url" target="_blank" rel="noopener noreferrer">
       <video v-if="isVideoUrl(banner('top').image_url)" :src="banner('top').image_url" autoplay muted loop playsinline preload="metadata"></video>
-      <img v-else :src="banner('top').image_url" alt="" />
+      <img v-else :src="banner('top').image_url" alt="" decoding="sync" fetchpriority="high" />
     </a>
 
     <div class="main-menu-layout">

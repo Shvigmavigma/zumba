@@ -100,6 +100,7 @@ const dangerDialog = ref(null)
 const dangerForm = ref({ confirmation: '', confirmation_repeat: '', password: '' })
 const dangerSaving = ref(false)
 const dangerResult = ref('')
+const auditLogPanel = ref(null)
 const userSearch = ref('')
 const userSort = ref('rating_desc')
 const userRatingGame = ref('ACC')
@@ -136,6 +137,15 @@ const dangerActions = {
     titleKey: 'adminUsers.downloadDatabaseBackup',
     descriptionKey: 'adminUsers.downloadDatabaseBackupHint',
     kind: 'download'
+  },
+  audit: {
+    endpoint: '/audit/clear',
+    code: 'CLEAR AUDIT LOGS',
+    titleKey: 'adminUsers.auditClearTitle',
+    descriptionKey: 'adminUsers.auditClearHint',
+    resultKey: 'adminUsers.auditClearSuccess',
+    submitKey: 'adminUsers.auditClear',
+    kind: 'audit'
   }
 }
 const activeDangerAction = computed(() => (dangerDialog.value ? dangerActions[dangerDialog.value] : null))
@@ -729,11 +739,17 @@ async function runDangerAction() {
       dangerResult.value = t('adminUsers.backupDownloaded')
     } else {
       const result = await api(action.endpoint, requestOptions)
-      dangerResult.value = t('adminUsers.deletedCount', { count: result?.deleted ?? 0 })
+      dangerResult.value = action.resultKey
+        ? t(action.resultKey, { count: result?.deleted ?? 0 })
+        : t('adminUsers.deletedCount', { count: result?.deleted ?? 0 })
     }
     dangerDialog.value = null
     dangerForm.value = { confirmation: '', confirmation_repeat: '', password: '' }
-    if (action.kind !== 'download') await load()
+    if (action.kind === 'audit') {
+      await auditLogPanel.value?.load()
+    } else if (action.kind !== 'download') {
+      await load()
+    }
   } catch (err) {
     error.value = err.message
   } finally {
@@ -1523,7 +1539,7 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
 
     <RaceAssetsEditor @error="error = $event" />
 
-    <AuditLogPanel />
+    <AuditLogPanel ref="auditLogPanel" @clear="openDangerDialog('audit')" />
 
     <section v-if="canUseDangerZone" class="admin-danger-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('danger') }">
       <div class="admin-zone-head">
@@ -1727,7 +1743,7 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
           </button>
           <button class="button danger" type="submit" :disabled="dangerSaving || !dangerFormValid">
             <Trash2 :size="16" />
-            {{ t('common.delete') }}
+            {{ t(activeDangerAction.submitKey || 'common.delete') }}
           </button>
         </div>
       </form>

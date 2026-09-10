@@ -21,7 +21,7 @@ const cropError = ref('')
 
 const positionOrder = ['top', 'left', 'right', 'bottom']
 const cropTargets = {
-  top: { width: 1280, height: 230 },
+  top: { width: 2400, height: 432 },
   bottom: { width: 760, height: 150 },
   left: { width: 245, height: 760 },
   right: { width: 245, height: 760 }
@@ -229,7 +229,7 @@ function canvasBlob(canvas) {
         return
       }
       reject(new Error(t('banners.cropSaveError')))
-    }, 'image/webp', 0.92)
+    }, 'image/webp', 0.98)
   })
 }
 
@@ -251,6 +251,8 @@ async function applyCrop() {
     canvas.width = target.width
     canvas.height = target.height
     const context = canvas.getContext('2d')
+    context.imageSmoothingEnabled = true
+    context.imageSmoothingQuality = 'high'
     context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, target.width, target.height)
     const blob = await canvasBlob(canvas)
     const body = new FormData()

@@ -584,7 +584,7 @@ async def seed_defaults(session: AsyncSession) -> None:
         admin.games = list(DEFAULT_USER_GAMES)
 
     default_banners = {
-        BannerPosition.top: ("/assets/banner-top.svg", "#"),
+        BannerPosition.top: ("/assets/getpc-racing-banner.jpg", "#"),
         BannerPosition.bottom: ("/assets/banner-bottom.svg", "#"),
         BannerPosition.left: ("/assets/banner-side.svg", "#"),
         BannerPosition.right: ("/assets/banner-side.svg", "#"),
