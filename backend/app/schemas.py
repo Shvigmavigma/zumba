@@ -162,6 +162,12 @@ class UserAdminRead(UserPrivate):
     """Private user data returned only by administrator endpoints."""
 
     steam_id: str
+    device_label: str | None = None
+    # A short, non-secret prefix of the server-side HMAC. The raw browser
+    # cookie is intentionally never returned.
+    device_id: str | None = None
+    same_device_account_count: int = Field(default=1, ge=1)
+    same_device_logins: list[str] = Field(default_factory=list)
 
 
 class UserModerationRead(UserPublic):
@@ -171,6 +177,10 @@ class UserModerationRead(UserPublic):
     steam_id: str | None = None
     steam_blacklisted: bool = False
     steam_blacklist_reason: str | None = None
+    device_label: str | None = None
+    device_id: str | None = None
+    same_device_account_count: int = Field(default=1, ge=1)
+    same_device_logins: list[str] = Field(default_factory=list)
 
 
 class ModerationHistoryRead(BaseModel):
@@ -185,6 +195,10 @@ class ModerationHistoryRead(BaseModel):
     pilot_number: int
     steam_id: str | None = None
     pending_profile_changes: dict | None = None
+    device_label: str | None = None
+    device_id: str | None = None
+    same_device_account_count: int = Field(default=1, ge=1)
+    same_device_logins: list[str] = Field(default_factory=list)
     created_at: datetime
     resolved_at: datetime
     resolved_by: int | None = None

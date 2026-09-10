@@ -2,14 +2,15 @@
 
 import httpx
 from urllib.parse import urlparse
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import get_session
-from app.deps import clear_expired_timeout, get_current_user, is_system_admin
+from app.deps import clear_expired_timeout, get_current_user, get_optional_user, is_system_admin
+from app.device import describe_user_agent, device_token_for_request, fingerprint_device_token, set_device_cookie
 from app.models import DEFAULT_SR, Role, Team, User, UserStatus
 from app.rate_limit import limiter
 from app.schemas import LoginRequest, TokenResponse, UserPrivate, UserRegister
@@ -58,7 +59,7 @@ def is_loopback_url(url: str) -> bool:
 
 @router.post("/register", response_model=UserPrivate, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
-async def register(payload: UserRegister, request: Request, session: AsyncSession = Depends(get_session)):
+async def register(payload: UserRegister, request: Request, response: Response, session: AsyncSession = Depends(get_session)):
     steam_id = decode_steam_registration_token(payload.steam_auth_token)
     duplicate = await session.scalar(
         select(User).where(
@@ -72,6 +73,9 @@ async def register(payload: UserRegister, request: Request, session: AsyncSessio
     if duplicate is not None:
         raise HTTPException(status_code=409, detail="Login, email or Steam ID already exists")
 
+    device_token, is_new_device_token = device_token_for_request(request)
+    if is_new_device_token:
+        set_device_cookie(response, device_token, request)
     user = User(
         login=payload.login,
         email=str(payload.email),
@@ -88,11 +92,34 @@ async def register(payload: UserRegister, request: Request, session: AsyncSessio
         status=UserStatus.unapproved,
         avatar_color=payload.avatar_color,
         games=payload.games,
+        device_fingerprint=fingerprint_device_token(device_token),
+        device_label=describe_user_agent(request.headers.get("user-agent")),
     )
     session.add(user)
     await session.commit()
     await session.refresh(user)
     return await private_user_response(session, user)
+
+
+@router.get("/device")
+@limiter.limit("60/minute")
+async def prepare_registration_device(
+    request: Request,
+    response: Response,
+    user: User | None = Depends(get_optional_user),
+    session: AsyncSession = Depends(get_session),
+):
+    token, is_new_device_token = device_token_for_request(request)
+    if is_new_device_token:
+        set_device_cookie(response, token, request)
+    if user is not None:
+        # Keep the first associated device stable.  A later login from a
+        # different device must not move the account into another group.
+        if user.device_fingerprint is None:
+            user.device_fingerprint = fingerprint_device_token(token)
+            user.device_label = describe_user_agent(request.headers.get("user-agent"))
+            await session.commit()
+    return {"ready": True}
 
 
 @router.post("/login", response_model=TokenResponse)

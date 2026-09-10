@@ -16,6 +16,9 @@ async function submit() {
   try {
     const data = await api('/auth/login', { method: 'POST', body: form.value })
     setSession(data.access_token, data.user)
+    // The app may have been opened anonymously before login. Associate the
+    // now-authenticated account with the already-issued browser marker.
+    api('/auth/device').catch(() => {})
     router.push('/')
   } catch (err) {
     error.value = err.message
@@ -34,6 +37,7 @@ onMounted(async () => {
     localStorage.setItem('token', token)
     const user = await api('/auth/me')
     setSession(token, user)
+    api('/auth/device').catch(() => {})
     router.replace('/')
   } catch (err) {
     error.value = err.message

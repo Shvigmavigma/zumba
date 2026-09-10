@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Eye, Trash2, X } from 'lucide-vue-next'
+import { Eye, Monitor, Trash2, X } from 'lucide-vue-next'
 import { api } from '../api'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
@@ -66,6 +66,12 @@ function moderationFields(user) {
     { label: t('fields.team'), value: user.team_name }
   ]
   if (isAdmin.value) fields.splice(7, 0, { label: t('fields.steam'), value: user.steam_id })
+  if (isAdmin.value) {
+    fields.push({ label: t('moderation.device'), value: user.device_label || t('common.none') })
+    if (user.same_device_account_count > 1) {
+      fields.push({ label: t('moderation.sameDeviceOtherAccounts'), value: user.same_device_logins?.join(', ') || t('common.none') })
+    }
+  }
   return fields
 }
 
@@ -170,7 +176,7 @@ watch([users, history, viewMode], () => {
     </div>
     <p v-if="error" class="error">{{ error }}</p>
     <div v-if="viewMode === 'current'" class="grid">
-      <article v-for="user in pagedUsers" :key="user.id" class="card user-moderation-card">
+      <article v-for="user in pagedUsers" :key="user.id" class="card user-moderation-card" :class="{ 'has-device-match': isAdmin && user.same_device_account_count > 1 }">
         <div class="user-list-cell">
           <UserAvatar :src="user.avatar_url" :color="user.avatar_color" :label="user.nickname || user.login" />
           <div class="user-moderation-main">
@@ -190,6 +196,14 @@ watch([users, history, viewMode], () => {
             :title="t('moderation.steamBlacklistReason', { reason: user.steam_blacklist_reason || t('moderation.steamBlacklistNoReason') })"
             :aria-label="t('moderation.steamBlacklistReason', { reason: user.steam_blacklist_reason || t('moderation.steamBlacklistNoReason') })"
           >{{ t('moderation.steamBlacklisted') }}</span>
+          <div v-if="isAdmin && user.device_label" class="moderation-device-meta">
+            <span class="moderation-device-label"><Monitor :size="14" /> {{ t('moderation.device') }}: {{ user.device_label }}</span>
+            <span
+              v-if="user.same_device_account_count > 1"
+              class="moderation-device-match"
+              :title="t('moderation.sameDeviceTooltip', { logins: user.same_device_logins?.join(', ') || t('common.none') })"
+            >{{ t('moderation.sameDeviceAccounts', { count: user.same_device_account_count }) }}</span>
+          </div>
           <button v-if="user.pending_profile_changes" class="moderation-change-preview" type="button" @click="openUserCard(user)">
             <span>
               <strong>{{ t('moderation.pendingChangesCard') }}</strong>
@@ -230,7 +244,7 @@ watch([users, history, viewMode], () => {
       </article>
     </div>
     <div v-else class="grid">
-      <article v-for="request in pagedHistory" :key="request.id" class="card moderation-history-card">
+      <article v-for="request in pagedHistory" :key="request.id" class="card moderation-history-card" :class="{ 'has-device-match': isAdmin && request.same_device_account_count > 1 }">
         <div class="user-list-cell">
           <UserAvatar :label="request.nickname || request.login" />
           <div class="user-moderation-main">
@@ -240,6 +254,10 @@ watch([users, history, viewMode], () => {
         </div>
         <div class="user-moderation-meta">
           <p v-if="isAdmin" class="muted">#{{ formatPilotNumber(request.pilot_number) }} - {{ t('fields.steam') }} {{ request.steam_id }}</p>
+          <div v-if="isAdmin && request.device_label" class="moderation-device-meta">
+            <span class="moderation-device-label"><Monitor :size="14" /> {{ t('moderation.device') }}: {{ request.device_label }}</span>
+            <span v-if="request.same_device_account_count > 1" class="moderation-device-match">{{ t('moderation.sameDeviceAccounts', { count: request.same_device_account_count }) }}</span>
+          </div>
           <p class="muted">{{ t(`moderation.requestTypes.${request.request_type}`) }} · {{ t('moderation.resolvedAt', { date: formatHistoryDate(request.resolved_at) }) }}</p>
         </div>
         <div class="moderation-history-resolution" :class="`is-${request.resolution}`">

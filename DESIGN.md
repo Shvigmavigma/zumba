@@ -141,6 +141,8 @@
 - 2026-09-10 — race result role fit: podium and result-table driver cells now explicitly allow nested flex/grid items to shrink, keeping long role labels inside their card/cell while preserving one-line ellipsis.
 - 2026-09-10 — podium role wrapping: a role that cannot fit beside the podium driver's name moves as a whole to the next flex line, while its badge text remains one-line and ellipsized inside the card.
 - 2026-09-10 — audit administration: the audit panel exposes a clear action only to the system administrator; the backend repeats that authorization and requires the existing danger-zone password plus the `CLEAR AUDIT LOGS` confirmation phrase.
+- 2026-09-10 — moderation device signals: every app entry prepares an HttpOnly device cookie and associates it with the signed-in account; only its HMAC digest and an OS/browser label are stored, and administrator-only moderation/admin lists highlight shared-device account groups without exposing the raw marker.
+- 2026-09-10 — admin identity tools: the user list supports server-side criteria search (including a safe device-fingerprint prefix) and an administrator-only detail card. Password hashes and raw device cookies remain intentionally excluded from every response.
 
 ## Non-Goals
 - No Figma sync
