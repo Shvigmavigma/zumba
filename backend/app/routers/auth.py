@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.db import get_session
 from app.deps import clear_expired_timeout, get_current_user, get_optional_user, is_system_admin
-from app.device import describe_user_agent, device_token_for_request, fingerprint_device_token, set_device_cookie
+from app.device import client_ip_for_request, describe_user_agent, device_token_for_request, fingerprint_client_ip, fingerprint_device_token, set_device_cookie
 from app.models import DEFAULT_SR, Role, Team, User, UserStatus
 from app.rate_limit import limiter
 from app.schemas import LoginRequest, TokenResponse, UserPrivate, UserRegister
@@ -76,6 +76,7 @@ async def register(payload: UserRegister, request: Request, response: Response, 
     device_token, is_new_device_token = device_token_for_request(request)
     if is_new_device_token:
         set_device_cookie(response, device_token, request)
+    ip_fingerprint = fingerprint_client_ip(client_ip_for_request(request))
     user = User(
         login=payload.login,
         email=str(payload.email),
@@ -94,6 +95,7 @@ async def register(payload: UserRegister, request: Request, response: Response, 
         games=payload.games,
         device_fingerprint=fingerprint_device_token(device_token),
         device_label=describe_user_agent(request.headers.get("user-agent")),
+        ip_fingerprint=ip_fingerprint,
     )
     session.add(user)
     await session.commit()
@@ -115,20 +117,39 @@ async def prepare_registration_device(
     if user is not None:
         # Keep the first associated device stable.  A later login from a
         # different device must not move the account into another group.
+        changed = False
         if user.device_fingerprint is None:
             user.device_fingerprint = fingerprint_device_token(token)
             user.device_label = describe_user_agent(request.headers.get("user-agent"))
+            changed = True
+        ip_fingerprint = fingerprint_client_ip(client_ip_for_request(request))
+        if user.ip_fingerprint is None and ip_fingerprint:
+            user.ip_fingerprint = ip_fingerprint
+            changed = True
+        if changed:
             await session.commit()
     return {"ready": True}
 
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("10/minute")
-async def login(payload: LoginRequest, request: Request, session: AsyncSession = Depends(get_session)):
+async def login(payload: LoginRequest, request: Request, response: Response, session: AsyncSession = Depends(get_session)):
     user = await session.scalar(select(User).where(or_(User.login == payload.login, User.email == payload.login)))
     if user is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    if clear_expired_timeout(user):
+    changed = clear_expired_timeout(user)
+    device_token, is_new_device_token = device_token_for_request(request)
+    if is_new_device_token:
+        set_device_cookie(response, device_token, request)
+    if user.device_fingerprint is None:
+        user.device_fingerprint = fingerprint_device_token(device_token)
+        user.device_label = describe_user_agent(request.headers.get("user-agent"))
+        changed = True
+    ip_fingerprint = fingerprint_client_ip(client_ip_for_request(request))
+    if user.ip_fingerprint is None and ip_fingerprint:
+        user.ip_fingerprint = ip_fingerprint
+        changed = True
+    if changed:
         await session.commit()
         await session.refresh(user)
     return TokenResponse(access_token=create_access_token(user), user=await private_user_response(session, user))
@@ -196,7 +217,23 @@ async def finish_steam_callback(request: Request, flow: str, session: AsyncSessi
     if user.status != UserStatus.active:
         return login_redirect(steam_error=f"Account status is {user.status.value}")
 
-    return login_redirect(token=create_access_token(user))
+    device_token, is_new_device_token = device_token_for_request(request)
+    changed = False
+    if user.device_fingerprint is None:
+        user.device_fingerprint = fingerprint_device_token(device_token)
+        user.device_label = describe_user_agent(request.headers.get("user-agent"))
+        changed = True
+    ip_fingerprint = fingerprint_client_ip(client_ip_for_request(request))
+    if user.ip_fingerprint is None and ip_fingerprint:
+        user.ip_fingerprint = ip_fingerprint
+        changed = True
+    if changed:
+        await session.commit()
+        await session.refresh(user)
+    redirect = login_redirect(token=create_access_token(user))
+    if is_new_device_token:
+        set_device_cookie(redirect, device_token, request)
+    return redirect
 
 
 @router.get("/steam/callback/{flow}")

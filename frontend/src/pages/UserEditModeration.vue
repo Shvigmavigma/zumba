@@ -71,8 +71,27 @@ function moderationFields(user) {
     if (user.same_device_account_count > 1) {
       fields.push({ label: t('moderation.sameDeviceOtherAccounts'), value: user.same_device_logins?.join(', ') || t('common.none') })
     }
+    fields.push({ label: t('moderation.ipId'), value: user.ip_id || t('common.none') })
+    if (user.same_ip_account_count > 1) {
+      fields.push({ label: t('moderation.sameIpOtherAccounts'), value: user.same_ip_logins?.join(', ') || t('common.none') })
+    }
   }
   return fields
+}
+
+function hasSharedAccountSignal(user) {
+  return Number(user?.same_device_account_count || 1) > 1 || Number(user?.same_ip_account_count || 1) > 1
+}
+
+function sharedAccountTooltip(user) {
+  const parts = []
+  if (Number(user?.same_device_account_count || 1) > 1) {
+    parts.push(t('moderation.sameDeviceTooltip', { logins: user.same_device_logins?.join(', ') || t('common.none') }))
+  }
+  if (Number(user?.same_ip_account_count || 1) > 1) {
+    parts.push(t('moderation.sameIpTooltip', { logins: user.same_ip_logins?.join(', ') || t('common.none') }))
+  }
+  return parts.join(' · ')
 }
 
 function openUserCard(user) {
@@ -176,7 +195,7 @@ watch([users, history, viewMode], () => {
     </div>
     <p v-if="error" class="error">{{ error }}</p>
     <div v-if="viewMode === 'current'" class="grid">
-      <article v-for="user in pagedUsers" :key="user.id" class="card user-moderation-card" :class="{ 'has-device-match': isAdmin && user.same_device_account_count > 1 }">
+      <article v-for="user in pagedUsers" :key="user.id" class="card user-moderation-card" :class="{ 'has-device-match': isAdmin && hasSharedAccountSignal(user) }">
         <div class="user-list-cell">
           <UserAvatar :src="user.avatar_url" :color="user.avatar_color" :label="user.nickname || user.login" />
           <div class="user-moderation-main">
@@ -196,13 +215,15 @@ watch([users, history, viewMode], () => {
             :title="t('moderation.steamBlacklistReason', { reason: user.steam_blacklist_reason || t('moderation.steamBlacklistNoReason') })"
             :aria-label="t('moderation.steamBlacklistReason', { reason: user.steam_blacklist_reason || t('moderation.steamBlacklistNoReason') })"
           >{{ t('moderation.steamBlacklisted') }}</span>
-          <div v-if="isAdmin && user.device_label" class="moderation-device-meta">
-            <span class="moderation-device-label"><Monitor :size="14" /> {{ t('moderation.device') }}: {{ user.device_label }}</span>
+          <div v-if="isAdmin && (user.device_label || user.ip_id || user.same_device_account_count > 1 || user.same_ip_account_count > 1)" class="moderation-device-meta">
+            <span v-if="user.device_label" class="moderation-device-label"><Monitor :size="14" /> {{ t('moderation.device') }}: {{ user.device_label }}</span>
             <span
               v-if="user.same_device_account_count > 1"
               class="moderation-device-match"
-              :title="t('moderation.sameDeviceTooltip', { logins: user.same_device_logins?.join(', ') || t('common.none') })"
+              :title="sharedAccountTooltip(user)"
             >{{ t('moderation.sameDeviceAccounts', { count: user.same_device_account_count }) }}</span>
+            <span v-if="user.same_ip_account_count > 1" class="moderation-device-match">{{ t('moderation.sameIpAccounts', { count: user.same_ip_account_count }) }}</span>
+            <span v-if="user.ip_id" class="moderation-device-match" :title="user.same_ip_account_count > 1 ? t('moderation.sameIpTooltip', { logins: user.same_ip_logins?.join(', ') || t('common.none') }) : ''">{{ t('moderation.ipId') }}: {{ user.ip_id }}</span>
           </div>
           <button v-if="user.pending_profile_changes" class="moderation-change-preview" type="button" @click="openUserCard(user)">
             <span>
@@ -244,7 +265,7 @@ watch([users, history, viewMode], () => {
       </article>
     </div>
     <div v-else class="grid">
-      <article v-for="request in pagedHistory" :key="request.id" class="card moderation-history-card" :class="{ 'has-device-match': isAdmin && request.same_device_account_count > 1 }">
+      <article v-for="request in pagedHistory" :key="request.id" class="card moderation-history-card" :class="{ 'has-device-match': isAdmin && hasSharedAccountSignal(request) }">
         <div class="user-list-cell">
           <UserAvatar :label="request.nickname || request.login" />
           <div class="user-moderation-main">
@@ -254,9 +275,11 @@ watch([users, history, viewMode], () => {
         </div>
         <div class="user-moderation-meta">
           <p v-if="isAdmin" class="muted">#{{ formatPilotNumber(request.pilot_number) }} - {{ t('fields.steam') }} {{ request.steam_id }}</p>
-          <div v-if="isAdmin && request.device_label" class="moderation-device-meta">
-            <span class="moderation-device-label"><Monitor :size="14" /> {{ t('moderation.device') }}: {{ request.device_label }}</span>
+          <div v-if="isAdmin && (request.device_label || request.ip_id || request.same_device_account_count > 1 || request.same_ip_account_count > 1)" class="moderation-device-meta">
+            <span v-if="request.device_label" class="moderation-device-label"><Monitor :size="14" /> {{ t('moderation.device') }}: {{ request.device_label }}</span>
             <span v-if="request.same_device_account_count > 1" class="moderation-device-match">{{ t('moderation.sameDeviceAccounts', { count: request.same_device_account_count }) }}</span>
+            <span v-if="request.same_ip_account_count > 1" class="moderation-device-match">{{ t('moderation.sameIpAccounts', { count: request.same_ip_account_count }) }}</span>
+            <span v-if="request.ip_id" class="moderation-device-match">{{ t('moderation.ipId') }}: {{ request.ip_id }}</span>
           </div>
           <p class="muted">{{ t(`moderation.requestTypes.${request.request_type}`) }} · {{ t('moderation.resolvedAt', { date: formatHistoryDate(request.resolved_at) }) }}</p>
         </div>

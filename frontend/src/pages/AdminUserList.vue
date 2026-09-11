@@ -124,6 +124,7 @@ const userSearchOptions = computed(() => [
   { value: 'pilot_number', label: t('adminUsers.searchPilotNumber') },
   { value: 'steam_id', label: t('adminUsers.searchSteamId') },
   { value: 'device_id', label: t('adminUsers.searchDeviceId') },
+  { value: 'ip_id', label: t('adminUsers.searchIpId') },
   { value: 'device', label: t('adminUsers.searchDevice') },
   { value: 'team', label: t('adminUsers.searchTeam') },
   { value: 'country', label: t('adminUsers.searchCountry') },
@@ -1060,12 +1061,28 @@ function detailValue(value) {
   return String(value)
 }
 
+function hasSharedAccountSignal(user) {
+  return Number(user?.same_device_account_count || 1) > 1 || Number(user?.same_ip_account_count || 1) > 1
+}
+
+function sharedAccountTooltip(user) {
+  const parts = []
+  if (Number(user?.same_device_account_count || 1) > 1) {
+    parts.push(t('adminUsers.sameDeviceTooltip', { logins: user.same_device_logins?.join(', ') || t('common.none') }))
+  }
+  if (Number(user?.same_ip_account_count || 1) > 1) {
+    parts.push(t('adminUsers.sameIpTooltip', { logins: user.same_ip_logins?.join(', ') || t('common.none') }))
+  }
+  return parts.join(' · ')
+}
+
 function detailRows(user) {
   if (!user) return []
   const ratings = Object.entries(user.game_ratings || {})
     .map(([game, value]) => `${game}: ${value?.rating ?? t('common.none')} (${value?.race_count ?? 0})`)
     .join(' · ')
   const linkedLogins = user.same_device_logins || []
+  const linkedIpLogins = user.same_ip_logins || []
   return [
     { label: t('adminUsers.accountId'), value: user.id },
     { label: t('fields.login'), value: user.login },
@@ -1095,6 +1112,8 @@ function detailRows(user) {
     { label: t('adminUsers.device'), value: user.device_label },
     { label: t('adminUsers.deviceId'), value: user.device_id },
     { label: t('adminUsers.linkedAccounts'), value: linkedLogins.length ? `${user.same_device_account_count || linkedLogins.length + 1}: ${linkedLogins.join(', ')}` : t('common.none') },
+    { label: t('adminUsers.ipId'), value: user.ip_id },
+    { label: t('adminUsers.sharedIpAccounts'), value: linkedIpLogins.length ? `${user.same_ip_account_count || linkedIpLogins.length + 1}: ${linkedIpLogins.join(', ')}` : t('common.none') },
     { label: t('profile.banEnd'), value: formatDateTime(user.ban_end) },
     { label: t('profile.timeoutStart'), value: formatDateTime(user.timeout_start) },
     { label: t('profile.timeoutEnd'), value: formatDateTime(user.timeout_end) },
@@ -1736,7 +1755,7 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="user in visibleUsers" :key="user.id" :class="{ 'has-device-match': user.same_device_account_count > 1 }">
+          <tr v-for="user in visibleUsers" :key="user.id" :class="{ 'has-device-match': hasSharedAccountSignal(user) }">
             <td>
               <div class="admin-user-cell">
                 <UserAvatar mini :src="user.avatar_url" :color="user.avatar_color" :label="user.login" />
@@ -1748,11 +1767,12 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
                   </span>
                   <span>#{{ formatPilotNumber(user.pilot_number) }} · RER {{ formatRating(ratingForGame(user, userRatingGame)) }} · {{ teamShortName(user.team_name, user.team_abbreviation) }}</span>
                   <span
-                    v-if="user.device_label"
+                    v-if="user.device_label || user.same_device_account_count > 1 || user.same_ip_account_count > 1"
                     class="admin-user-device"
-                    :title="user.same_device_account_count > 1 ? t('adminUsers.sameDeviceTooltip', { logins: user.same_device_logins?.join(', ') || t('common.none') }) : ''"
-                  ><Monitor :size="13" /> {{ t('adminUsers.device') }}: {{ user.device_label }}<small v-if="user.same_device_account_count > 1">{{ t('adminUsers.sameDeviceAccounts', { count: user.same_device_account_count }) }}</small></span>
+                    :title="sharedAccountTooltip(user)"
+                  ><Monitor :size="13" /> {{ t('adminUsers.device') }}: {{ user.device_label || t('common.none') }}<small v-if="user.same_device_account_count > 1">{{ t('adminUsers.sameDeviceAccounts', { count: user.same_device_account_count }) }}</small><small v-if="user.same_ip_account_count > 1">· {{ t('adminUsers.sameIpAccounts', { count: user.same_ip_account_count }) }}</small></span>
                   <span v-if="user.device_id" class="admin-user-device-id">{{ t('adminUsers.deviceIdShort') }}: {{ user.device_id }}</span>
+                  <span v-if="user.ip_id" class="admin-user-device-id" :title="user.same_ip_account_count > 1 ? t('adminUsers.sameIpTooltip', { logins: user.same_ip_logins?.join(', ') || t('common.none') }) : ''">{{ t('adminUsers.ipIdShort') }}: {{ user.ip_id }}</span>
                 </div>
               </div>
             </td>

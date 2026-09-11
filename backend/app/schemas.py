@@ -168,6 +168,10 @@ class UserAdminRead(UserPrivate):
     device_id: str | None = None
     same_device_account_count: int = Field(default=1, ge=1)
     same_device_logins: list[str] = Field(default_factory=list)
+    # Only a short HMAC prefix is exposed; the raw IP is never returned.
+    ip_id: str | None = None
+    same_ip_account_count: int = Field(default=1, ge=1)
+    same_ip_logins: list[str] = Field(default_factory=list)
 
 
 class UserModerationRead(UserPublic):
@@ -181,6 +185,9 @@ class UserModerationRead(UserPublic):
     device_id: str | None = None
     same_device_account_count: int = Field(default=1, ge=1)
     same_device_logins: list[str] = Field(default_factory=list)
+    ip_id: str | None = None
+    same_ip_account_count: int = Field(default=1, ge=1)
+    same_ip_logins: list[str] = Field(default_factory=list)
 
 
 class ModerationHistoryRead(BaseModel):
@@ -199,6 +206,9 @@ class ModerationHistoryRead(BaseModel):
     device_id: str | None = None
     same_device_account_count: int = Field(default=1, ge=1)
     same_device_logins: list[str] = Field(default_factory=list)
+    ip_id: str | None = None
+    same_ip_account_count: int = Field(default=1, ge=1)
+    same_ip_logins: list[str] = Field(default_factory=list)
     created_at: datetime
     resolved_at: datetime
     resolved_by: int | None = None
