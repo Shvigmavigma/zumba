@@ -117,6 +117,7 @@ def add_moderation_history(session: AsyncSession, user: User, request_type: str,
             steam_id=user.steam_id,
             device_fingerprint=user.device_fingerprint,
             device_label=user.device_label,
+            ip_fingerprint=user.ip_fingerprint,
             pending_profile_changes=dict(user.pending_profile_changes) if isinstance(user.pending_profile_changes, dict) else None,
             resolved_by=resolved_by,
         )
@@ -148,6 +149,28 @@ def device_group_data(user: User, groups: dict[str, list[str]]) -> tuple[int, li
 def device_id_preview(fingerprint: str | None) -> str | None:
     """Return a lookup-safe prefix, never the raw browser cookie."""
     return fingerprint[:16] if fingerprint else None
+
+
+async def ip_group_logins(session: AsyncSession, fingerprints: set[str]) -> dict[str, list[str]]:
+    if not fingerprints:
+        return {}
+    rows = await session.execute(
+        select(User.ip_fingerprint, User.login)
+        .where(User.ip_fingerprint.in_(fingerprints))
+        .order_by(User.ip_fingerprint, User.created_at, User.id)
+    )
+    groups: dict[str, list[str]] = defaultdict(list)
+    for fingerprint, login in rows.all():
+        if fingerprint:
+            groups[fingerprint].append(login)
+    return dict(groups)
+
+
+def ip_group_data(user: User, groups: dict[str, list[str]]) -> tuple[int, list[str]]:
+    if not user.ip_fingerprint:
+        return 1, []
+    logins = groups.get(user.ip_fingerprint, [])
+    return max(len(logins), 1), [login for login in logins if login != user.login]
 
 
 def user_response(
@@ -312,6 +335,10 @@ async def pending_users(request: Request, moderator: User = Depends(require_mode
         session,
         {user.device_fingerprint for user, _, _ in rows if user.device_fingerprint},
     ) if moderator.role == Role.admin else {}
+    ip_groups = await ip_group_logins(
+        session,
+        {user.ip_fingerprint for user, _, _ in rows if user.ip_fingerprint},
+    ) if moderator.role == Role.admin else {}
     result = []
     for user, team_name, team_abbreviation in rows:
         data = user_response(user, team_name, team_abbreviation)
@@ -320,6 +347,8 @@ async def pending_users(request: Request, moderator: User = Depends(require_mode
             data["device_label"] = user.device_label
             data["device_id"] = device_id_preview(user.device_fingerprint)
             data["same_device_account_count"], data["same_device_logins"] = device_group_data(user, device_groups)
+            data["ip_id"] = device_id_preview(user.ip_fingerprint)
+            data["same_ip_account_count"], data["same_ip_logins"] = ip_group_data(user, ip_groups)
         pending_changes = user.pending_profile_changes
         data["pending_profile_changes"] = (
             {key: value for key, value in pending_changes.items() if key != "email"}
@@ -351,6 +380,10 @@ async def moderation_history(
         session,
         {row.device_fingerprint for row in rows if row.device_fingerprint},
     ) if moderator.role == Role.admin else {}
+    ip_groups = await ip_group_logins(
+        session,
+        {row.ip_fingerprint for row in rows if row.ip_fingerprint},
+    ) if moderator.role == Role.admin else {}
     result = []
     for row in rows:
         data = ModerationHistoryRead.model_validate(row).model_dump()
@@ -361,6 +394,9 @@ async def moderation_history(
             data["device_id"] = device_id_preview(row.device_fingerprint)
             data["same_device_account_count"] = max(len(device_groups.get(row.device_fingerprint, [])), 1) if row.device_fingerprint else 1
             data["same_device_logins"] = [login for login in device_groups.get(row.device_fingerprint, []) if login != row.login]
+            data["ip_id"] = device_id_preview(row.ip_fingerprint)
+            data["same_ip_account_count"] = max(len(ip_groups.get(row.ip_fingerprint, [])), 1) if row.ip_fingerprint else 1
+            data["same_ip_logins"] = [login for login in ip_groups.get(row.ip_fingerprint, []) if login != row.login]
         result.append(data)
     return result
 
@@ -395,6 +431,7 @@ async def admin_user_list(
             "pilot_number": cast(User.pilot_number, String).ilike(like),
             "steam_id": User.steam_id.ilike(like),
             "device_id": User.device_fingerprint.ilike(like),
+            "ip_id": User.ip_fingerprint.ilike(like),
             "device": User.device_label.ilike(like),
             "team": or_(Team.name.ilike(like), Team.abbreviation.ilike(like)),
             "country": User.country.ilike(like),
@@ -426,12 +463,18 @@ async def admin_user_list(
         session,
         {user.device_fingerprint for user in users if user.device_fingerprint},
     )
+    ip_groups = await ip_group_logins(
+        session,
+        {user.ip_fingerprint for user in users if user.ip_fingerprint},
+    )
     result = []
     for user, team_name, team_abbreviation in rows:
         data = user_response(user, team_name, team_abbreviation, private=True, include_steam_id=True)
         data["device_label"] = user.device_label
         data["device_id"] = device_id_preview(user.device_fingerprint)
         data["same_device_account_count"], data["same_device_logins"] = device_group_data(user, device_groups)
+        data["ip_id"] = device_id_preview(user.ip_fingerprint)
+        data["same_ip_account_count"], data["same_ip_logins"] = ip_group_data(user, ip_groups)
         result.append(data)
     return result
 

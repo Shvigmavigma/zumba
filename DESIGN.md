@@ -144,6 +144,7 @@
 - 2026-09-10 — moderation device signals: every app entry prepares an HttpOnly device cookie and associates it with the signed-in account; only its HMAC digest and an OS/browser label are stored, and administrator-only moderation/admin lists highlight shared-device account groups without exposing the raw marker.
 - 2026-09-10 — admin identity tools: the user list supports server-side criteria search (including a safe device-fingerprint prefix) and an administrator-only detail card. Password hashes and raw device cookies remain intentionally excluded from every response.
 - 2026-09-11 — system-administrator account editing: the detail card opens a full editor for mutable profile, role/status, team, ratings, race counters, restriction dates, visibility, and password-reset fields; secret hashes and raw device markers stay hidden or read-only.
+- 2026-09-11 — moderation identity signals: retain the existing HttpOnly browser marker and add a salted/HMAC client-IP fingerprint; expose only safe prefixes and separate cookie/IP account matches to administrators.
 
 ## Non-Goals
 - No Figma sync
