@@ -240,10 +240,20 @@ class UserUpdate(BaseModel):
 
 class UserAdminUpdate(UserUpdate):
     login: str | None = Field(default=None, min_length=3, max_length=50)
+    steam_id: str | None = Field(default=None, min_length=1, max_length=50, pattern=r"^\d+$")
     pilot_number: int | None = Field(default=None, ge=0, le=999)
     sr: float | None = Field(default=None, ge=MIN_SR, le=MAX_SR)
     rating: int | None = Field(default=None, ge=int(MIN_RATING), le=int(MAX_RATING))
     game_ratings: dict[GameCode, int] | None = None
+    # Full account controls are accepted only by the system administrator.
+    role: Role | None = None
+    status: UserStatus | None = None
+    team_id: int | None = Field(default=None, ge=1)
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+    rating_race_count: int | None = Field(default=None, ge=0)
+    game_rating_race_counts: dict[GameCode, int] | None = None
+    ban_end: datetime | None = None
+    timeout_end: datetime | None = None
 
     @field_validator("game_ratings")
     @classmethod
@@ -253,6 +263,15 @@ class UserAdminUpdate(UserUpdate):
         for rating in value.values():
             if rating < MIN_RATING or rating > MAX_RATING:
                 raise ValueError(f"Ratings must be between {int(MIN_RATING)} and {int(MAX_RATING)}")
+        return value
+
+    @field_validator("game_rating_race_counts")
+    @classmethod
+    def valid_game_rating_race_counts(cls, value: dict[GameCode, int] | None):
+        if value is None:
+            return value
+        if any(count < 0 for count in value.values()):
+            raise ValueError("Race counts cannot be negative")
         return value
 
 

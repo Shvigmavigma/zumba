@@ -20,7 +20,7 @@ from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHisto
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
 from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, PilotRoleAssignmentUpdate, PilotRoleCreate, PilotRoleRead, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminRead, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
-from app.security import verify_password
+from app.security import hash_password, verify_password
 from app.services import recalculate_all_ratings, result_rows
 
 
@@ -219,7 +219,7 @@ async def reassign_restricted_user_references(
 
 
 PROFILE_REQUIRED_FIELDS = {"email", "first_name", "last_name", "nickname", "avatar_color", "games"}
-ADMIN_UNIQUE_FIELDS = {"email", "login"}
+ADMIN_UNIQUE_FIELDS = {"email", "login", "steam_id"}
 
 
 async def ensure_unique_user_fields(session: AsyncSession, data: dict, user_id: int) -> None:
@@ -917,15 +917,66 @@ async def update_user_profile(
     user_id: int,
     request: Request,
     payload: UserAdminUpdate,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    ensure_not_system_admin(user)
+    target_is_system_admin = is_system_admin(user)
+    if target_is_system_admin and not is_system_admin(admin):
+        raise HTTPException(status_code=403, detail="The system administrator can only be edited by itself")
 
     data = payload.model_dump(exclude_unset=True)
+    full_account_fields = {
+        "role",
+        "status",
+        "team_id",
+        "steam_id",
+        "password",
+        "rating_race_count",
+        "game_rating_race_counts",
+        "ban_end",
+        "timeout_end",
+    }
+    if not is_system_admin(admin) and full_account_fields.intersection(data):
+        raise HTTPException(status_code=403, detail="Only the system administrator can edit full account fields")
+
+    team_id_provided = "team_id" in data
+    steam_id_provided = "steam_id" in data
+    ban_end_provided = "ban_end" in data
+    timeout_end_provided = "timeout_end" in data
+    requested_role = data.pop("role", None)
+    requested_status = data.pop("status", None)
+    requested_team_id = data.pop("team_id", None)
+    requested_steam_id = data.pop("steam_id", None)
+    requested_password = data.pop("password", None)
+    requested_race_count = data.pop("rating_race_count", None)
+    requested_game_race_counts = data.pop("game_rating_race_counts", None)
+    requested_ban_end = data.pop("ban_end", None)
+    requested_timeout_end = data.pop("timeout_end", None)
+
+    if target_is_system_admin:
+        if data.get("login") not in (None, user.login):
+            raise HTTPException(status_code=403, detail="The system administrator login cannot be changed")
+        if requested_role not in (None, Role.admin):
+            raise HTTPException(status_code=403, detail="The system administrator role cannot be changed")
+        if requested_status not in (None, UserStatus.active):
+            raise HTTPException(status_code=403, detail="The system administrator status cannot be changed")
+        requested_role = None
+        requested_status = None
+
+    if steam_id_provided and not requested_steam_id:
+        raise HTTPException(status_code=400, detail="Steam ID cannot be empty")
+
+    effective_status = requested_status or user.status
+    if requested_timeout_end is not None and as_utc(requested_timeout_end) <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Timeout end must be in the future")
+    if effective_status == UserStatus.timeout:
+        effective_timeout_end = requested_timeout_end if timeout_end_provided else user.timeout_end
+        if effective_timeout_end is None or as_utc(effective_timeout_end) <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="A future timeout end is required for timeout status")
+
     if "favorite_car" in data and data["favorite_car"] is not None:
         data["favorite_car"] = data["favorite_car"].strip() or None
     required_fields = PROFILE_REQUIRED_FIELDS | {"login", "pilot_number"}
@@ -937,13 +988,39 @@ async def update_user_profile(
     sr_value = data.pop("sr", None)
     game_ratings = data.pop("game_ratings", None)
 
+    if requested_team_id is not None:
+        team = await session.get(Team, requested_team_id)
+        if team is None:
+            raise HTTPException(status_code=400, detail="Team not found")
+
     for field, value in data.items():
         setattr(user, field, value)
     if overall_rating is not None:
         user.rating = overall_rating
     if sr_value is not None:
         user.sr = sr_value
-    if game_ratings is not None:
+    if requested_role is not None:
+        user.role = requested_role
+    if requested_status is not None:
+        user.status = requested_status
+    if requested_team_id is not None or team_id_provided:
+        user.team_id = requested_team_id
+    if requested_steam_id is not None:
+        user.steam_id = requested_steam_id
+    if requested_password:
+        user.password_hash = hash_password(requested_password)
+    if requested_race_count is not None:
+        user.rating_race_count = requested_race_count
+    if requested_ban_end is not None or ban_end_provided:
+        user.ban_end = requested_ban_end
+    if requested_timeout_end is not None or timeout_end_provided:
+        user.timeout_end = requested_timeout_end
+    if requested_status == UserStatus.timeout and user.timeout_start is None:
+        user.timeout_start = datetime.now(timezone.utc)
+    elif requested_status is not None and requested_status != UserStatus.timeout:
+        user.timeout_start = None
+        user.timeout_end = None
+    if game_ratings is not None or requested_game_race_counts is not None:
         normalized_ratings = default_game_ratings()
         existing_ratings = user.game_ratings if isinstance(user.game_ratings, dict) else {}
         for game in RACE_GAMES:
@@ -951,8 +1028,12 @@ async def update_user_profile(
             if isinstance(existing, dict):
                 normalized_ratings[game]["rating"] = int(existing.get("rating", normalized_ratings[game]["rating"]))
                 normalized_ratings[game]["race_count"] = max(0, int(existing.get("race_count", 0)))
-        for game, rating in game_ratings.items():
-            normalized_ratings[game]["rating"] = int(rating)
+        if game_ratings is not None:
+            for game, rating in game_ratings.items():
+                normalized_ratings[game]["rating"] = int(rating)
+        if requested_game_race_counts is not None:
+            for game, count in requested_game_race_counts.items():
+                normalized_ratings[game]["race_count"] = int(count)
         user.game_ratings = normalized_ratings
     user.pending_profile_changes = None
     await session.commit()
