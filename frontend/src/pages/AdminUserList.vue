@@ -32,6 +32,7 @@ const timeoutSaving = ref(false)
 const detailDialogUser = ref(null)
 const editDialogUser = ref(null)
 const editForm = ref({})
+const teams = ref([])
 const editSaving = ref(false)
 const editAvatarFile = ref(null)
 const editAvatarSaving = ref(false)
@@ -109,6 +110,10 @@ const userRatingGame = ref('ACC')
 const page = ref(1)
 const pageSize = 25
 const visibleUsers = computed(() => users.value)
+const canEditFullAccount = computed(() => state.user?.is_system_admin === true)
+const teamOptions = computed(() => [{ id: null, name: t('adminUsers.noTeam'), abbreviation: '' }, ...teams.value])
+const editableRoles = ['admin', 'moder', 'marshall', 'smm', 'pilot']
+const editableStatuses = ['active', 'banned', 'timeout', 'unapproved']
 const userSearchOptions = computed(() => [
   { value: 'all', label: t('adminUsers.searchAll') },
   { value: 'id', label: t('adminUsers.searchAccountId') },
@@ -228,9 +233,10 @@ async function load() {
       search_by: userSearchBy.value
     })
     if (userSearch.value.trim()) params.set('search', userSearch.value.trim())
-    const [loadedUsers, teamConfig, fanVoteConfig, loadedTwitchConfig, loadedDonationSettings, loadedLicenseSettings, loadedBrandingSettings, loadedSystemSettings, loadedWeatherImages, loadedSteamBlacklist, loadedPilotRoles] = await Promise.all([
+    const [loadedUsers, teamConfig, loadedTeams, fanVoteConfig, loadedTwitchConfig, loadedDonationSettings, loadedLicenseSettings, loadedBrandingSettings, loadedSystemSettings, loadedWeatherImages, loadedSteamBlacklist, loadedPilotRoles] = await Promise.all([
       api(`/users/admin?${params.toString()}`),
       api('/teams/config'),
+      api('/teams').catch(() => []),
       api('/races/fan-vote/config'),
       api('/twitch/config'),
       api('/app-settings/donations'),
@@ -250,6 +256,7 @@ async function load() {
     ])
     users.value = loadedUsers
     teamLimit.value = teamConfig.member_limit
+    teams.value = loadedTeams
     fanVoteDurationHours.value = fanVoteConfig.duration_hours
     twitchConfig.value = {
       fallback_video_url: loadedTwitchConfig.fallback_video_url || '',
@@ -830,7 +837,7 @@ function closeTimeoutDialog() {
 }
 
 function openEditDialog(user) {
-  if (user.is_system_admin) return
+  if (user.is_system_admin && !canEditFullAccount.value) return
   editDialogUser.value = user
   const gameRatings = Object.fromEntries(gameOptions(t).map((option) => [
     option.value,
@@ -838,6 +845,7 @@ function openEditDialog(user) {
   ]))
   editForm.value = {
     login: user.login || '',
+    steam_id: user.steam_id || '',
     email: user.email || '',
     first_name: user.first_name || '',
     last_name: user.last_name || '',
@@ -848,7 +856,21 @@ function openEditDialog(user) {
     games: user.games?.length ? [...user.games] : ['ACC'],
     sr: Number(user.sr ?? 5),
     rating: Number(user.rating ?? 1000),
-    game_ratings: gameRatings
+    rating_race_count: Number(user.rating_race_count ?? 0),
+    game_rating_race_counts: Object.fromEntries(gameOptions(t).map((option) => [
+      option.value,
+      Number(user.game_ratings?.[option.value]?.race_count ?? 0)
+    ])),
+    game_ratings: gameRatings,
+    favorite_car: user.favorite_car || '',
+    avatar_color: user.avatar_color || '#2563eb',
+    show_pilot_roles: user.show_pilot_roles !== false,
+    role: user.role || 'pilot',
+    status: user.status || 'active',
+    team_id: user.team_id ?? null,
+    ban_end: user.ban_end ? datetimeLocalValue(new Date(user.ban_end)) : '',
+    timeout_end: user.timeout_end ? datetimeLocalValue(new Date(user.timeout_end)) : '',
+    password: ''
   }
   editAvatarFile.value = null
 }
@@ -876,25 +898,48 @@ async function saveUserProfile() {
   editSaving.value = true
   error.value = ''
   try {
+    const body = {
+      login: editForm.value.login,
+      email: editForm.value.email,
+      first_name: editForm.value.first_name,
+      last_name: editForm.value.last_name,
+      nickname: editForm.value.nickname,
+      pilot_number: Number(editForm.value.pilot_number),
+      country: editForm.value.country || null,
+      discord: editForm.value.discord || null,
+      games: editForm.value.games,
+      favorite_car: editForm.value.favorite_car || null,
+      avatar_color: editForm.value.avatar_color,
+      show_pilot_roles: editForm.value.show_pilot_roles,
+      sr: Number(editForm.value.sr),
+      rating: Number(editForm.value.rating),
+      game_ratings: Object.fromEntries(Object.entries(editForm.value.game_ratings || {}).map(([game, rating]) => [game, Number(rating)]))
+    }
+    if (canEditFullAccount.value) {
+      Object.assign(body, {
+        role: editForm.value.role,
+        status: editForm.value.status,
+        steam_id: editForm.value.steam_id,
+        team_id: editForm.value.team_id ? Number(editForm.value.team_id) : null,
+        ban_end: editForm.value.ban_end ? new Date(editForm.value.ban_end).toISOString() : null,
+        timeout_end: editForm.value.timeout_end ? new Date(editForm.value.timeout_end).toISOString() : null,
+        rating_race_count: Number(editForm.value.rating_race_count),
+        game_rating_race_counts: Object.fromEntries(Object.entries(editForm.value.game_rating_race_counts || {}).map(([game, count]) => [game, Number(count)]))
+      })
+      if (editForm.value.password) body.password = editForm.value.password
+    }
     const updatedUser = await api(`/users/${editDialogUser.value.id}`, {
       method: 'PATCH',
-      body: {
-        login: editForm.value.login,
-        email: editForm.value.email,
-        first_name: editForm.value.first_name,
-        last_name: editForm.value.last_name,
-        nickname: editForm.value.nickname,
-        pilot_number: Number(editForm.value.pilot_number),
-        country: editForm.value.country || null,
-        discord: editForm.value.discord || null,
-        games: editForm.value.games,
-        sr: Number(editForm.value.sr),
-        rating: Number(editForm.value.rating),
-        game_ratings: Object.fromEntries(Object.entries(editForm.value.game_ratings || {}).map(([game, rating]) => [game, Number(rating)]))
-      }
+      body
     })
-    updateUserInList(updatedUser)
-    editDialogUser.value = updatedUser
+    // The profile endpoint intentionally returns the regular private view;
+    // preserve administrator-only metadata already loaded in the details card
+    // (device marker, linked accounts, moderation flags) while applying the
+    // updated editable fields.
+    const mergedUser = { ...editDialogUser.value, ...updatedUser }
+    if (canEditFullAccount.value) mergedUser.steam_id = editForm.value.steam_id
+    updateUserInList(mergedUser)
+    editDialogUser.value = mergedUser
   } catch (err) {
     error.value = err.message
   } finally {
@@ -913,8 +958,9 @@ async function uploadEditAvatar() {
       method: 'POST',
       body: payload
     })
-    updateUserInList(updatedUser)
-    editDialogUser.value = updatedUser
+    const mergedUser = { ...editDialogUser.value, ...updatedUser }
+    updateUserInList(mergedUser)
+    editDialogUser.value = mergedUser
     editAvatarFile.value = null
   } catch (err) {
     error.value = err.message
@@ -992,6 +1038,20 @@ function openUserDetails(user) {
 
 function closeUserDetails() {
   detailDialogUser.value = null
+}
+
+function editUserFromDetails() {
+  const user = detailDialogUser.value
+  if (!user || !canEditFullAccount.value) return
+  closeUserDetails()
+  openEditDialog(user)
+}
+
+function editRolesFromDetails() {
+  const user = detailDialogUser.value
+  if (!user || !canEditFullAccount.value || user.is_system_admin) return
+  closeUserDetails()
+  openPilotRoleDialog(user)
 }
 
 function detailValue(value) {
@@ -1157,8 +1217,9 @@ async function savePilotRoles() {
       method: 'PUT',
       body: { role_ids: pilotRoleSelection.value }
     })
-    updateUserInList(updated)
-    pilotRoleDialogUser.value = updated
+    const mergedUser = { ...pilotRoleDialogUser.value, ...updated }
+    updateUserInList(mergedUser)
+    pilotRoleDialogUser.value = mergedUser
   } catch (err) {
     error.value = err.message
   } finally {
@@ -1812,9 +1873,15 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
             <h2>{{ t('adminUsers.userDetailsTitle') }}</h2>
             <p>{{ detailDialogUser.login }} · #{{ formatPilotNumber(detailDialogUser.pilot_number) }}</p>
           </div>
-          <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="closeUserDetails">
-            <X :size="18" />
-          </button>
+          <div class="admin-user-details-head-actions">
+            <button v-if="canEditFullAccount" class="button small" type="button" @click="editUserFromDetails">
+              <Edit3 :size="15" />
+              {{ t('common.edit') }}
+            </button>
+            <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="closeUserDetails">
+              <X :size="18" />
+            </button>
+          </div>
         </div>
 
         <div class="admin-user-details-hero">
@@ -1823,6 +1890,9 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
             <h3>{{ detailDialogUser.first_name }} {{ detailDialogUser.last_name }}</h3>
             <p class="muted">@{{ detailDialogUser.login }} · {{ detailDialogUser.nickname }}</p>
             <PilotRoles :roles="detailDialogUser.pilot_roles" />
+            <button v-if="canEditFullAccount && !detailDialogUser.is_system_admin" class="button small admin-user-details-roles-button" type="button" @click="editRolesFromDetails">
+              {{ t('adminUsers.editPilotRoles') }}
+            </button>
           </div>
         </div>
 
@@ -1963,7 +2033,11 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
         <div class="admin-profile-edit-grid">
           <label class="field">
             <span>{{ t('fields.login') }}</span>
-            <input v-model="editForm.login" maxlength="50" required />
+            <input v-model="editForm.login" maxlength="50" :disabled="editDialogUser.is_system_admin" required />
+          </label>
+          <label v-if="canEditFullAccount" class="field">
+            <span>{{ t('fields.steamId') }}</span>
+            <input v-model="editForm.steam_id" inputmode="numeric" pattern="[0-9]+" maxlength="50" required />
           </label>
           <label class="field">
             <span>{{ t('fields.email') }}</span>
@@ -1994,6 +2068,18 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
             <input v-model="editForm.discord" maxlength="100" />
           </label>
           <label class="field">
+            <span>{{ t('profile.favoriteCar') }}</span>
+            <input v-model="editForm.favorite_car" maxlength="80" />
+          </label>
+          <label class="field">
+            <span>{{ t('fields.avatarColor') }}</span>
+            <input v-model="editForm.avatar_color" type="color" :aria-label="t('fields.avatarColor')" />
+          </label>
+          <label class="field admin-profile-toggle-field">
+            <span>{{ t('profile.showRoles') }}</span>
+            <input v-model="editForm.show_pilot_roles" type="checkbox" />
+          </label>
+          <label class="field">
             <span>{{ t('fields.sr') }}</span>
             <input v-model.number="editForm.sr" type="number" min="0" max="30" step="0.1" required />
           </label>
@@ -2004,6 +2090,59 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
                 <span>{{ option.label }}</span>
                 <input v-model.number="editForm.game_ratings[option.value]" type="number" min="10" max="10000" step="1" required />
               </label>
+            </div>
+          </div>
+          <div v-if="canEditFullAccount" class="admin-profile-full-fields">
+            <div class="admin-profile-full-fields-head">
+              <div>
+                <strong>{{ t('adminUsers.fullAccountFields') }}</strong>
+                <p class="muted">{{ t('adminUsers.fullAccountFieldsHint') }}</p>
+              </div>
+            </div>
+            <div class="admin-profile-full-fields-grid">
+              <label class="field">
+                <span>{{ t('common.role') }}</span>
+                <select v-model="editForm.role" :disabled="editDialogUser.is_system_admin">
+                  <option v-for="role in editableRoles" :key="role" :value="role">{{ roleLabel(t, role) }}</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>{{ t('common.status') }}</span>
+                <select v-model="editForm.status" :disabled="editDialogUser.is_system_admin">
+                  <option v-for="status in editableStatuses" :key="status" :value="status">{{ statusLabel(t, status) }}</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>{{ t('fields.team') }}</span>
+                <select v-model="editForm.team_id">
+                  <option v-for="team in teamOptions" :key="team.id ?? 'none'" :value="team.id">{{ team.id ? `${team.name} · ${team.abbreviation}` : team.name }}</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>{{ t('fields.ratingRaces') }}</span>
+                <input v-model.number="editForm.rating_race_count" type="number" min="0" step="1" required />
+              </label>
+              <label class="field">
+                <span>{{ t('profile.banEnd') }}</span>
+                <input v-model="editForm.ban_end" type="datetime-local" />
+              </label>
+              <label class="field">
+                <span>{{ t('profile.timeoutEnd') }}</span>
+                <input v-model="editForm.timeout_end" type="datetime-local" />
+              </label>
+              <label class="field admin-profile-password-field">
+                <span>{{ t('adminUsers.newPassword') }}</span>
+                <input v-model="editForm.password" type="password" autocomplete="new-password" minlength="8" maxlength="128" :placeholder="t('adminUsers.newPasswordHint')" />
+              </label>
+            </div>
+            <div class="admin-profile-race-counts">
+              <span>{{ t('adminUsers.raceCountsBySimulator') }}</span>
+              <div class="admin-profile-ratings-grid">
+                <label v-for="option in gameOptions(t)" :key="option.value" class="field">
+                  <span>{{ option.label }}</span>
+                  <input v-model.number="editForm.game_rating_race_counts[option.value]" type="number" min="0" step="1" required />
+                </label>
+              </div>
             </div>
           </div>
           <div class="field admin-profile-games is-required">
