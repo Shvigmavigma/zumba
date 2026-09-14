@@ -60,6 +60,9 @@ const forcePilotNumber = ref('')
 const forcePilotCar = ref('')
 const forcePilotCandidates = ref([])
 const forcePilotLoading = ref(false)
+const forcePilotSearch = ref('')
+let forcePilotSearchTimer = null
+let forcePilotSearchRequest = 0
 const raceAssetConfig = computed(() => {
   const game = race.value?.game
   if (!game) return { track_images: {} }
@@ -94,7 +97,9 @@ const isChampionshipStage = computed(() => Boolean(race.value?.championship_id))
 const isLmuRace = computed(() => race.value?.game === 'LMU')
 const lmuResultsOpen = computed(() => !isLmuRace.value || race.value?.status === 'finished' || Boolean(race.value?.results) || !race.value?.lmu_results_at || new Date(race.value.lmu_results_at).getTime() <= Date.now())
 const usesSimulatorJsonResults = computed(() => race.value?.game === 'ACC')
-const canEditManualResults = computed(() => canManageRace.value && (race.value?.status !== 'finished' || isLmuRace.value))
+// Staff can replace a saved result set as well as enter the first one. The
+// backend restores the previous rating/SR bonus before recalculating it.
+const canEditManualResults = computed(() => canManageRace.value && Boolean(race.value))
 const canShowRegistrationPanel = computed(() => Boolean(state.user) && (race.value?.status === 'registration_open' || (isChampionshipStage.value && race.value?.status === 'not_started')))
 const resultRows = computed(() => {
   if (Array.isArray(race.value?.results)) return race.value.results
@@ -122,7 +127,8 @@ const resultParticipants = computed(() => {
         team_id: row.team_id || participant?.team_id,
         team_name: row.team_name || participant?.team_name,
         team_abbreviation: row.team_abbreviation || participant?.team_abbreviation,
-        country: row.country || participant?.country
+        country: row.country || participant?.country,
+        pilot_roles: row.pilot_roles || participant?.pilot_roles || []
       }
     })
 })
@@ -294,6 +300,14 @@ function resultTimeLabel(row, value) {
 
 function resultBestLapLabel(row) {
   return resultTimeLabel(row, resultBestLapMs(row))
+}
+
+function resultQualificationBestLapMs(row) {
+  return row?.qualification_best_lap_ms ?? row?.qualificationBestLapMs ?? null
+}
+
+function resultQualificationBestLapLabel(row) {
+  return resultTimeLabel(row, resultQualificationBestLapMs(row))
 }
 
 function resultFinishLabel(row) {
@@ -648,7 +662,8 @@ function updateForcePilotDefaults() {
   forcePilotCar.value = race.value?.allowed_cars?.[0] || ''
 }
 
-async function loadForcePilotCandidates(currentRace) {
+async function loadForcePilotCandidates(currentRace, search = forcePilotSearch.value) {
+  const requestId = ++forcePilotSearchRequest
   forcePilotCandidates.value = []
   forcePilotId.value = ''
   forcePilotNumber.value = ''
@@ -657,11 +672,13 @@ async function loadForcePilotCandidates(currentRace) {
   forcePilotLoading.value = true
   try {
     const params = new URLSearchParams({ limit: '100', rating_game: currentRace.game || 'ACC' })
-    forcePilotCandidates.value = await api(`/users/pilots?${params.toString()}`)
+    if (String(search || '').trim()) params.set('search', String(search).trim())
+    const candidates = await api(`/users/pilots?${params.toString()}`)
+    if (requestId === forcePilotSearchRequest) forcePilotCandidates.value = candidates
   } catch {
-    forcePilotCandidates.value = []
+    if (requestId === forcePilotSearchRequest) forcePilotCandidates.value = []
   } finally {
-    forcePilotLoading.value = false
+    if (requestId === forcePilotSearchRequest) forcePilotLoading.value = false
   }
 }
 
@@ -1029,13 +1046,23 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
   load()
 })
-onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown)
+  if (forcePilotSearchTimer) clearTimeout(forcePilotSearchTimer)
+})
 watch([participantSearch, participantSort], () => {
   participantPage.value = 1
 })
 watch(manualPilotSearch, () => {
   if (manualPilotSearch.value.trim().length >= 1) searchManualPilots()
   else manualPilotResults.value = []
+})
+watch(forcePilotSearch, () => {
+  if (forcePilotSearchTimer) clearTimeout(forcePilotSearchTimer)
+  if (!race.value || !canForcePilotRegistration.value) return
+  forcePilotSearchTimer = setTimeout(() => {
+    loadForcePilotCandidates(race.value, forcePilotSearch.value)
+  }, 240)
 })
 watch(visibleParticipants, () => {
   if (participantPage.value > participantTotalPages.value) {
@@ -1371,6 +1398,13 @@ watch(visibleParticipants, () => {
             <strong>{{ t('raceDetails.forceRegistrationTitle') }}</strong>
             <span>{{ t('raceDetails.forceRegistrationHint') }}</span>
           </div>
+          <div class="force-pilot-registration-search">
+            <label class="field">
+              <span>{{ t('raceDetails.forceRegistrationSearch') }}</span>
+              <input v-model="forcePilotSearch" type="search" :placeholder="t('raceDetails.forceRegistrationSearch')" :disabled="forcePilotLoading || actionPending" @keydown.enter.prevent />
+            </label>
+            <span class="pill">{{ forcePilotLoading ? t('common.loading') : forcePilotCandidates.length }}</span>
+          </div>
           <div class="force-pilot-registration-fields">
             <label class="field">
               <span>{{ t('raceDetails.forceRegistrationPilot') }}</span>
@@ -1578,6 +1612,10 @@ watch(visibleParticipants, () => {
                   <span class="result-podium-best-lap-label">{{ t('raceDetails.bestLap') }}</span>
                   <strong>{{ resultBestLapLabel(row) }}</strong>
                 </span>
+                <span v-if="resultsTab === 'race' && Number.isFinite(Number(resultQualificationBestLapMs(row)))" class="result-podium-best-lap">
+                  <span class="result-podium-best-lap-label">{{ t('raceDetails.qualificationBestLap') }}</span>
+                  <strong>{{ resultQualificationBestLapLabel(row) }}</strong>
+                </span>
               </div>
               <span v-if="resultsTab === 'race'" class="result-podium-rating-line">
                 <span class="result-podium-rating-label">{{ t('raceDetails.ratingDelta') }}</span>
@@ -1595,6 +1633,7 @@ watch(visibleParticipants, () => {
                   <th v-if="resultsTab === 'race'">{{ t('raceDetails.laps') }}</th>
                   <th v-else>{{ t('common.car') }}</th>
                   <th>{{ t('raceDetails.bestLap') }}</th>
+                  <th v-if="resultsTab === 'race' && qualificationRows.length">{{ t('raceDetails.qualificationBestLap') }}</th>
                   <th v-if="resultsTab === 'race'">{{ t('raceDetails.resultTime') }}</th>
                   <th v-if="resultsTab === 'race'">{{ t('raceDetails.timePenalty') }}</th>
                   <th v-if="resultsTab === 'race'">{{ t('raceDetails.srPenalty') }}</th>
@@ -1632,6 +1671,7 @@ watch(visibleParticipants, () => {
                   <td v-if="resultsTab === 'race'" :data-label="t('raceDetails.laps')">{{ row.lap_count ?? '-' }}</td>
                   <td v-else :data-label="t('common.car')">{{ carModelLabel(row.car_model) }}</td>
                   <td :data-label="t('raceDetails.bestLap')">{{ resultBestLapLabel(row) }}</td>
+                  <td v-if="resultsTab === 'race' && qualificationRows.length" :data-label="t('raceDetails.qualificationBestLap')">{{ resultQualificationBestLapLabel(row) }}</td>
                   <td v-if="resultsTab === 'race'" :data-label="t('raceDetails.resultTime')">{{ resultFinishLabel(row) }}</td>
                   <td v-if="resultsTab === 'race'" :data-label="t('raceDetails.timePenalty')">
                     <button

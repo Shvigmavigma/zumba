@@ -60,6 +60,22 @@ class PilotRoleCreate(BaseModel):
         return value
 
 
+class PilotRoleUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    display_mode: PilotRoleDisplayMode | None = None
+    border_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+    @field_validator("name")
+    @classmethod
+    def clean_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("Role name is required")
+        return value
+
+
 class PilotRoleAssignmentUpdate(BaseModel):
     role_ids: list[int] = Field(default_factory=list, max_length=50)
 

@@ -86,6 +86,12 @@ const pilotRoleDeleting = ref({})
 const pilotRoleDialogUser = ref(null)
 const pilotRoleSelection = ref([])
 const pilotRoleAssignSaving = ref(false)
+const pilotRoleEditDialog = ref(null)
+const pilotRoleEditForm = ref({ name: '', display_mode: 'text', border_color: '#2563eb' })
+const pilotRoleEditFile = ref(null)
+const pilotRoleEditPreview = ref('')
+const pilotRoleEditCropper = ref(null)
+const pilotRoleEditSaving = ref(false)
 const weatherImages = ref({
   clear_light_url: '', clear_dark_url: '',
   partly_cloudy_light_url: '', partly_cloudy_dark_url: '',
@@ -1027,6 +1033,8 @@ onBeforeUnmount(() => {
   closeDefaultAvatarCropper()
   closePilotRoleCropper()
   revokePilotRolePreview()
+  closePilotRoleEditCropper()
+  revokePilotRoleEditPreview()
 })
 
 function isAdminZoneCollapsed(key) {
@@ -1074,6 +1082,19 @@ function sharedAccountTooltip(user) {
     parts.push(t('adminUsers.sameIpTooltip', { logins: user.same_ip_logins?.join(', ') || t('common.none') }))
   }
   return parts.join(' · ')
+}
+
+function showSameDeviceAccounts(user) {
+  const deviceId = String(user?.device_id || '').trim()
+  if (!deviceId) return
+  const alreadyFiltered = userSearchBy.value === 'device_id' && userSearch.value.trim() === deviceId
+  userSearchBy.value = 'device_id'
+  userSearch.value = deviceId
+  if (page.value !== 1) {
+    page.value = 1
+  } else if (alreadyFiltered) {
+    load()
+  }
 }
 
 function detailRows(user) {
@@ -1153,12 +1174,44 @@ function closePilotRoleCropper() {
   pilotRoleCropper.value = null
 }
 
+function setPilotRoleEditFile(event) {
+  const file = event.target.files?.[0] || null
+  event.target.value = ''
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    error.value = 'Выберите файл изображения.'
+    return
+  }
+  closePilotRoleEditCropper()
+  pilotRoleEditFile.value = null
+  revokePilotRoleEditPreview()
+  pilotRoleEditCropper.value = { sourceUrl: URL.createObjectURL(file), error: '' }
+}
+
+function revokePilotRoleEditPreview() {
+  if (pilotRoleEditPreview.value) URL.revokeObjectURL(pilotRoleEditPreview.value)
+  pilotRoleEditPreview.value = ''
+}
+
+function uploadCroppedPilotRoleEdit(blob) {
+  revokePilotRoleEditPreview()
+  pilotRoleEditFile.value = new File([blob], 'pilot-role.webp', { type: 'image/webp' })
+  pilotRoleEditPreview.value = URL.createObjectURL(pilotRoleEditFile.value)
+  closePilotRoleEditCropper()
+}
+
+function closePilotRoleEditCropper() {
+  if (!pilotRoleEditCropper.value || pilotRoleEditSaving.value) return
+  URL.revokeObjectURL(pilotRoleEditCropper.value.sourceUrl)
+  pilotRoleEditCropper.value = null
+}
+
 function pilotRoleModeLabel(mode) {
   return {
-    text: 'Текст',
-    text_image: 'Текст + изображение',
-    image: 'Изображение'
-  }[mode] || 'Текст'
+    text: t('adminUsers.roleTextMode'),
+    text_image: t('adminUsers.roleTextImageMode'),
+    image: t('adminUsers.roleImageMode')
+  }[mode] || t('adminUsers.roleTextMode')
 }
 
 async function createPilotRole() {
@@ -1193,6 +1246,83 @@ async function createPilotRole() {
     error.value = err.message
   } finally {
     pilotRoleSaving.value = false
+  }
+}
+
+function openPilotRoleEditor(role) {
+  pilotRoleEditDialog.value = role
+  pilotRoleEditForm.value = {
+    name: role.name || '',
+    display_mode: role.display_mode || (role.image_url ? 'text_image' : 'text'),
+    border_color: role.border_color || '#2563eb'
+  }
+  pilotRoleEditFile.value = null
+  revokePilotRoleEditPreview()
+}
+
+function closePilotRoleEditor() {
+  if (pilotRoleEditSaving.value) return
+  closePilotRoleEditCropper()
+  revokePilotRoleEditPreview()
+  pilotRoleEditFile.value = null
+  pilotRoleEditDialog.value = null
+}
+
+function replaceRoleInUserLists(updatedRole) {
+  users.value = users.value.map((user) => ({
+    ...user,
+    pilot_roles: (user.pilot_roles || []).map((role) => role.id === updatedRole.id ? { ...role, ...updatedRole } : role)
+  }))
+  if (detailDialogUser.value?.pilot_roles) {
+    detailDialogUser.value = {
+      ...detailDialogUser.value,
+      pilot_roles: detailDialogUser.value.pilot_roles.map((role) => role.id === updatedRole.id ? { ...role, ...updatedRole } : role)
+    }
+  }
+  if (pilotRoleDialogUser.value?.pilot_roles) {
+    pilotRoleDialogUser.value = {
+      ...pilotRoleDialogUser.value,
+      pilot_roles: pilotRoleDialogUser.value.pilot_roles.map((role) => role.id === updatedRole.id ? { ...role, ...updatedRole } : role)
+    }
+  }
+}
+
+async function savePilotRoleEdit() {
+  const role = pilotRoleEditDialog.value
+  if (!role) return
+  const name = String(pilotRoleEditForm.value.name || '').trim()
+  if (!name) return
+  const displayMode = pilotRoleEditForm.value.display_mode || 'text'
+  if (displayMode !== 'text' && !role.image_url && !pilotRoleEditFile.value) {
+    error.value = t('adminUsers.roleImageRequired')
+    return
+  }
+  pilotRoleEditSaving.value = true
+  error.value = ''
+  try {
+    let updatedRole = await api(`/users/admin/pilot-roles/${role.id}`, {
+      method: 'PATCH',
+      body: {
+        name,
+        display_mode: displayMode,
+        border_color: pilotRoleEditForm.value.border_color || '#2563eb'
+      }
+    })
+    if (pilotRoleEditFile.value && displayMode !== 'text') {
+      const body = new FormData()
+      body.append('file', pilotRoleEditFile.value, pilotRoleEditFile.value.name)
+      updatedRole = await api(`/users/admin/pilot-roles/${role.id}/image`, { method: 'POST', body })
+    }
+    pilotRoles.value = pilotRoles.value
+      .map((item) => item.id === updatedRole.id ? { ...item, ...updatedRole } : item)
+      .sort((left, right) => left.name.localeCompare(right.name))
+    replaceRoleInUserLists(updatedRole)
+    pilotRoleEditSaving.value = false
+    closePilotRoleEditor()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    pilotRoleEditSaving.value = false
   }
 }
 
@@ -1259,6 +1389,13 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
     pilotRoleImageFile.value = null
     revokePilotRolePreview()
     closePilotRoleCropper()
+  }
+})
+watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
+  if (mode === 'text') {
+    pilotRoleEditFile.value = null
+    revokePilotRoleEditPreview()
+    closePilotRoleEditCropper()
   }
 })
 </script>
@@ -1538,17 +1675,75 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
           <PilotRoles :roles="[role]" />
           <span class="muted">{{ pilotRoleModeLabel(role.display_mode || (role.image_url ? 'text_image' : 'text')) }}</span>
           <span v-if="role.display_mode !== 'image'" class="admin-pilot-role-color-swatch" :style="{ backgroundColor: role.border_color || 'var(--primary)' }" :title="role.border_color || 'Цвет рамки'" aria-hidden="true"></span>
+          <button class="icon-button" type="button" :disabled="pilotRoleEditSaving" :title="t('adminUsers.editRole')" :aria-label="t('adminUsers.editRole')" @click="openPilotRoleEditor(role)"><Edit3 :size="16" /></button>
           <button class="icon-button danger-icon" type="button" :disabled="pilotRoleDeleting[role.id]" title="Удалить роль" aria-label="Удалить роль" @click="deletePilotRole(role)"><Trash2 :size="16" /></button>
         </div>
       </div>
-      <p v-else class="muted">Роли ещё не созданы.</p>
+      <p v-else class="muted">{{ t('adminUsers.rolesNotCreated') }}</p>
     </section>
+
+    <div v-if="pilotRoleEditDialog" class="penalty-modal-backdrop" @click.self="closePilotRoleEditor">
+      <form class="penalty-modal admin-pilot-role-modal card" @submit.prevent="savePilotRoleEdit">
+        <div class="penalty-modal-head section-header">
+          <div>
+            <h2>{{ t('adminUsers.editRoleTitle') }}</h2>
+            <p class="muted">{{ t('adminUsers.editRoleHint') }}</p>
+          </div>
+          <button class="icon-button" type="button" title="Закрыть" aria-label="Закрыть" :disabled="pilotRoleEditSaving" @click="closePilotRoleEditor"><X :size="18" /></button>
+        </div>
+        <div class="admin-pilot-role-edit-grid">
+          <label class="field">
+            <span>{{ t('adminUsers.roleName') }}</span>
+            <input v-model="pilotRoleEditForm.name" maxlength="80" required />
+          </label>
+          <label class="field">
+            <span>{{ t('adminUsers.roleDisplayMode') }}</span>
+            <select v-model="pilotRoleEditForm.display_mode">
+              <option value="text">{{ t('adminUsers.roleTextMode') }}</option>
+              <option value="text_image">{{ t('adminUsers.roleTextImageMode') }}</option>
+              <option value="image">{{ t('adminUsers.roleImageMode') }}</option>
+            </select>
+          </label>
+          <label v-if="pilotRoleEditForm.display_mode !== 'image'" class="field admin-pilot-role-color">
+            <span>Цвет рамки</span>
+            <input v-model="pilotRoleEditForm.border_color" type="color" aria-label="Цвет рамки роли" />
+          </label>
+          <label v-if="pilotRoleEditForm.display_mode !== 'text'" class="field admin-pilot-role-image-field">
+            <span>{{ t('adminUsers.roleImage') }}</span>
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="setPilotRoleEditFile" />
+            <small class="muted">{{ t('adminUsers.roleImageHint') }}</small>
+            <span v-if="pilotRoleEditFile" class="admin-pilot-role-image-ready"><img v-if="pilotRoleEditPreview" :src="pilotRoleEditPreview" alt="" />{{ t('common.ready') }}</span>
+          </label>
+        </div>
+        <div class="admin-pilot-role-preview">
+          <span class="muted">{{ t('adminUsers.rolePreview') }}</span>
+          <PilotRoles :roles="[{ ...pilotRoleEditDialog, ...pilotRoleEditForm, image_url: pilotRoleEditPreview || pilotRoleEditDialog.image_url }]" />
+        </div>
+        <div class="admin-timeout-actions">
+          <button class="button" type="button" :disabled="pilotRoleEditSaving" @click="closePilotRoleEditor">Отмена</button>
+          <button class="button primary" type="submit" :disabled="pilotRoleEditSaving">Сохранить</button>
+        </div>
+      </form>
+    </div>
+
+    <ImageCropper
+      v-if="pilotRoleEditCropper"
+      :source-url="pilotRoleEditCropper.sourceUrl"
+      :title="t('adminUsers.roleImageCropTitle')"
+      :hint="t('adminUsers.roleImageCropHint')"
+      :target-width="256"
+      :target-height="256"
+      :saving="pilotRoleEditSaving"
+      :error="pilotRoleEditCropper.error"
+      @close="closePilotRoleEditCropper"
+      @crop="uploadCroppedPilotRoleEdit"
+    />
 
     <ImageCropper
       v-if="pilotRoleCropper"
       :source-url="pilotRoleCropper.sourceUrl"
-      title="Обрезка изображения роли"
-      hint="Настройте квадратный фрагмент — он будет показан рядом с именем и не превысит его высоту."
+      :title="t('adminUsers.roleImageCropTitle')"
+      :hint="t('adminUsers.roleImageCropHint')"
       :target-width="256"
       :target-height="256"
       :saving="pilotRoleSaving"
@@ -1812,6 +2007,16 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
                 >
                   <Eye :size="16" />
                 </button>
+                <button
+                  v-if="user.device_id"
+                  class="icon-button"
+                  type="button"
+                  :title="t('adminUsers.showSameDeviceAccounts')"
+                  :aria-label="t('adminUsers.showSameDeviceAccounts')"
+                  @click="showSameDeviceAccounts(user)"
+                >
+                  <Monitor :size="16" />
+                </button>
                 <button class="button small" type="button" :disabled="user.is_system_admin" @click="openPilotRoleDialog(user)">Роль</button>
                 <button
                   class="icon-button"
@@ -1894,6 +2099,10 @@ watch(() => pilotRoleForm.value.display_mode, (mode) => {
             <p>{{ detailDialogUser.login }} · #{{ formatPilotNumber(detailDialogUser.pilot_number) }}</p>
           </div>
           <div class="admin-user-details-head-actions">
+            <button v-if="detailDialogUser.device_id" class="button small" type="button" @click="showSameDeviceAccounts(detailDialogUser); closeUserDetails()">
+              <Monitor :size="15" />
+              {{ t('adminUsers.showSameDeviceAccounts') }}
+            </button>
             <button v-if="canEditFullAccount" class="button small" type="button" @click="editUserFromDetails">
               <Edit3 :size="15" />
               {{ t('common.edit') }}

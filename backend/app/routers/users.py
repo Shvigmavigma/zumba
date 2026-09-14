@@ -19,7 +19,7 @@ from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, is_
 from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, PilotRoleBadge, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamRaceRegistration, User, UserStatus, default_game_ratings
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
-from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, PilotRoleAssignmentUpdate, PilotRoleCreate, PilotRoleRead, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminRead, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
+from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, PilotRoleAssignmentUpdate, PilotRoleCreate, PilotRoleRead, PilotRoleUpdate, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminRead, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
 from app.security import hash_password, verify_password
 from app.services import recalculate_all_ratings, result_rows
 
@@ -544,6 +544,31 @@ async def upload_pilot_role_image(
         raise
     await session.refresh(role)
     remove_avatar_file(previous_image_url)
+    return role
+
+
+@router.patch("/admin/pilot-roles/{role_id}", response_model=PilotRoleRead)
+@limiter.limit("60/minute")
+async def update_pilot_role(
+    role_id: int,
+    payload: PilotRoleUpdate,
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    role = await session.get(PilotRoleBadge, role_id)
+    if role is None:
+        raise HTTPException(status_code=404, detail="Роль не найдена")
+    data = payload.model_dump(exclude_unset=True)
+    for field, value in data.items():
+        if value is not None:
+            setattr(role, field, value)
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="Такая роль уже существует") from exc
+    await session.refresh(role)
     return role
 
 

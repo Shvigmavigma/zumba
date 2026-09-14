@@ -3412,6 +3412,8 @@ textarea {
 .admin-user-details-head-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -5460,6 +5462,21 @@ textarea {
   color: var(--muted);
   font-size: var(--small-text-size);
   font-weight: 750;
+}
+
+.force-pilot-registration-search {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.force-pilot-registration-search .pill {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
 }
 
 .force-pilot-registration-fields {
@@ -17057,6 +17074,10 @@ body,
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .force-pilot-registration-search {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .race-results-table-wrap,
   .manual-results-table {
     -webkit-overflow-scrolling: touch;
@@ -18166,6 +18187,34 @@ body,
   margin-inline-start: auto;
 }
 
+.admin-pilot-role-row .icon-button + .icon-button {
+  margin-inline-start: 0;
+}
+
+.admin-pilot-role-edit-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(180px, 1fr) minmax(110px, 0.45fr);
+  gap: 12px;
+  align-items: end;
+  margin-block: 14px 18px;
+}
+
+.admin-pilot-role-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--control-radius);
+  background: var(--panel-muted);
+  margin-block-end: 18px;
+}
+
+.admin-pilot-role-preview .pilot-roles {
+  margin-inline-start: 0;
+}
+
 .admin-pilot-role-options {
   display: grid;
   gap: 8px;
@@ -18203,13 +18252,18 @@ body,
 }
 
 @media (max-width: 720px) {
-  .admin-pilot-role-create {
+  .admin-pilot-role-create,
+  .admin-pilot-role-edit-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (min-width: 721px) and (max-width: 1120px) {
   .admin-pilot-role-create {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-pilot-role-edit-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

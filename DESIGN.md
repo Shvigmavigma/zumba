@@ -145,6 +145,9 @@
 - 2026-09-10 — admin identity tools: the user list supports server-side criteria search (including a safe device-fingerprint prefix) and an administrator-only detail card. Password hashes and raw device cookies remain intentionally excluded from every response.
 - 2026-09-11 — system-administrator account editing: the detail card opens a full editor for mutable profile, role/status, team, ratings, race counters, restriction dates, visibility, and password-reset fields; secret hashes and raw device markers stay hidden or read-only.
 - 2026-09-11 — moderation identity signals: retain the existing HttpOnly browser marker and add a salted/HMAC client-IP fingerprint; expose only safe prefixes and separate cookie/IP account matches to administrators.
+- 2026-09-13 — timezone and device lookup: the shared timezone picker exposes the browser's complete IANA zone catalog (plus UTC aliases) while preserving Moscow as the default; administrator user rows and detail cards can filter directly to accounts sharing a safe device fingerprint.
+- 2026-09-13 — manual race result editing: staff can reopen the existing manual-entry form for a saved race, with current values prefilled and replaced on save; race output also shows each driver's qualifying best lap alongside the race best lap when qualification data exists.
+- 2026-09-13 — pilot role editing: administrators can edit a role's name, display mode, border colour, and cropped image without deleting the role record; assignments keep the same role ID, so every pilot who already has the role keeps it after edits.
 
 ## Non-Goals
 - No Figma sync
