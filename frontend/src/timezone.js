@@ -1,67 +1,49 @@
 import { state } from './store'
 
-const preferredShortLabels = {
-  UTC: 'UTC',
-  'Europe/Kyiv': 'Kyiv',
-  'Europe/Moscow': 'MSK',
-  'Asia/Yekaterinburg': 'YEKT',
-  'Asia/Almaty': 'ALM',
-  'Asia/Tashkent': 'TAS',
-  'Europe/London': 'LON',
-  'Europe/Berlin': 'BER',
-  'Africa/Cairo': 'CAI',
-  'Africa/Johannesburg': 'JNB',
-  'America/New_York': 'NYC',
-  'America/Chicago': 'CHI',
-  'America/Denver': 'DEN',
-  'America/Los_Angeles': 'LAX',
-  'America/Sao_Paulo': 'SAO',
-  'Asia/Dubai': 'DXB',
-  'Asia/Kolkata': 'DEL',
-  'Asia/Shanghai': 'SHA',
-  'Asia/Singapore': 'SIN',
-  'Asia/Tokyo': 'TYO',
-  'Asia/Seoul': 'SEL',
-  'Australia/Sydney': 'SYD',
-  'Pacific/Auckland': 'AKL'
-}
+// The picker intentionally exposes one fixed UTC offset for every hour from
+// -24 through +24.  JavaScript's IANA database does not contain all of those
+// offsets (and some offsets change with DST), so the fixed options use a small
+// `UTC+HH`/`UTC-HH` identifier and are formatted by the helpers below.
+const fixedUtcOffsets = Array.from({ length: 49 }, (_, index) => index - 24)
+  .filter((offset) => offset !== 3)
 
-const fallbackTimeZones = [
-  { value: 'UTC', shortLabel: 'UTC' },
-  { value: 'Europe/Kyiv', shortLabel: 'Kyiv' },
-  { value: 'Europe/Moscow', shortLabel: 'MSK' },
-  { value: 'Asia/Yekaterinburg', shortLabel: 'YEKT' },
-  { value: 'Asia/Almaty', shortLabel: 'ALM' },
-  { value: 'Asia/Tashkent', shortLabel: 'TAS' },
-  { value: 'Europe/London', shortLabel: 'LON' },
-  { value: 'Europe/Berlin', shortLabel: 'BER' },
-  { value: 'Africa/Cairo', shortLabel: 'CAI' },
-  { value: 'Africa/Johannesburg', shortLabel: 'JNB' },
-  { value: 'America/New_York', shortLabel: 'NYC' },
-  { value: 'America/Chicago', shortLabel: 'CHI' },
-  { value: 'America/Denver', shortLabel: 'DEN' },
-  { value: 'America/Los_Angeles', shortLabel: 'LAX' },
-  { value: 'America/Sao_Paulo', shortLabel: 'SAO' },
-  { value: 'Asia/Dubai', shortLabel: 'DXB' },
-  { value: 'Asia/Kolkata', shortLabel: 'DEL' },
-  { value: 'Asia/Shanghai', shortLabel: 'SHA' },
-  { value: 'Asia/Singapore', shortLabel: 'SIN' },
-  { value: 'Asia/Tokyo', shortLabel: 'TYO' },
-  { value: 'Asia/Seoul', shortLabel: 'SEL' },
-  { value: 'Australia/Sydney', shortLabel: 'SYD' },
-  { value: 'Pacific/Auckland', shortLabel: 'AKL' }
+const fixedTimeZoneOptions = fixedUtcOffsets.map((offset) => {
+  const sign = offset < 0 ? '-' : '+'
+  const hours = String(Math.abs(offset)).padStart(2, '0')
+  const value = `UTC${sign}${hours}`
+  return { value, shortLabel: value, label: value }
+})
+
+// Keep the two real +03 zones as separate choices, since Kyiv observes DST
+// while Moscow stays on UTC+03 year-round.
+const cityTimeZoneOptions = [
+  { value: 'Europe/Kyiv', shortLabel: 'Kyiv', label: 'Kyiv UTC+03' },
+  { value: 'Europe/Moscow', shortLabel: 'MSK', label: 'MSK UTC+03' }
 ]
 
-function availableTimeZones() {
-  let values = []
-  try {
-    values = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []
-  } catch {
-    values = []
-  }
-  const source = values.length ? [...values, ...Object.keys(preferredShortLabels)] : fallbackTimeZones.map((item) => item.value)
-  // Keep a few non-canonical UTC aliases available for users who need them.
-  return Array.from(new Set([...source, 'UTC', 'GMT', 'Etc/UTC', 'Etc/GMT'])).sort((left, right) => left.localeCompare(right))
+const supportedTimeZoneValues = new Set([
+  ...fixedTimeZoneOptions.map((item) => item.value),
+  ...cityTimeZoneOptions.map((item) => item.value)
+])
+
+function fixedOffsetMinutes(timeZone) {
+  const match = /^UTC([+-])(\d{2})(?::?(\d{2}))?$/.exec(timeZone || '')
+  if (!match) return null
+  const hours = Number(match[2])
+  const minutes = Number(match[3] || 0)
+  if (hours > 24 || minutes > 59 || (hours === 24 && minutes !== 0)) return null
+  const total = (hours * 60) + minutes
+  return match[1] === '-' ? -total : total
+}
+
+function dateForTimeZone(value, timeZone) {
+  const date = new Date(value)
+  const offset = fixedOffsetMinutes(timeZone)
+  return offset === null ? date : new Date(date.getTime() + (offset * 60 * 1000))
+}
+
+function formatterTimeZone(timeZone) {
+  return fixedOffsetMinutes(timeZone) === null ? timeZone : 'UTC'
 }
 
 function offsetLabel(timeZone) {
@@ -80,15 +62,20 @@ function offsetLabel(timeZone) {
   }
 }
 
-export const timeZoneOptions = availableTimeZones().map((value) => {
-  const shortLabel = preferredShortLabels[value]
-  const offset = offsetLabel(value)
-  return {
-    value,
-    shortLabel: shortLabel || value,
-    label: shortLabel ? `${shortLabel} ${offset}` : `${value}${offset ? ` ${offset}` : ''}`
-  }
-})
+const beforeKyivAndMoscow = fixedTimeZoneOptions.filter((item) => fixedOffsetMinutes(item.value) < 180)
+const afterKyivAndMoscow = fixedTimeZoneOptions.filter((item) => fixedOffsetMinutes(item.value) > 180)
+
+// Keep the list in chronological offset order, with the two +03 choices next
+// to each other instead of hiding them at the bottom of the select.
+export const timeZoneOptions = [
+  ...beforeKyivAndMoscow,
+  ...cityTimeZoneOptions,
+  ...afterKyivAndMoscow
+]
+
+export function isSupportedTimeZone(value) {
+  return supportedTimeZoneValues.has(value)
+}
 
 export function localeCode() {
   return state.locale === 'ru' ? 'ru-RU' : 'en-US'
@@ -100,11 +87,12 @@ export function activeTimeZone() {
 
 export function formatInTimeZone(value, options = {}) {
   if (!value) return ''
+  const timeZone = activeTimeZone()
   return new Intl.DateTimeFormat(localeCode(), {
-    timeZone: activeTimeZone(),
     hourCycle: 'h23',
-    ...options
-  }).format(new Date(value))
+    ...options,
+    timeZone: formatterTimeZone(timeZone)
+  }).format(dateForTimeZone(value, timeZone))
 }
 
 export function formatDateTime(value, options = {}) {
@@ -150,12 +138,13 @@ export function formatTimeOnly(value) {
 }
 
 export function dateKeyInTimeZone(value) {
+  const timeZone = activeTimeZone()
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: activeTimeZone(),
+    timeZone: formatterTimeZone(timeZone),
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'
-  }).formatToParts(new Date(value))
+  }).formatToParts(dateForTimeZone(value, timeZone))
   const data = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]))
   return `${data.year}-${data.month}-${data.day}`
 }

@@ -692,9 +692,9 @@ onBeforeUnmount(() => {
               @keydown.space.prevent="openRace(race, $event)"
             >
               <div class="main-race-date-tile">
-                <strong>{{ formatRaceDay(race.registration_start) }}</strong>
-                <span>{{ formatRaceMonth(race.registration_start) }}</span>
-                <small>{{ formatRaceTime(race.registration_start) }}</small>
+                <strong>{{ formatRaceDay(race.datetime_start) }}</strong>
+                <span>{{ formatRaceMonth(race.datetime_start) }}</span>
+                <small>{{ formatRaceTime(race.datetime_start) }}</small>
               </div>
 
               <div class="main-race-card-main">
@@ -740,9 +740,9 @@ onBeforeUnmount(() => {
               <div class="main-race-action-panel">
                 <span v-if="isRaceRegistered(race)" class="status-badge main-registered-badge">{{ t('main.registeredForRace') }}</span>
                 <span class="status-badge race-status-badge" :class="`race-status-${race.status}`">{{ statusLabel(t, race.status) }}</span>
-                <span class="main-race-fill">
-                  <small>{{ t('fields.raceTime') }}</small>
-                  <strong>{{ formatRaceDate(race.datetime_start) }}</strong>
+                <span class="main-race-registration-start">
+                  <small>{{ t('main.registrationFrom') }}</small>
+                  <strong>{{ formatRaceDate(race.registration_start) }}</strong>
                 </span>
                 <a v-if="isExternalRace(race)" class="button main-race-open" :href="raceOpenHref(race)" target="_blank" rel="noopener noreferrer">
                   <Eye :size="16" />
