@@ -1,5 +1,5 @@
 <script setup>
-import { Check, ChevronDown, Search } from 'lucide-vue-next'
+import { Check, ChevronDown, Search, SearchX } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -24,7 +24,27 @@ const props = defineProps({
     type: String,
     default: ''
   },
+  clearable: {
+    type: Boolean,
+    default: true
+  },
   emptyLabel: {
+    type: String,
+    default: ''
+  },
+  leadingIcon: {
+    type: Object,
+    default: null
+  },
+  panelWidth: {
+    type: Number,
+    default: null
+  },
+  panelClass: {
+    type: String,
+    default: ''
+  },
+  triggerAriaLabel: {
     type: String,
     default: ''
   }
@@ -92,11 +112,13 @@ function updatePanelPosition() {
 
   const gap = 6
   const top = rect.bottom + gap
+  const width = Math.min(props.panelWidth || rect.width, window.innerWidth - 24)
+  const left = Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12))
   const maxHeight = Math.max(180, Math.min(320, window.innerHeight - top - 12))
   panelStyle.value = {
-    left: `${rect.left}px`,
+    left: `${left}px`,
     top: `${top}px`,
-    width: `${rect.width}px`,
+    width: `${width}px`,
     maxHeight: `${maxHeight}px`
   }
 }
@@ -124,8 +146,9 @@ function openDropdown() {
   focusSearch()
 }
 
-function closeDropdown() {
+function closeDropdown(restoreFocus = false) {
   isOpen.value = false
+  if (restoreFocus) nextTick(() => root.value?.querySelector('button')?.focus())
 }
 
 function toggleDropdown() {
@@ -160,6 +183,7 @@ function moveActive(step) {
   nextTick(() => {
     const active = panel.value?.querySelector(`#${CSS.escape(optionId(activeIndex.value))}`)
     active?.scrollIntoView({ block: 'nearest' })
+    if (document.activeElement?.classList.contains('country-combobox-option')) active?.focus()
   })
 }
 
@@ -174,7 +198,8 @@ function handleKeydown(event) {
     event.preventDefault()
     choose(filteredOptions.value[activeIndex.value])
   } else if (event.key === 'Escape') {
-    closeDropdown()
+    event.preventDefault()
+    closeDropdown(true)
   }
 }
 
@@ -217,10 +242,13 @@ onBeforeUnmount(removeListeners)
     <button
       class="country-combobox-trigger"
       type="button"
+      :aria-label="triggerAriaLabel || selectedLabel"
+      aria-haspopup="dialog"
       :aria-expanded="isOpen"
       :aria-controls="listId"
       @click="toggleDropdown"
     >
+      <component :is="leadingIcon" v-if="leadingIcon" class="country-combobox-leading" :size="16" aria-hidden="true" />
       <span class="country-combobox-value" :class="{ 'is-placeholder': !selectedLabel }">
         {{ selectedLabel || placeholderText }}
       </span>
@@ -228,7 +256,7 @@ onBeforeUnmount(removeListeners)
     </button>
 
     <Teleport to="body">
-      <div v-if="isOpen" ref="panel" class="country-combobox-panel" :style="panelStyle">
+      <div v-if="isOpen" ref="panel" class="country-combobox-panel" :class="[panelClass, { 'has-clear': clearable && modelValue }]" :style="panelStyle" role="dialog" :aria-label="triggerAriaLabel || selectedLabel" @keydown="handleKeydown">
         <div class="country-combobox-search">
           <Search :size="16" />
           <input
@@ -236,11 +264,17 @@ onBeforeUnmount(removeListeners)
             v-model="query"
             type="search"
             autocomplete="off"
+            role="combobox"
+            aria-autocomplete="list"
+            :aria-label="searchPlaceholderText"
+            :aria-expanded="isOpen"
+            :aria-controls="listId"
+            :aria-activedescendant="filteredOptions.length ? optionId(activeIndex) : undefined"
             :placeholder="searchPlaceholderText"
           />
         </div>
         <button
-          v-if="modelValue"
+          v-if="clearable && modelValue"
           class="country-combobox-clear"
           type="button"
           @click="clearCountry"
@@ -251,20 +285,24 @@ onBeforeUnmount(removeListeners)
           <button
             v-for="(option, index) in filteredOptions"
             :id="optionId(index)"
-            :key="option.code"
+            :key="option.value"
             class="country-combobox-option"
             :class="{ 'is-active': index === activeIndex, 'is-selected': option.value === modelValue }"
             type="button"
             role="option"
             :aria-selected="option.value === modelValue"
             @mouseenter="activeIndex = index"
+            @focus="activeIndex = index"
             @click="choose(option)"
           >
             <span class="country-combobox-option-main">{{ option.label }}</span>
             <span class="country-combobox-option-code">{{ option.code?.length === 2 ? option.code : '' }}</span>
             <Check v-if="option.value === modelValue" :size="16" />
           </button>
-          <p v-if="!filteredOptions.length" class="country-combobox-empty">{{ emptyLabelText }}</p>
+          <div v-if="!filteredOptions.length" class="country-combobox-empty" role="status">
+            <SearchX :size="18" aria-hidden="true" />
+            <span>{{ emptyLabelText }}</span>
+          </div>
         </div>
       </div>
     </Teleport>

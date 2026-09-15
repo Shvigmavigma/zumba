@@ -108,7 +108,8 @@
 
 ## Components
 - `frontend/src/pages/AdminUserList.vue` — administration page with theme-specific logo, browser title/favicon, default-avatar, system-setting, per-user/per-IP rate-limit, and per-simulator rating controls (loading is represented by disabled upload actions; empty state uses bundled defaults).
-- `frontend/src/App.vue` — existing application shell, navigation, and theme-specific brand logo.
+- `frontend/src/App.vue` — existing application shell, navigation, theme-specific brand logo, and shared timezone picker.
+- `frontend/src/components/CountryCombobox.vue` — searchable, keyboard-navigable picker reused for the shared timezone selector, with compact trigger styling and a theme-aware list.
 - `frontend/src/components/ImageCropper.vue` — reusable fixed-ratio crop dialog for selected raster images.
 - `frontend/src/pages/MainMenu.vue` — main race filter bar with a compact native dropdown plus centred race time, in-card registration badge, and weather tooltip.
 - `frontend/src/components/RaceAssetsEditor.vue` — admin ACC car-model mapping rows with editable IDs, add/remove controls, and responsive collapse.
@@ -148,6 +149,7 @@
 - 2026-09-13 — timezone and device lookup: the shared timezone picker exposes the browser's complete IANA zone catalog (plus UTC aliases) while preserving Moscow as the default; administrator user rows and detail cards can filter directly to accounts sharing a safe device fingerprint.
 - 2026-09-13 — manual race result editing: staff can reopen the existing manual-entry form for a saved race, with current values prefilled and replaced on save; race output also shows each driver's qualifying best lap alongside the race best lap when qualification data exists.
 - 2026-09-13 — pilot role editing: administrators can edit a role's name, display mode, border colour, and cropped image without deleting the role record; assignments keep the same role ID, so every pilot who already has the role keeps it after edits.
+- 2026-09-15 — timezone picker search: preserve the compact shared toolbar trigger while using the existing searchable combobox for a themed, keyboard-navigable timezone list with an explicit no-results state.
 
 ## Non-Goals
 - No Figma sync

@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { CalendarDays, Calculator, Clock3, Flag, Home, Languages, ListChecks, LogIn, LogOut, Medal, Moon, MoreHorizontal, Newspaper, Shield, Sun, Trophy, User, Users, Vote } from 'lucide-vue-next'
+import CountryCombobox from './components/CountryCombobox.vue'
 import { api } from './api'
 import { statusLabel } from './i18nLabels'
 import { brandingSettings, ensureBrandingSettings } from './brandingSettings'
@@ -287,12 +288,20 @@ watch(navItems, () => {
           <Languages :size="18" />
           <span>{{ state.locale.toUpperCase() }}</span>
         </button>
-        <label class="timezone-picker" :title="t('common.timezone')">
-          <Clock3 :size="16" />
-          <select :value="state.timeZone" :aria-label="t('common.timezone')" @change="setTimeZone($event.target.value)">
-            <option v-for="option in timeZoneOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-          </select>
-        </label>
+        <CountryCombobox
+          class="timezone-picker"
+          panel-class="timezone-picker-panel"
+          :title="t('common.timezone')"
+          :model-value="state.timeZone"
+          :options="timeZoneOptions"
+          :leading-icon="Clock3"
+          :panel-width="300"
+          :clearable="false"
+          :trigger-aria-label="t('common.timezone')"
+          :search-placeholder="t('common.timezoneSearch')"
+          :empty-label="t('common.timezoneNoResults')"
+          @update:model-value="setTimeZone"
+        />
         <RouterLink v-if="!state.user" class="button small" to="/login"><LogIn :size="16" />{{ t('nav.login') }}</RouterLink>
         <RouterLink v-else class="button small" to="/profile">
           <User :size="16" />
