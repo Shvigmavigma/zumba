@@ -13798,19 +13798,6 @@ body,
   color: var(--brand-blue);
 }
 
-.timezone-picker select {
-  width: 54px;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 900;
-  outline: 0;
-}
-
 .main-registered-badge,
 .championship-user-badge,
 .main-championship-meta .pill.is-registered {
@@ -14069,11 +14056,6 @@ body,
 }
 
 @media (max-width: 680px) {
-  .timezone-picker {
-    max-width: 74px;
-    padding-inline: 10px;
-  }
-
   .main-menu-support {
     display: grid;
     justify-items: start;
@@ -14099,46 +14081,179 @@ body,
   }
 }
 
-/* Focused fixes: Twitch loading, race-card wrapping, timezone contrast */
+/* Focused fixes: Twitch loading, race-card wrapping, timezone picker */
 .timezone-picker {
+  position: relative;
+  flex: 0 0 auto;
+  width: auto;
   min-width: 136px;
-  background: color-mix(in srgb, var(--panel) 96%, var(--brand-blue) 4%);
+  max-width: none;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
 }
 
-.timezone-picker select {
+.timezone-picker:hover {
+  border-color: color-mix(in srgb, var(--brand-blue) 48%, var(--border));
+}
+
+.timezone-picker .country-combobox-trigger {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: calc(var(--control-height-small) - 2px);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  text-align: left;
+  box-shadow: none;
+}
+
+.timezone-picker .country-combobox-trigger:hover {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.timezone-picker .country-combobox-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand-blue) 45%, transparent);
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+
+.timezone-picker .country-combobox-leading {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--brand-blue);
+}
+
+.timezone-picker .country-combobox-value {
   width: 104px;
-  min-height: 28px;
-  appearance: none;
-  -webkit-appearance: none;
-  color-scheme: light;
-  background:
-    linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 9px) 50% / 5px 5px no-repeat,
-    linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 5px) 50% / 5px 5px no-repeat;
+  padding-right: 16px;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
 }
 
-.timezone-picker select option {
-  background: var(--panel);
+.timezone-picker .country-combobox-chevron {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  translate: 0 -50%;
+  width: 14px;
+  height: 14px;
+  color: var(--brand-blue);
+}
+
+.timezone-picker.is-open {
+  border-color: color-mix(in srgb, var(--brand-blue) 52%, var(--border));
+}
+
+.timezone-picker-panel {
+  gap: 8px;
+  padding: 10px;
+  border-color: color-mix(in srgb, var(--brand-blue) 26%, var(--border));
+  border-radius: 18px;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--panel-shine) 82%, transparent),
+    color-mix(in srgb, var(--panel) 97%, var(--panel-muted)));
+  box-shadow: 0 18px 48px rgba(9, 22, 44, 0.22), 0 4px 14px color-mix(in srgb, var(--brand-blue) 10%, transparent);
+  backdrop-filter: blur(16px);
+}
+
+.timezone-picker-panel:not(.has-clear) {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.timezone-picker-panel .country-combobox-search input {
+  height: 42px;
+  padding-left: 36px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel-muted) 48%, var(--panel));
+  font-size: 14px;
+}
+
+.timezone-picker-panel .country-combobox-list {
+  gap: 4px;
+  padding: 2px;
+}
+
+.timezone-picker-panel .country-combobox-option {
+  grid-template-columns: minmax(0, 1fr) 18px;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+
+.timezone-picker-panel .country-combobox-option-main {
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.timezone-picker-panel .country-combobox-option:hover,
+.timezone-picker-panel .country-combobox-option.is-active {
+  border-color: color-mix(in srgb, var(--brand-blue) 22%, transparent);
+  background: color-mix(in srgb, var(--brand-blue) 8%, var(--panel));
+}
+
+.timezone-picker-panel .country-combobox-option.is-selected {
+  border-color: color-mix(in srgb, var(--brand-blue) 34%, var(--border));
+  background: color-mix(in srgb, var(--brand-blue) 13%, var(--panel));
+  color: var(--primary-strong);
+}
+
+.timezone-picker-panel .country-combobox-option:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand-blue) 40%, transparent);
+  outline-offset: 1px;
+}
+
+.timezone-picker-panel .country-combobox-option svg {
+  color: var(--brand-blue);
+}
+
+.timezone-picker-panel .country-combobox-empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 24px 12px;
+}
+
+.timezone-picker-panel .country-combobox-empty svg {
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .timezone-picker .country-combobox-trigger {
+  background: transparent;
+  color: var(--text);
+  box-shadow: none;
+}
+
+:root[data-theme='dark'] .timezone-picker-panel {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--panel-shine) 46%, var(--panel)),
+    color-mix(in srgb, var(--panel) 96%, var(--panel-muted)));
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.46), 0 3px 14px color-mix(in srgb, var(--brand-blue) 12%, transparent);
+}
+
+:root[data-theme='dark'] .timezone-picker-panel .country-combobox-search input {
+  background: #07101d;
   color: var(--text);
 }
 
-:root[data-theme='dark'] .timezone-picker {
-  border-color: color-mix(in srgb, var(--brand-blue) 42%, var(--border));
-  background: #061226;
-  color: #ffffff;
-}
-
-:root[data-theme='dark'] .timezone-picker select {
-  color: #ffffff;
-  color-scheme: dark;
-  background:
-    linear-gradient(45deg, transparent 50%, #ffffff 50%) calc(100% - 9px) 50% / 5px 5px no-repeat,
-    linear-gradient(135deg, #ffffff 50%, transparent 50%) calc(100% - 5px) 50% / 5px 5px no-repeat,
-    #061226;
-}
-
-:root[data-theme='dark'] .timezone-picker select option {
-  background: #061226;
-  color: #ffffff;
+@media (prefers-reduced-motion: reduce) {
+  .timezone-picker {
+    transition: none;
+  }
 }
 
 .twitch-floating-widget {
@@ -14379,7 +14494,7 @@ body,
     min-width: 124px;
   }
 
-  .timezone-picker select {
+  .timezone-picker .country-combobox-value {
     width: 92px;
   }
 
@@ -17101,7 +17216,7 @@ body,
     min-width: 96px;
   }
 
-  .timezone-picker select {
+  .timezone-picker .country-combobox-value {
     width: 64px;
   }
 
