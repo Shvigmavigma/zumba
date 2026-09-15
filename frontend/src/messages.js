@@ -250,6 +250,7 @@ export const messages = {
       topDonations: 'Топ донатов',
       noTopDonations: 'Топ донатов пока пуст',
       registeredForRace: 'Вы зарегистрированы',
+      registrationFrom: 'Регистрация от:',
       championshipOpen: 'Открыта регистрация на чемпионат',
       championshipCta: 'Перейти',
       championshipStages: '{count} этапов'
@@ -1136,6 +1137,7 @@ export const messages = {
       topDonations: 'Top donations',
       noTopDonations: 'No top donations yet',
       registeredForRace: 'You are registered',
+      registrationFrom: 'Registration from:',
       championshipOpen: 'Championship registration is open',
       championshipCta: 'Open',
       championshipStages: '{count} stages'
