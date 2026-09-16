@@ -222,7 +222,16 @@ const raceOverviewFacts = computed(() => {
       key: 'participants',
       label: currentRace.is_team_event ? t('raceDetails.teams') : t('raceDetails.participants'),
       value: `${count} / ${Number.isFinite(capacity) ? capacity : '—'}`
-    }] : [])
+    }] : []),
+    {
+      key: 'sessionTimes',
+      label: t('raceDetails.sessionDistribution'),
+      sessions: [
+        { key: 'practice', label: t('raceDetails.practice'), value: formatSessionTime(currentRace.practice_start_time, currentRace.practice_end_time) },
+        { key: 'qualification', label: t('fields.qualification'), value: formatSessionTime(currentRace.qualification_start_time, currentRace.qualification_end_time) },
+        { key: 'race', label: t('raceDetails.raceSession'), value: formatSessionTime(currentRace.race_session_start_time, currentRace.race_session_end_time) }
+      ]
+    }
   ]
 })
 const activeResultRows = computed(() => (resultsTab.value === 'qualification' ? qualificationRows.value : resultRows.value))
@@ -291,6 +300,10 @@ function formatDate(value) {
 
 function raceFactPanelId(key) {
   return `race-overview-${race.value?.id || 'race'}-${key}`
+}
+
+function formatSessionTime(start, end) {
+  return start && end ? `${String(start).slice(0, 5)} - ${String(end).slice(0, 5)}` : '—'
 }
 
 function toggleRaceFact(key) {
@@ -415,6 +428,14 @@ function participantSubtitle(item) {
 function participantHref(item) {
   const userId = Number(item?.user_id || item?.id)
   return Number.isInteger(userId) && userId > 0 ? `/pilots/${userId}` : ''
+}
+
+function isCurrentUser(userId) {
+  return Number(userId) === Number(state.user?.id)
+}
+
+function teamIncludesCurrentUser(team) {
+  return (team?.drivers || []).some((driver) => isCurrentUser(driver.user_id))
 }
 
 function modHref(value) {
@@ -1255,7 +1276,7 @@ watch(visibleParticipants, () => {
           </template>
         </div>
 
-        <div class="race-hero-overview" :class="{ 'weather-details-expanded': weatherDetailsOpen, 'has-two-facts': raceOverviewFacts.length === 2 }">
+        <div class="race-hero-overview" :class="{ 'weather-details-expanded': weatherDetailsOpen, 'has-two-facts': raceOverviewFacts.length === 2, 'has-four-facts': raceOverviewFacts.length === 4 }">
           <section class="race-hero-weather" :class="{ 'is-collapsed': collapsedRaceFacts.weather }">
             <button
               class="race-overview-toggle race-weather-card-toggle"
@@ -1319,7 +1340,13 @@ watch(visibleParticipants, () => {
                 <ChevronDown v-else :size="16" />
               </button>
               <div :id="raceFactPanelId(fact.key)" v-show="!collapsedRaceFacts[fact.key]" class="race-overview-fact-value">
-                <strong>{{ fact.value }}</strong>
+                <div v-if="fact.sessions" class="race-session-fact-list">
+                  <div v-for="session in fact.sessions" :key="session.key">
+                    <span>{{ session.label }}</span>
+                    <strong>{{ session.value }}</strong>
+                  </div>
+                </div>
+                <strong v-else>{{ fact.value }}</strong>
               </div>
             </article>
           </div>
@@ -1548,7 +1575,7 @@ watch(visibleParticipants, () => {
               </div>
             </div>
             <div class="race-participant-list">
-              <article v-for="member in selectedTeamDriverMembers()" :key="`selected-team-driver-${member.id}`" class="race-participant-row">
+              <article v-for="member in selectedTeamDriverMembers()" :key="`selected-team-driver-${member.id}`" class="race-participant-row" :class="{ 'is-current-user': isCurrentUser(member.id) }">
                 <UserAvatar class="pilot-avatar-slot" :src="member.avatar_url" :color="member.avatar_color" :label="teamMemberName(member)" />
                 <div class="race-participant-main">
                   <span class="user-name-line"><strong>{{ teamMemberName(member) }}</strong><PilotRoles :roles="member.pilot_roles" /></span>
@@ -1747,7 +1774,7 @@ watch(visibleParticipants, () => {
         </div>
 
         <div v-if="participantsExpanded && race.is_team_event && teamRegistrations.length" class="race-participant-list">
-          <article v-for="item in teamRegistrations" :key="item.id" class="race-participant-row race-team-registration-row">
+          <article v-for="item in teamRegistrations" :key="item.id" class="race-participant-row race-team-registration-row" :class="{ 'is-current-user': teamIncludesCurrentUser(item) }">
             <UserAvatar class="pilot-avatar-slot" :src="item.team_avatar_url" :color="item.team_avatar_color" :label="item.team_name" />
             <div class="race-participant-main">
               <strong>{{ item.team_name }} <span v-if="item.team_abbreviation">({{ item.team_abbreviation }})</span></strong>
@@ -1765,7 +1792,7 @@ watch(visibleParticipants, () => {
         </div>
 
         <div v-else-if="participantsExpanded && visibleParticipants.length" class="race-participant-list">
-          <article v-for="item in pagedParticipants" :key="item.user_id" class="race-participant-row" :class="{ 'has-registration-action': canRemovePilotRegistration }">
+          <article v-for="item in pagedParticipants" :key="item.user_id" class="race-participant-row" :class="{ 'has-registration-action': canRemovePilotRegistration, 'is-current-user': isCurrentUser(item.user_id) }">
             <UserAvatar class="pilot-avatar-slot" :src="item.avatar_url" :color="item.avatar_color" :label="participantName(item)" />
             <div class="race-participant-main">
               <span class="user-name-line">
@@ -3409,6 +3436,10 @@ watch(visibleParticipants, () => {
   min-width: 0;
 }
 
+.race-details-page .race-hero-overview.has-four-facts .race-overview-facts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .race-details-page .race-hero-overview.has-two-facts .race-overview-facts {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -3421,6 +3452,33 @@ watch(visibleParticipants, () => {
   display: flex;
   min-height: 92px;
   flex-direction: column;
+}
+
+.race-details-page .race-session-fact-list {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 1px 10px 8px;
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.race-details-page .race-session-fact-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+.race-details-page .race-session-fact-list span {
+  min-width: 0;
+  color: #b9d1f5;
+}
+
+.race-details-page .race-session-fact-list strong {
+  flex: 0 0 auto;
+  color: #f4f7ff;
+  font-variant-numeric: tabular-nums;
 }
 
 .race-details-page .race-overview-toggle {
@@ -4059,6 +4117,15 @@ watch(visibleParticipants, () => {
 .race-details-page .race-registration-panel .button.primary.race-register-button:hover:not(:disabled) {
   border-color: #075f3b;
   background: #075f3b;
+}
+
+.race-details-page .race-participant-row.is-current-user,
+.race-details-page .race-participant-row.is-current-user:hover {
+  border-color: color-mix(in srgb, var(--brand-blue) 54%, var(--border));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--brand-blue) 12%, transparent), transparent 72%),
+    var(--panel);
+  box-shadow: inset 3px 0 0 var(--brand-blue);
 }
 
 @media (min-width: 681px) {

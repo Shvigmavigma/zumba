@@ -30,6 +30,12 @@ const form = ref({
   registration_start: '',
   datetime_start: '',
   datetime_end: '',
+  practice_start_time: '',
+  practice_end_time: '',
+  qualification_start_time: '',
+  qualification_end_time: '',
+  race_session_start_time: '',
+  race_session_end_time: '',
   max_pilots: 32,
   car_class: '',
   track: '',
@@ -68,6 +74,11 @@ const weatherConditions = computed(() => [
   { key: 'heavy_rain', label: t('weather.heavyRain') },
   { key: 'storm', label: t('weather.storm') }
 ])
+const sessionTimeFields = computed(() => [
+  { key: 'practice', label: t('raceEdit.practice'), start: 'practice_start_time', end: 'practice_end_time' },
+  { key: 'qualification', label: t('raceEdit.qualification'), start: 'qualification_start_time', end: 'qualification_end_time' },
+  { key: 'race', label: t('raceEdit.race'), start: 'race_session_start_time', end: 'race_session_end_time' }
+])
 
 function withCurrent(items, current) {
   if (!current || items.includes(current)) return items
@@ -88,6 +99,10 @@ function toIso(value) {
 
 function optionalIso(value) {
   return value ? toIso(value) : null
+}
+
+function timeField(value) {
+  return value ? String(value).slice(0, 5) : ''
 }
 
 function applyAssetDefaults({ forceCars = false } = {}) {
@@ -142,6 +157,12 @@ async function submit() {
       registration_start: toIso(form.value.registration_start),
       datetime_start: toIso(form.value.datetime_start),
       datetime_end: toIso(form.value.datetime_end),
+      practice_start_time: form.value.practice_start_time || null,
+      practice_end_time: form.value.practice_end_time || null,
+      qualification_start_time: form.value.qualification_start_time || null,
+      qualification_end_time: form.value.qualification_end_time || null,
+      race_session_start_time: form.value.race_session_start_time || null,
+      race_session_end_time: form.value.race_session_end_time || null,
       lmu_results_at: isLmuRace.value ? optionalIso(form.value.lmu_results_at || form.value.datetime_start) : null,
       max_pilots: isLmuRace.value ? 1 : form.value.max_pilots,
       track: form.value.track,
@@ -173,6 +194,12 @@ onMounted(async () => {
     registration_start: race.registration_start.slice(0, 16),
     datetime_start: race.datetime_start.slice(0, 16),
     datetime_end: race.datetime_end.slice(0, 16),
+    practice_start_time: timeField(race.practice_start_time),
+    practice_end_time: timeField(race.practice_end_time),
+    qualification_start_time: timeField(race.qualification_start_time),
+    qualification_end_time: timeField(race.qualification_end_time),
+    race_session_start_time: timeField(race.race_session_start_time),
+    race_session_end_time: timeField(race.race_session_end_time),
     lmu_results_at: race.lmu_results_at ? race.lmu_results_at.slice(0, 16) : ''
   }
   modsText.value = race.mods_pack?.join('\n') || ''
@@ -220,6 +247,24 @@ onMounted(async () => {
         </label>
       </section>
       <label class="field"><span>{{ t('fields.raceTime') }}</span><input v-model="form.datetime_start" type="datetime-local" required /></label>
+      <section class="race-session-times-editor">
+        <div class="section-header compact">
+          <div><h3>{{ t('raceEdit.sessionTimes') }}</h3></div>
+        </div>
+        <div class="race-session-time-grid">
+          <div v-for="session in sessionTimeFields" :key="session.key" class="race-session-time-row">
+            <strong>{{ session.label }}</strong>
+            <label class="field">
+              <span>{{ t('raceEdit.sessionStart') }}</span>
+              <input v-model="form[session.start]" type="time" />
+            </label>
+            <label class="field">
+              <span>{{ t('raceEdit.sessionEnd') }}</span>
+              <input v-model="form[session.end]" type="time" />
+            </label>
+          </div>
+        </div>
+      </section>
       <section class="race-weather-editor">
         <div class="section-header compact">
           <div>

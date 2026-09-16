@@ -210,7 +210,8 @@ async def upsert_demo_accounts(session: AsyncSession) -> None:
         user.first_name = account["first_name"]
         user.last_name = account["last_name"]
         user.nickname = account["nickname"]
-        user.pilot_number = account["pilot_number"]
+        if user.pilot_number is None:
+            user.pilot_number = account["pilot_number"]
         user.country = account.get("country", "Global")
         user.sr = account["sr"]
         user.discord = None

@@ -52,6 +52,8 @@ docker compose up -d --force-recreate backend web
 docker compose up --build -d
 ```
 
+Эта команда пересобирает и обновляет контейнеры, сохраняя данные пилотов и их номера в постоянном томе PostgreSQL `postgres_data`. Не запускайте `docker compose down -v` при обычном обновлении: флаг `-v` удалит базу данных.
+
 Проверка:
 
 ```bash

@@ -14454,6 +14454,41 @@ body,
   margin: 0;
 }
 
+.race-session-times-editor {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--brand-blue) 25%, var(--border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 92%, var(--brand-blue) 8%);
+}
+
+.race-session-times-editor .section-header {
+  margin: 0;
+}
+
+.race-session-times-editor .section-header h3 {
+  margin: 0;
+}
+
+.race-session-time-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.race-session-time-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.6fr) repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.race-session-time-row > strong {
+  align-self: center;
+}
+
 .race-weather-editor .section-header {
   margin: 0;
 }
@@ -14471,6 +14506,18 @@ body,
 @media (max-width: 900px) {
   .race-weather-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .race-session-time-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-session-time-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .race-session-time-row > strong {
+    grid-column: 1 / -1;
   }
 }
 
@@ -18611,4 +18658,13 @@ body,
   .main-races-section .main-race-action-panel {
     padding: 10px;
   }
+}
+
+.pilot-roster-row.is-current-user,
+.pilot-roster-row.is-current-user:hover {
+  border-color: color-mix(in srgb, var(--brand-blue) 54%, var(--border));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--brand-blue) 12%, transparent), transparent 72%),
+    var(--panel);
+  box-shadow: inset 3px 0 0 var(--brand-blue);
 }

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from enum import StrEnum
 
 from sqlalchemy import (
@@ -12,6 +12,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Table,
+    Time,
     Text,
     UniqueConstraint,
     text,
@@ -376,6 +377,12 @@ class Race(Base):
     registration_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, default=utc_now, server_default=text("CURRENT_TIMESTAMP"))
     datetime_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     datetime_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    practice_start_time: Mapped[time | None] = mapped_column(Time)
+    practice_end_time: Mapped[time | None] = mapped_column(Time)
+    qualification_start_time: Mapped[time | None] = mapped_column(Time)
+    qualification_end_time: Mapped[time | None] = mapped_column(Time)
+    race_session_start_time: Mapped[time | None] = mapped_column(Time)
+    race_session_end_time: Mapped[time | None] = mapped_column(Time)
     max_pilots: Mapped[int] = mapped_column(Integer)
     car_class: Mapped[str] = mapped_column("class", String(50), index=True)
     track: Mapped[str] = mapped_column(String(100), index=True)

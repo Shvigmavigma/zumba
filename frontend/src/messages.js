@@ -645,6 +645,9 @@ export const messages = {
       collapseParticipants: 'Свернуть участников',
       expandRaceFact: 'Развернуть: {label}',
       collapseRaceFact: 'Свернуть: {label}',
+      sessionDistribution: 'Распределение времени',
+      practice: 'Практика',
+      raceSession: 'Гонка',
       myPenalties: 'Мои штрафы',
       penalties: 'Штрафы гонки',
       penaltiesCount: 'Штрафов: {count}',
@@ -742,7 +745,13 @@ export const messages = {
     },
     raceEdit: {
       createTitle: 'Создание гонки',
-      editTitle: 'Редактирование гонки'
+      editTitle: 'Редактирование гонки',
+      sessionTimes: 'Распределение времени',
+      practice: 'Практика',
+      qualification: 'Квалификация',
+      race: 'Гонка',
+      sessionStart: 'Начало',
+      sessionEnd: 'Окончание'
     },
     raceAssets: {
       manageTitle: 'Управление трассами',
@@ -1571,6 +1580,9 @@ export const messages = {
       collapseParticipants: 'Collapse participants',
       expandRaceFact: 'Expand: {label}',
       collapseRaceFact: 'Collapse: {label}',
+      sessionDistribution: 'Session schedule',
+      practice: 'Practice',
+      raceSession: 'Race',
       myPenalties: 'My penalties',
       penalties: 'Race penalties',
       penaltiesCount: '{count} penalties',
@@ -1668,7 +1680,13 @@ export const messages = {
     },
     raceEdit: {
       createTitle: 'Create race',
-      editTitle: 'Edit race'
+      editTitle: 'Edit race',
+      sessionTimes: 'Session schedule',
+      practice: 'Practice',
+      qualification: 'Qualifying',
+      race: 'Race',
+      sessionStart: 'Start',
+      sessionEnd: 'End'
     },
     raceAssets: {
       manageTitle: 'Track management',

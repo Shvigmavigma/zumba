@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 import re
 from typing import Any, Literal
 
@@ -528,6 +528,12 @@ class RaceBase(BaseModel):
     registration_start: datetime
     datetime_start: datetime
     datetime_end: datetime
+    practice_start_time: time | None = None
+    practice_end_time: time | None = None
+    qualification_start_time: time | None = None
+    qualification_end_time: time | None = None
+    race_session_start_time: time | None = None
+    race_session_end_time: time | None = None
     max_pilots: int = Field(ge=1, le=500)
     car_class: str = Field(min_length=1, max_length=50)
     track: str = Field(min_length=1, max_length=100)
@@ -683,6 +689,12 @@ class RaceUpdate(BaseModel):
     registration_start: datetime | None = None
     datetime_start: datetime | None = None
     datetime_end: datetime | None = None
+    practice_start_time: time | None = None
+    practice_end_time: time | None = None
+    qualification_start_time: time | None = None
+    qualification_end_time: time | None = None
+    race_session_start_time: time | None = None
+    race_session_end_time: time | None = None
     max_pilots: int | None = Field(default=None, ge=1, le=500)
     car_class: str | None = Field(default=None, max_length=50)
     track: str | None = Field(default=None, max_length=100)
