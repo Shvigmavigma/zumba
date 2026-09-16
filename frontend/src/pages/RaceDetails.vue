@@ -3457,6 +3457,7 @@ watch(visibleParticipants, () => {
 .race-details-page .race-session-fact-list {
   display: grid;
   gap: 3px;
+  width: 100%;
   min-width: 0;
   padding: 1px 10px 8px;
   font-size: 11px;
