@@ -4,6 +4,7 @@ import csv
 import io
 import zipfile
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from xml.etree import ElementTree as ET
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
@@ -15,11 +16,11 @@ from app.avatar_uploads import ensure_avatar_upload_allowed, mark_avatar_uploade
 from app.config import get_settings
 from app.database_backup import create_database_backup
 from app.db import get_session
-from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, is_system_admin, require_admin, require_moder_plus, require_pilot_plus, require_system_admin
-from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, PilotRoleBadge, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamRaceRegistration, User, UserStatus, default_game_ratings
+from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, get_current_user, is_system_admin, require_admin, require_moder_plus, require_pilot_plus, require_system_admin
+from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, PilotRoleBadge, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamRaceRegistration, User, UserStatus, default_game_ratings, utc_now
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
-from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, PilotRoleAssignmentUpdate, PilotRoleCreate, PilotRoleRead, PilotRoleUpdate, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminRead, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
+from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, ModerationRejectRequest, PilotRoleAssignmentUpdate, PilotRoleCreate, PilotRoleRead, PilotRoleUpdate, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminRead, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
 from app.security import hash_password, verify_password
 from app.services import recalculate_all_ratings, result_rows
 
@@ -103,7 +104,23 @@ def parse_steam_blacklist_rows(raw: bytes, filename: str | None) -> tuple[list[t
     return entries, errors
 
 
-def add_moderation_history(session: AsyncSession, user: User, request_type: str, resolution: str, resolved_by: int) -> None:
+def moderation_request_snapshot(user: User, request_type: str, *, include_private: bool = False) -> dict:
+    if request_type == "profile":
+        return dict(user.pending_profile_changes) if isinstance(user.pending_profile_changes, dict) else {}
+    fields = ["login", "first_name", "last_name", "nickname", "pilot_number", "country", "discord", "games", "favorite_car", "avatar_color"]
+    if include_private:
+        fields.insert(1, "email")
+    return {field: getattr(user, field) for field in fields}
+
+
+def add_moderation_history(
+    session: AsyncSession,
+    user: User,
+    request_type: str,
+    resolution: str,
+    resolved_by: int,
+    rejection_reason: str | None = None,
+) -> None:
     session.add(
         ModerationHistory(
             user_id=user.id,
@@ -119,6 +136,8 @@ def add_moderation_history(session: AsyncSession, user: User, request_type: str,
             device_label=user.device_label,
             ip_fingerprint=user.ip_fingerprint,
             pending_profile_changes=dict(user.pending_profile_changes) if isinstance(user.pending_profile_changes, dict) else None,
+            rejection_reason=rejection_reason,
+            request_snapshot=moderation_request_snapshot(user, request_type),
             resolved_by=resolved_by,
         )
     )
@@ -389,6 +408,10 @@ async def moderation_history(
         data = ModerationHistoryRead.model_validate(row).model_dump()
         if moderator.role != Role.admin:
             data["steam_id"] = None
+            if isinstance(data["pending_profile_changes"], dict):
+                data["pending_profile_changes"] = {key: value for key, value in data["pending_profile_changes"].items() if key != "email"}
+            if isinstance(data["request_snapshot"], dict):
+                data["request_snapshot"] = {key: value for key, value in data["request_snapshot"].items() if key != "email"}
         else:
             data["device_label"] = row.device_label
             data["device_id"] = device_id_preview(row.device_fingerprint)
@@ -968,6 +991,52 @@ async def update_me(
     return user_response(user, team_name, team_abbreviation, private=True)
 
 
+@router.delete("/me/rejection", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/minute")
+async def dismiss_profile_rejection(
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if not isinstance(user.last_rejection, dict) or user.last_rejection.get("request_type") != "profile":
+        raise HTTPException(status_code=404, detail="No rejected profile change to dismiss")
+    user.last_rejection = None
+    await session.commit()
+
+
+@router.post("/me/resubmit-registration", response_model=UserPrivate)
+@limiter.limit("3/minute")
+async def resubmit_registration(
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if user.status != UserStatus.rejected or not isinstance(user.last_rejection, dict):
+        raise HTTPException(status_code=400, detail="There is no rejected registration to resubmit")
+    if user.last_rejection.get("request_type") != "registration":
+        raise HTTPException(status_code=400, detail="Only a rejected registration can be resubmitted")
+
+    available_at_value = user.last_rejection.get("resubmit_after")
+    try:
+        available_at = datetime.fromisoformat(available_at_value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=409, detail="Registration resubmission time is unavailable")
+    if available_at.tzinfo is None:
+        available_at = available_at.replace(tzinfo=timezone.utc)
+    now = utc_now()
+    if now < available_at:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Registration can be resubmitted after {available_at.isoformat()}",
+        )
+
+    user.status = UserStatus.unapproved
+    await session.commit()
+    await session.refresh(user)
+    team_name, team_abbreviation = await user_team_info(session, user)
+    return user_response(user, team_name, team_abbreviation, private=True)
+
+
 @router.post("/me/avatar", response_model=UserPrivate)
 @limiter.limit("20/minute")
 async def upload_my_avatar(
@@ -1163,25 +1232,47 @@ async def approve_user(user_id: int, request: Request, moderator: User = Depends
     return user
 
 
-@router.delete("/{user_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/{user_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("3/minute")
-async def reject_user(user_id: int, request: Request, moderator: User = Depends(require_moder_plus), session: AsyncSession = Depends(get_session)):
+async def reject_user(
+    user_id: int,
+    payload: ModerationRejectRequest,
+    request: Request,
+    moderator: User = Depends(require_moder_plus),
+    session: AsyncSession = Depends(get_session),
+):
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     ensure_not_system_admin(user)
-    avatar_url = user.avatar_url
     if user.status == UserStatus.unapproved:
-        add_moderation_history(session, user, "registration", "rejected", moderator.id)
-        await session.delete(user)
+        request_type = "registration"
     elif user.pending_profile_changes is not None:
-        add_moderation_history(session, user, "profile", "rejected", moderator.id)
-        user.pending_profile_changes = None
+        request_type = "profile"
     else:
         raise HTTPException(status_code=400, detail="No registration or profile change to reject")
+
+    rejected_at = utc_now()
+    add_moderation_history(
+        session,
+        user,
+        request_type,
+        "rejected",
+        moderator.id,
+        rejection_reason=payload.reason,
+    )
+    user.last_rejection = {
+        "request_type": request_type,
+        "reason": payload.reason,
+        "request_snapshot": moderation_request_snapshot(user, request_type, include_private=True),
+        "rejected_at": rejected_at.isoformat(),
+        "resubmit_after": (rejected_at + timedelta(hours=24)).isoformat() if request_type == "registration" else None,
+    }
+    if request_type == "registration":
+        user.status = UserStatus.rejected
+    else:
+        user.pending_profile_changes = None
     await session.commit()
-    if user.status == UserStatus.unapproved:
-        remove_avatar_file(avatar_url)
 
 
 @router.delete("/{user_id}/moderation", status_code=status.HTTP_204_NO_CONTENT)

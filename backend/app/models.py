@@ -74,6 +74,7 @@ class UserStatus(StrEnum):
     banned = "banned"
     timeout = "timeout"
     unapproved = "unapproved"
+    rejected = "rejected"
 
 
 class RaceStatus(StrEnum):
@@ -176,6 +177,7 @@ class User(Base):
     # JSONB's default serializer otherwise turns Python None into a JSON value,
     # which still matches ``IS NOT NULL`` filters.
     pending_profile_changes: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
+    last_rejection: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
 
     created_races: Mapped[list["Race"]] = relationship(back_populates="creator", foreign_keys="Race.creator_id")
     team: Mapped["Team | None"] = relationship(back_populates="members", foreign_keys=[team_id])
@@ -234,6 +236,8 @@ class ModerationHistory(Base):
     device_label: Mapped[str | None] = mapped_column(String(120))
     ip_fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
     pending_profile_changes: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
+    request_snapshot: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)

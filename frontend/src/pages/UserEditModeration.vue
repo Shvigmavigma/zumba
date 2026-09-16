@@ -17,6 +17,8 @@ const error = ref('')
 const viewMode = ref('current')
 const page = ref(1)
 const selectedUser = ref(null)
+const rejectingUser = ref(null)
+const rejectionReason = ref('')
 const pageSize = 8
 const visibleItems = computed(() => viewMode.value === 'current' ? users.value : history.value)
 const totalPages = computed(() => Math.max(1, Math.ceil(visibleItems.value.length / pageSize)))
@@ -139,13 +141,35 @@ async function approve(user) {
   }
 }
 
-async function reject(user) {
+function reject(user) {
+  rejectingUser.value = user
+  rejectionReason.value = ''
+  error.value = ''
+}
+
+async function confirmReject() {
+  if (!rejectingUser.value || !rejectionReason.value.trim()) {
+    error.value = t('moderation.rejectReasonRequired')
+    return
+  }
   try {
-    await api(`/users/${user.id}/reject`, { method: 'DELETE' })
-    users.value = users.value.filter((item) => item.id !== user.id)
+    await api(`/users/${rejectingUser.value.id}/reject`, {
+      method: 'POST',
+      body: { reason: rejectionReason.value.trim() }
+    })
+    users.value = users.value.filter((item) => item.id !== rejectingUser.value.id)
+    rejectingUser.value = null
+    rejectionReason.value = ''
+    error.value = ''
   } catch (err) {
     error.value = err.message
   }
+}
+
+function closeRejectDialog() {
+  rejectingUser.value = null
+  rejectionReason.value = ''
+  error.value = ''
 }
 
 async function deleteRequest(user) {
@@ -282,6 +306,7 @@ watch([users, history, viewMode], () => {
             <span v-if="request.ip_id" class="moderation-device-match">{{ t('moderation.ipId') }}: {{ request.ip_id }}</span>
           </div>
           <p class="muted">{{ t(`moderation.requestTypes.${request.request_type}`) }} · {{ t('moderation.resolvedAt', { date: formatHistoryDate(request.resolved_at) }) }}</p>
+          <p v-if="request.rejection_reason" class="moderation-rejection-reason">{{ t('moderation.rejectionReason', { reason: request.rejection_reason }) }}</p>
         </div>
         <div class="moderation-history-resolution" :class="`is-${request.resolution}`">
           {{ t(`moderation.resolutions.${request.resolution}`) }}
@@ -328,6 +353,28 @@ watch([users, history, viewMode], () => {
           <button class="button" type="button" @click="closeUserCard">{{ t('common.close') }}</button>
         </div>
       </article>
+    </div>
+
+    <div v-if="rejectingUser" class="penalty-modal-backdrop" @click.self="closeRejectDialog">
+      <form class="card penalty-modal moderation-reject-dialog" role="dialog" aria-modal="true" @submit.prevent="confirmReject">
+        <div class="section-header penalty-modal-head">
+          <div>
+            <h2>{{ t('moderation.rejectRequestTitle') }}</h2>
+            <p class="muted">{{ rejectingUser.nickname || rejectingUser.login }}</p>
+          </div>
+          <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="closeRejectDialog">
+            <X :size="18" />
+          </button>
+        </div>
+        <label class="field">
+          <span>{{ t('moderation.rejectReasonPrompt') }}</span>
+          <textarea v-model="rejectionReason" rows="4" maxlength="1000" required autofocus />
+        </label>
+        <div class="toolbar moderation-dialog-actions">
+          <button class="button" type="button" @click="closeRejectDialog">{{ t('common.cancel') }}</button>
+          <button class="button danger" type="submit" :disabled="!rejectionReason.trim()">{{ t('common.reject') }}</button>
+        </div>
+      </form>
     </div>
   </section>
 </template>

@@ -10,10 +10,12 @@ const props = defineProps({
   hint: { type: String, default: '' },
   targetWidth: { type: Number, required: true },
   targetHeight: { type: Number, required: true },
+  viewMode: { type: Boolean, default: false },
+  initialView: { type: Object, default: () => ({}) },
   saving: { type: Boolean, default: false },
   error: { type: String, default: '' }
 })
-const emit = defineEmits(['close', 'crop'])
+const emit = defineEmits(['close', 'crop', 'view'])
 const { t } = useI18n()
 const cropFrame = ref(null)
 const cropImage = ref(null)
@@ -63,8 +65,19 @@ function reset() {
 
 function onImageLoad(event) {
   naturalSize.value = { width: event.target.naturalWidth, height: event.target.naturalHeight }
+  const initialZoom = Number(props.initialView.zoom)
+  zoom.value = props.viewMode && Number.isFinite(initialZoom) ? Math.min(3, Math.max(1, initialZoom)) : 1
+  offset.value = { x: 0, y: 0 }
   nextTick(() => {
     updateFrameSize()
+    if (props.viewMode && geometry.value) {
+      const x = Number(props.initialView.x)
+      const y = Number(props.initialView.y)
+      offset.value = {
+        x: (0.5 - (Number.isFinite(x) ? x : 50) / 100) * 2 * geometry.value.maxOffsetX,
+        y: (0.5 - (Number.isFinite(y) ? y : 50) / 100) * 2 * geometry.value.maxOffsetY
+      }
+    }
     clampOffset()
   })
 }
@@ -114,6 +127,15 @@ function canvasBlob(canvas) {
 async function applyCrop() {
   if (!geometry.value || !cropImage.value) return
   localError.value = ''
+  if (props.viewMode) {
+    const current = geometry.value
+    emit('view', {
+      zoom: zoom.value,
+      x: current.maxOffsetX ? (0.5 - offset.value.x / (2 * current.maxOffsetX)) * 100 : 50,
+      y: current.maxOffsetY ? (0.5 - offset.value.y / (2 * current.maxOffsetY)) * 100 : 50
+    })
+    return
+  }
   try {
     const source = cropSourceRect(geometry.value, naturalSize.value.width, naturalSize.value.height)
     const canvas = document.createElement('canvas')
