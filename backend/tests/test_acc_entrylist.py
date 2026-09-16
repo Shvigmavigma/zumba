@@ -55,6 +55,25 @@ class AccEntrylistTest(unittest.TestCase):
         saved = preserve_track_metadata(previous.games["ACC"], incoming.games["ACC"])
         self.assertEqual(saved.expected_average_lap_ms, {"Monza 2024": 108500})
 
+    def test_track_image_crop_is_preserved_when_track_is_renamed(self):
+        previous = normalize_race_assets({
+            "tracks": ["Monza"],
+            "track_images": {"Monza": "/api/uploads/track-images/monza.jpg"},
+            "track_image_crops": {"Monza": {"zoom": 1.8, "x": 25, "y": 70}},
+            "games": {},
+        })
+        incoming = normalize_race_assets({"tracks": ["Monza GP"], "games": {}})
+        saved = preserve_track_metadata(previous.games["ACC"], incoming.games["ACC"])
+        self.assertEqual(saved.track_image_crops["Monza GP"].model_dump(), {"zoom": 1.8, "x": 25, "y": 70})
+
+    def test_track_image_crop_bounds_are_validated(self):
+        with self.assertRaises(ValidationError):
+            normalize_race_assets({
+                "tracks": ["Monza"],
+                "track_image_crops": {"Monza": {"zoom": 4, "x": 50, "y": 50}},
+                "games": {},
+            })
+
     def test_admin_mapping_overrides_a_model_id(self):
         custom = {"BMW M4 GT3": 99}
         self.assertEqual(acc_forced_car_model("BMW M4 GT3", custom), 99)

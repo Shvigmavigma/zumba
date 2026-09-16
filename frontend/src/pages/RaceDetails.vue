@@ -2,8 +2,9 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, ChevronUp, Film, Heart, ImageUp, Scale, Trash2, Upload, UserMinus, X } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, Cloud, CloudDrizzle, CloudLightning, CloudRain, CloudSun, Crop, Film, Heart, ImageUp, Info, MapPin, Scale, Sun, Thermometer, Trash2, Upload, UserMinus, X } from 'lucide-vue-next'
 import { api } from '../api'
+import ImageCropper from '../components/ImageCropper.vue'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
 import PilotRoles from '../components/PilotRoles.vue'
@@ -31,14 +32,21 @@ const raceVideoInput = ref(null)
 const raceAssets = ref({ tracks: [], classes: [], games: {} })
 const trackImageFile = ref(null)
 const trackImageInput = ref(null)
+const trackImageDisplay = ref(null)
 const trackImageOpen = ref(false)
+const trackImageCropOpen = ref(false)
+const trackImageCropError = ref('')
+const trackImageCropTarget = ref({ width: 1200, height: 700 })
 const trackAverageLapMs = ref(null)
+const weatherDetailsOpen = ref(false)
+const collapsedRaceFacts = ref({})
 const manualRows = ref([])
 const participantsExpanded = ref(false)
 const penaltiesOpen = ref(false)
 const focusedPenaltyId = ref(null)
 const penaltyCreateOpen = ref(false)
 const resultsTab = ref('race')
+const raceOperationalTab = ref('information')
 const participantSearch = ref('')
 const participantSort = ref('rating_desc')
 const participantPage = ref(1)
@@ -77,6 +85,12 @@ const trackExpectedAverageLapMs = computed(() => {
   return entry && Number(entry[1]) > 0 ? Number(entry[1]) : null
 })
 const raceTrackImage = computed(() => trackImageFromConfig(raceAssetConfig.value, race.value?.track, race.value?.track_id))
+const raceTrackImageCrop = computed(() => trackImageCropFromConfig(raceAssetConfig.value, race.value?.track, race.value?.track_id))
+const raceTrackImageStyle = computed(() => ({
+  objectPosition: `${raceTrackImageCrop.value.x}% ${raceTrackImageCrop.value.y}%`,
+  transformOrigin: `${raceTrackImageCrop.value.x}% ${raceTrackImageCrop.value.y}%`,
+  transform: `scale(${raceTrackImageCrop.value.zoom})`
+}))
 
 const raceRatingGame = computed(() => race.value?.game || 'ACC')
 const participants = computed(() => race.value?.registered_pilots || [])
@@ -196,11 +210,43 @@ const qualificationRows = computed(() => {
     gap_ms: Number.isFinite(Number(row.best_lap_ms)) && Number.isFinite(Number(leaderLap)) ? Number(row.best_lap_ms) - Number(leaderLap) : null
   }))
 })
+const raceOverviewFacts = computed(() => {
+  const currentRace = race.value
+  if (!currentRace) return []
+  const count = currentRace.is_team_event ? teamRegistrations.value.length : participants.value.length
+  const capacity = Number(currentRace.max_pilots)
+  return [
+    { key: 'registrationStart', label: t('fields.registrationStart'), value: formatDate(currentRace.registration_start) },
+    { key: 'registrationEnd', label: t('fields.registrationEnd'), value: formatDate(currentRace.datetime_end) },
+    ...(!isLmuRace.value ? [{
+      key: 'participants',
+      label: currentRace.is_team_event ? t('raceDetails.teams') : t('raceDetails.participants'),
+      value: `${count} / ${Number.isFinite(capacity) ? capacity : '—'}`
+    }] : [])
+  ]
+})
 const activeResultRows = computed(() => (resultsTab.value === 'qualification' ? qualificationRows.value : resultRows.value))
+const podiumRows = computed(() => {
+  if (resultsTab.value === 'qualification' && qualificationRows.value.length) return qualificationRows.value
+  return resultRows.value.length ? resultRows.value : qualificationRows.value
+})
+const podiumUsesQualification = computed(() => resultsTab.value === 'qualification' || resultRows.value.length === 0)
 const resultTabItems = computed(() => [
   { id: 'race', label: t('raceDetails.raceResultsTab'), count: resultRows.value.length },
-  ...(qualificationRows.value.length ? [{ id: 'qualification', label: t('raceDetails.qualificationResultsTab'), count: qualificationRows.value.length }] : [])
+  ...(qualificationRows.value.length && !isLmuRace.value ? [{ id: 'qualification', label: t('raceDetails.qualificationResultsTab'), count: qualificationRows.value.length }] : []),
+  { id: 'information', label: t('raceDetails.informationTab'), count: null }
 ])
+const raceOperationalTabItems = computed(() => {
+  if (!race.value || race.value.status !== 'ongoing') return []
+  if (race.value.status === 'ongoing') {
+    return [
+      { id: 'session', label: t('raceDetails.sessionTab'), count: null },
+      { id: 'information', label: t('raceDetails.eventInfoTab'), count: null }
+    ]
+  }
+  return []
+})
+const showRaceParticipants = computed(() => !isLmuRace.value)
 const fanVoteOptions = computed(() => fanVote.value?.options || [])
 const fanVoteCandidates = computed(() => {
   const candidates = new Map()
@@ -243,10 +289,36 @@ function formatDate(value) {
   return formatDateTime(value)
 }
 
+function raceFactPanelId(key) {
+  return `race-overview-${race.value?.id || 'race'}-${key}`
+}
+
+function toggleRaceFact(key) {
+  collapsedRaceFacts.value[key] = !collapsedRaceFacts.value[key]
+}
+
 const weatherKeys = ['clear', 'partly_cloudy', 'overcast', 'light_rain', 'heavy_rain', 'storm']
+const weatherIcons = {
+  clear: Sun,
+  partly_cloudy: CloudSun,
+  overcast: Cloud,
+  light_rain: CloudDrizzle,
+  heavy_rain: CloudRain,
+  storm: CloudLightning
+}
+const forecastWeatherKey = computed(() => weatherKeys
+  .map((key) => ({ key, chance: Number(race.value?.weather_chances?.[key]) }))
+  .filter((item) => Number.isFinite(item.chance) && item.chance > 0)
+  .sort((left, right) => right.chance - left.chance)[0]?.key || null)
+const forecastWeatherIcon = computed(() => weatherIcons[forecastWeatherKey.value] || Cloud)
 
 function weatherLabel(key) {
   return t(`weather.${key === 'partly_cloudy' ? 'partlyCloudy' : key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())}`)
+}
+
+function weatherChance(currentRace, key) {
+  const chance = Number(currentRace?.weather_chances?.[key])
+  return Number.isFinite(chance) ? `${Math.round(chance)}%` : '0%'
 }
 
 function weatherSummary(currentRace) {
@@ -369,12 +441,20 @@ function pilotNumberDraft(value) {
   return Number.isInteger(number) && number > 0 ? formatPilotNumber(number) : ''
 }
 
-function trackImageFromConfig(config, track, trackId = '') {
+function trackAssetValue(config, key, track, trackId = '') {
   const trackName = String(track || '').trim()
-  const currentTrackName = (trackId && Object.entries(config?.track_ids || {}).find(([, id]) => id === trackId)?.[0]) || trackName
-  if (!currentTrackName) return ''
-  const images = config?.track_images || {}
-  return images[currentTrackName] || Object.entries(images).find(([key]) => key.toLowerCase() === currentTrackName.toLowerCase())?.[1] || ''
+  const currentTrackName = (trackId && Object.entries(config?.track_ids || {}).find(([, id]) => String(id) === String(trackId))?.[0]) || trackName
+  const assets = config?.[key] || {}
+  const assetKey = Object.keys(assets).find((name) => name.toLowerCase() === currentTrackName.toLowerCase())
+  return assetKey ? assets[assetKey] : null
+}
+
+function trackImageFromConfig(config, track, trackId = '') {
+  return trackAssetValue(config, 'track_images', track, trackId) || ''
+}
+
+function trackImageCropFromConfig(config, track, trackId = '') {
+  return trackAssetValue(config, 'track_image_crops', track, trackId) || { zoom: 1, x: 50, y: 50 }
 }
 
 function carModelLabel(value) {
@@ -392,6 +472,38 @@ function openTrackImage() {
 
 function closeTrackImage() {
   trackImageOpen.value = false
+}
+
+function openTrackImageCropper() {
+  if (!raceTrackImage.value) return
+  const rect = trackImageDisplay.value?.getBoundingClientRect()
+  if (rect?.width && rect?.height) {
+    trackImageCropTarget.value = { width: Math.round(rect.width), height: Math.round(rect.height) }
+  }
+  trackImageCropError.value = ''
+  trackImageCropOpen.value = true
+}
+
+function closeTrackImageCropper() {
+  trackImageCropOpen.value = false
+  trackImageCropError.value = ''
+}
+
+async function saveTrackImageCrop(crop) {
+  if (!race.value) return
+  actionPending.value = true
+  trackImageCropError.value = ''
+  try {
+    raceAssets.value = await api('/race-assets/track-image/crop', {
+      method: 'PATCH',
+      body: { game: race.value.game, track: race.value.track, ...crop }
+    })
+    closeTrackImageCropper()
+  } catch (err) {
+    trackImageCropError.value = err.message
+  } finally {
+    actionPending.value = false
+  }
 }
 
 function handleKeydown(event) {
@@ -720,6 +832,10 @@ async function load() {
       api('/race-assets')
     ])
     race.value = loadedRace
+    collapsedRaceFacts.value = {}
+    weatherDetailsOpen.value = false
+    raceOperationalTab.value = loadedRace.status === 'ongoing' ? 'session' : 'information'
+    participantsExpanded.value = loadedRace.status !== 'finished'
     fanVote.value = loadedFanVote
     raceAssets.value = loadedRaceAssets
     await loadForcePilotCandidates(loadedRace)
@@ -1042,6 +1158,11 @@ async function deletePenalty(penalty) {
   }
 }
 
+function selectRaceOperationalTab(tabId) {
+  raceOperationalTab.value = tabId
+  if (tabId === 'participants') participantsExpanded.value = true
+}
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
   load()
@@ -1052,6 +1173,12 @@ onBeforeUnmount(() => {
 })
 watch([participantSearch, participantSort], () => {
   participantPage.value = 1
+})
+watch(resultTabItems, (items) => {
+  if (!items.some((item) => item.id === resultsTab.value)) resultsTab.value = 'race'
+})
+watch(raceOperationalTabItems, (items) => {
+  if (!items.some((item) => item.id === raceOperationalTab.value)) raceOperationalTab.value = items[0]?.id || 'information'
 })
 watch(manualPilotSearch, () => {
   if (manualPilotSearch.value.trim().length >= 1) searchManualPilots()
@@ -1076,59 +1203,198 @@ watch(visibleParticipants, () => {
     <p v-if="error" class="error">{{ error }}</p>
 
     <template v-if="race">
-      <section class="card race-details-hero">
-        <div class="section-header">
+      <nav class="race-details-breadcrumb" :aria-label="t('nav.calendar')">
+        <RouterLink to="/calendar">{{ t('nav.calendar') }}</RouterLink>
+        <span aria-hidden="true">/</span>
+        <span>{{ race.name }}</span>
+      </nav>
+
+      <section class="card race-details-hero" :data-status="race.status">
+        <div class="race-hero-main" :data-track-name="race.track">
           <div class="race-details-title">
-            <h1>{{ race.name }}</h1>
-            <p class="muted">
-              {{ gameLabel(t, race.game) }} -
+            <span class="race-hero-kicker">{{ gameLabel(t, race.game) }} <span aria-hidden="true">·</span> {{ race.car_class }}</span>
+            <div class="race-title-heading-row">
+              <h1>{{ race.name }}</h1>
+              <a v-if="race.status === 'registration_open'" class="button race-more-info-button" href="#race-operational-details">
+                <Info :size="16" />
+                {{ t('raceDetails.additionalInformation') }}
+              </a>
+              <button class="button primary race-penalties-button" type="button" @click="penaltiesOpen = true">
+                <Scale :size="16" />
+                {{ t('raceDetails.openPenalties') }}
+                <span class="button-count">{{ penalties.length }}</span>
+              </button>
+            </div>
+            <p class="race-hero-track-line">
               <RouterLink class="race-track-link" :to="{ path: '/pilots', query: { tab: 'tracks', track: race.track } }">{{ race.track }}</RouterLink>
               <span v-if="trackAverageLapMs"> · {{ t('tracks.averageLap') }}: {{ formatDuration(trackAverageLapMs) }}</span>
               <span v-if="trackExpectedAverageLapMs"> · {{ t('tracks.expectedAverageLap') }}: {{ formatDuration(trackExpectedAverageLapMs) }}</span>
-              - {{ race.car_class }}
             </p>
+            <div class="race-hero-badges">
+              <span class="status-badge race-status-badge" :class="`race-status-${race.status}`">{{ statusLabel(t, race.status) }}</span>
+              <span v-if="race.is_team_event" class="status-badge race-team-badge">{{ t('raceFilters.teamBadge') }}</span>
+              <span class="race-hero-chip">{{ race.has_qualification ? t('raceDetails.withQualification') : t('raceDetails.withoutQualification') }}</span>
+              <span class="race-hero-chip">{{ race.is_official ? t('raceDetails.ratingCounted') : t('raceDetails.ratingNotCounted') }}</span>
+            </div>
           </div>
-          <div class="toolbar race-details-actions">
-            <button class="button primary" type="button" @click="penaltiesOpen = true">
-              <Scale :size="16" />
-              {{ t('raceDetails.openPenalties') }}
-              <span class="button-count">{{ penalties.length }}</span>
-            </button>
-            <button v-if="canIssuePenalty" class="button" type="button" @click="openPenaltyCreator">
-              {{ t('raceDetails.issuePenalty') }}
-            </button>
-            <template v-if="canManageRace">
-              <RouterLink class="button" :to="`/races/${race.id}/edit`">{{ t('common.edit') }}</RouterLink>
-              <button v-if="race.status !== 'finished' && race.results" class="button primary" type="button" :disabled="actionPending" @click="closeRace">{{ t('raceDetails.closeRace') }}</button>
-              <button class="button danger" type="button" :disabled="actionPending" @click="deleteRace">{{ t('common.delete') }}</button>
-            </template>
-          </div>
+
+          <aside class="race-hero-status">
+            <span>{{ t('common.status') }}</span>
+            <strong>{{ statusLabel(t, race.status) }}</strong>
+          </aside>
         </div>
 
-        <p>{{ race.description }}</p>
-        <div class="race-details-meta">
-          <span class="status-badge race-status-badge" :class="`race-status-${race.status}`">{{ statusLabel(t, race.status) }}</span>
-          <span v-if="race.is_team_event" class="status-badge race-team-badge">{{ t('raceFilters.teamBadge') }}</span>
-          <span>{{ t('fields.registrationStart') }}: {{ formatDate(race.registration_start) }}</span>
-          <span>{{ t('fields.registrationEnd') }}: {{ formatDate(race.datetime_end) }}</span>
-          <span>{{ t('fields.raceTime') }}: {{ formatDate(race.datetime_start) }}</span>
-          <span v-if="!isLmuRace && race.is_team_event">{{ t('raceDetails.registeredTeamsLimit', { count: teamRegistrations.length, max: race.max_pilots }) }}</span>
-          <span v-else-if="!isLmuRace">{{ participants.length }} / {{ race.max_pilots }}</span>
-          <span>{{ race.has_qualification ? t('raceDetails.withQualification') : t('raceDetails.withoutQualification') }}</span>
-          <span>{{ race.is_official ? t('raceDetails.ratingCounted') : t('raceDetails.ratingNotCounted') }}</span>
+        <div v-if="canIssuePenalty || canManageRace" class="toolbar race-details-actions">
+          <button v-if="canIssuePenalty" class="button" type="button" @click="openPenaltyCreator">
+            {{ t('raceDetails.issuePenalty') }}
+          </button>
+          <template v-if="canManageRace">
+            <RouterLink class="button" :to="`/races/${race.id}/edit`">{{ t('common.edit') }}</RouterLink>
+            <button v-if="race.status !== 'finished' && race.results" class="button primary" type="button" :disabled="actionPending" @click="closeRace">{{ t('raceDetails.closeRace') }}</button>
+            <button class="button danger" type="button" :disabled="actionPending" @click="deleteRace">{{ t('common.delete') }}</button>
+          </template>
         </div>
-        <p class="race-details-weather-summary"><strong>{{ t('raceCard.weather') }}:</strong> {{ weatherSummary(race) }} · {{ t('weather.trackTemperature') }}: {{ weatherTemperature(race) }}</p>
-        <p>{{ t('fields.server') }}: <a :href="race.server_link" target="_blank" rel="noopener noreferrer">{{ race.server_link }}</a></p>
-        <p class="race-mods-line">
-          <span>{{ t('fields.mods') }}:</span>
-          <span v-if="race.mods_pack?.length" class="race-mod-links">
-            <a v-for="mod in race.mods_pack" :key="mod" :href="modHref(mod)" target="_blank" rel="noopener noreferrer">{{ mod }}</a>
-          </span>
-          <span v-else>{{ t('common.none') }}</span>
-        </p>
-        <button v-if="raceTrackImage" class="race-track-image-display race-track-image-trigger" type="button" :aria-label="race.track" @click="openTrackImage">
-          <img class="race-track-image" :src="raceTrackImage" :alt="race.track" />
-        </button>
+
+        <div class="race-hero-overview" :class="{ 'weather-details-expanded': weatherDetailsOpen, 'has-two-facts': raceOverviewFacts.length === 2 }">
+          <section class="race-hero-weather" :class="{ 'is-collapsed': collapsedRaceFacts.weather }">
+            <button
+              class="race-overview-toggle race-weather-card-toggle"
+              type="button"
+              :aria-expanded="!collapsedRaceFacts.weather"
+              :aria-controls="raceFactPanelId('weather')"
+              :aria-label="t(collapsedRaceFacts.weather ? 'raceDetails.expandRaceFact' : 'raceDetails.collapseRaceFact', { label: t('weather.title') })"
+              @click="toggleRaceFact('weather')"
+            >
+              <component :is="forecastWeatherIcon" class="race-weather-icon" :class="`weather-${forecastWeatherKey || 'unknown'}`" :size="21" aria-hidden="true" />
+              <span>{{ t('weather.title') }}</span>
+              <small v-if="collapsedRaceFacts.weather" class="race-weather-collapsed-summary">
+                {{ forecastWeatherKey ? weatherLabel(forecastWeatherKey) : t('common.none') }} · {{ weatherTemperature(race) }}
+              </small>
+              <ChevronUp v-if="!collapsedRaceFacts.weather" :size="16" />
+              <ChevronDown v-else :size="16" />
+            </button>
+            <div :id="raceFactPanelId('weather')" v-show="!collapsedRaceFacts.weather" class="race-hero-weather-body">
+              <div class="race-hero-weather-summary">
+                <div class="race-weather-condition">
+                  <span>{{ t('raceDetails.infoWeather') }}</span>
+                  <strong>{{ forecastWeatherKey ? weatherLabel(forecastWeatherKey) : t('common.none') }}</strong>
+                </div>
+                <div class="race-weather-temperature">
+                  <Thermometer :size="18" aria-hidden="true" />
+                  <strong>{{ weatherTemperature(race) }}</strong>
+                </div>
+                <button
+                  class="race-weather-toggle"
+                  type="button"
+                  :aria-expanded="weatherDetailsOpen"
+                  :aria-controls="`race-weather-details-${race.id}`"
+                  @click="weatherDetailsOpen = !weatherDetailsOpen"
+                >
+                  <span>{{ weatherDetailsOpen ? t('raceDetails.hideWeatherDetails') : t('raceDetails.weatherDetails') }}</span>
+                  <ChevronUp v-if="weatherDetailsOpen" :size="16" />
+                  <ChevronDown v-else :size="16" />
+                </button>
+              </div>
+              <div :id="`race-weather-details-${race.id}`" v-show="weatherDetailsOpen" class="race-weather-details">
+                <div v-for="key in weatherKeys" :key="key" class="race-weather-probability">
+                  <span>{{ weatherLabel(key) }}</span>
+                  <strong>{{ weatherChance(race, key) }}</strong>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div class="race-overview-facts">
+            <article v-for="fact in raceOverviewFacts" :key="fact.key" class="race-overview-fact" :data-fact-key="fact.key" :class="{ 'is-collapsed': collapsedRaceFacts[fact.key] }">
+              <button
+                class="race-overview-toggle"
+                type="button"
+                :aria-expanded="!collapsedRaceFacts[fact.key]"
+                :aria-controls="raceFactPanelId(fact.key)"
+                :aria-label="t(collapsedRaceFacts[fact.key] ? 'raceDetails.expandRaceFact' : 'raceDetails.collapseRaceFact', { label: fact.label })"
+                @click="toggleRaceFact(fact.key)"
+              >
+                <span>{{ fact.label }}</span>
+                <ChevronUp v-if="!collapsedRaceFacts[fact.key]" :size="16" />
+                <ChevronDown v-else :size="16" />
+              </button>
+              <div :id="raceFactPanelId(fact.key)" v-show="!collapsedRaceFacts[fact.key]" class="race-overview-fact-value">
+                <strong>{{ fact.value }}</strong>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <div
+        class="race-details-layout"
+        :class="{
+          'has-registration': canShowRegistrationPanel,
+          'has-tabs': resultRows.length || qualificationRows.length || race.status === 'finished' || race.status === 'ongoing',
+          'is-lmu': isLmuRace
+        }"
+        :data-status="race.status"
+      >
+      <section class="card race-track-media" :class="{ 'has-race-video': race.status === 'finished' }">
+        <div ref="trackImageDisplay" class="race-track-image-display">
+          <button v-if="raceTrackImage" class="race-track-image-trigger" type="button" :aria-label="race.track" @click="openTrackImage">
+            <img class="race-track-image" :src="raceTrackImage" :alt="race.track" :style="raceTrackImageStyle" />
+          </button>
+          <div v-else class="race-track-image-empty">
+            <MapPin :size="22" />
+            <span>{{ t('raceDetails.trackImageMissing') }}</span>
+          </div>
+        </div>
+        <div class="race-track-media-copy">
+          <span class="race-track-media-kicker">{{ gameLabel(t, race.game) }} · {{ race.car_class }}</span>
+          <h2>{{ race.track }}</h2>
+          <div class="race-track-media-stats">
+            <div v-if="trackAverageLapMs">
+              <span>{{ t('tracks.averageLap') }}</span>
+              <strong>{{ formatDuration(trackAverageLapMs) }}</strong>
+            </div>
+            <div v-if="trackExpectedAverageLapMs">
+              <span>{{ t('tracks.expectedAverageLap') }}</span>
+              <strong>{{ formatDuration(trackExpectedAverageLapMs) }}</strong>
+            </div>
+            <div>
+              <span>{{ t('weather.trackTemperature') }}</span>
+              <strong>{{ weatherTemperature(race) }}</strong>
+            </div>
+          </div>
+        </div>
+        <section v-if="race.status === 'finished'" class="race-video-panel race-track-video-panel">
+          <div class="section-header">
+            <div>
+              <h2>{{ t('raceDetails.videoTitle') }}</h2>
+              <p v-if="canManageRace" class="muted">{{ t('raceDetails.videoHint') }}</p>
+            </div>
+            <span v-if="canManageRace && race.video_filename" class="pill">
+              <Film :size="14" />
+              {{ race.video_filename }}
+            </span>
+          </div>
+
+          <div v-if="race.video_url" class="race-video-frame">
+            <video controls preload="metadata" :src="race.video_url"></video>
+          </div>
+          <div v-else class="empty-row">{{ t('raceDetails.noVideo') }}</div>
+
+          <form v-if="canManageRace" class="form race-video-upload" @submit.prevent="uploadRaceVideo">
+            <label class="field">
+              <span>{{ t('raceDetails.videoFile') }}</span>
+              <input ref="raceVideoInput" type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.mp4,.webm,.mov,.mkv" @change="setRaceVideo" />
+            </label>
+            <button class="button primary" type="submit" :disabled="actionPending || !raceVideoFile">
+              <Upload :size="16" />
+              {{ race.video_url ? t('raceDetails.replaceVideo') : t('raceDetails.uploadVideo') }}
+            </button>
+            <button v-if="race.video_url" class="button danger" type="button" :disabled="actionPending" @click="deleteRaceVideo">
+              <Trash2 :size="16" />
+              {{ t('raceDetails.deleteVideo') }}
+            </button>
+          </form>
+        </section>
         <form v-if="canManageRace && race.track" class="race-track-image-control" @submit.prevent="uploadTrackImage">
           <div class="race-track-image-copy">
             <strong>{{ t('adminUsers.trackImages') }}</strong>
@@ -1141,6 +1407,10 @@ watch(visibleParticipants, () => {
           </label>
           <button class="button primary small" type="submit" :disabled="actionPending || !trackImageFile">
             {{ t('common.save') }}
+          </button>
+          <button class="button small" type="button" :disabled="actionPending || !raceTrackImage" @click="openTrackImageCropper">
+            <Crop :size="15" />
+            {{ t('raceDetails.adjustTrackImage') }}
           </button>
         </form>
       </section>
@@ -1157,11 +1427,78 @@ watch(visibleParticipants, () => {
             </button>
           </div>
           <div class="banner-image-view race-track-image-viewer">
-            <img :src="raceTrackImage" :alt="race.track" />
+            <img :src="raceTrackImage" :alt="race.track" :style="raceTrackImageStyle" />
           </div>
         </section>
       </div>
 
+      <ImageCropper
+        v-if="trackImageCropOpen && raceTrackImage"
+        :source-url="raceTrackImage"
+        :title="t('raceDetails.trackImageCropTitle')"
+        :hint="t('raceDetails.trackImageCropHint')"
+        :target-width="trackImageCropTarget.width"
+        :target-height="trackImageCropTarget.height"
+        :view-mode="true"
+        :initial-view="raceTrackImageCrop"
+        :saving="actionPending"
+        :error="trackImageCropError"
+        @close="closeTrackImageCropper"
+        @view="saveTrackImageCrop"
+      />
+
+      <div v-if="resultRows.length || qualificationRows.length || race.status === 'finished' || race.status === 'ongoing'" class="race-details-tabs">
+      <div
+        v-if="resultRows.length || qualificationRows.length || race.status === 'finished'"
+        class="race-results-tabs race-results-tabs-top"
+        role="tablist"
+        :aria-label="t('raceDetails.results')"
+      >
+        <button
+          v-for="tab in resultTabItems"
+          :key="tab.id"
+          class="tab-button"
+          type="button"
+          role="tab"
+          :aria-selected="resultsTab === tab.id"
+          :class="{ active: resultsTab === tab.id }"
+          @click="resultsTab = tab.id"
+        >
+          <span>{{ tab.label }}</span>
+          <strong v-if="tab.count !== null">{{ tab.count }}</strong>
+        </button>
+      </div>
+
+      <div
+        v-if="race.status === 'ongoing'"
+        class="race-results-tabs race-results-tabs-top race-operational-tabs"
+        role="tablist"
+        :aria-label="t('raceDetails.eventInfoTab')"
+      >
+        <button
+          v-for="tab in raceOperationalTabItems"
+          :key="tab.id"
+          class="tab-button"
+          type="button"
+          role="tab"
+          :aria-selected="raceOperationalTab === tab.id"
+          :class="{ active: raceOperationalTab === tab.id }"
+          @click="selectRaceOperationalTab(tab.id)"
+        >
+          <span>{{ tab.label }}</span>
+          <strong v-if="tab.count !== null">{{ tab.count }}</strong>
+        </button>
+      </div>
+      </div>
+
+      <div
+        class="race-details-content-grid"
+        :class="{
+          'has-registration': canShowRegistrationPanel,
+          'is-lmu': isLmuRace
+        }"
+        :data-status="race.status"
+      >
       <section v-if="canShowRegistrationPanel" class="card race-registration-panel">
         <div v-if="race.is_team_event && teamRegistered" class="section-header">
           <div>
@@ -1220,7 +1557,7 @@ watch(visibleParticipants, () => {
               </article>
             </div>
             <p v-if="isChampionshipStage" class="muted">Для командного чемпионата заявка подаётся отдельно на этот этап.</p>
-            <button class="button primary" type="submit">{{ t('common.register') }}</button>
+            <button class="button primary race-register-button" type="submit">{{ t('common.register') }}</button>
           </template>
         </form>
         <div v-else-if="registered" class="section-header">
@@ -1240,46 +1577,11 @@ watch(visibleParticipants, () => {
             <input v-model="pilotNumber" inputmode="numeric" pattern="[0-9]{3}" minlength="3" maxlength="3" placeholder="001" required />
           </label>
           <p v-if="isChampionshipStage" class="muted">{{ t('raceDetails.championshipStageRegistrationHint') }}</p>
-          <button class="button primary" type="submit">{{ isChampionshipStage ? t('raceDetails.championshipStageRegister') : t('common.register') }}</button>
+          <button class="button primary race-register-button" type="submit">{{ isChampionshipStage ? t('raceDetails.championshipStageRegister') : t('common.register') }}</button>
         </form>
       </section>
 
       <div v-if="race.status === 'finished'" class="race-main-layout">
-        <div class="race-main-column">
-          <section v-if="race.status === 'finished'" class="card race-video-panel">
-            <div class="section-header">
-              <div>
-                <h2>{{ t('raceDetails.videoTitle') }}</h2>
-                <p v-if="canManageRace" class="muted">{{ t('raceDetails.videoHint') }}</p>
-              </div>
-              <span v-if="canManageRace && race.video_filename" class="pill">
-                <Film :size="14" />
-                {{ race.video_filename }}
-              </span>
-            </div>
-
-            <div v-if="race.video_url" class="race-video-frame">
-              <video controls preload="metadata" :src="race.video_url"></video>
-            </div>
-            <div v-else class="empty-row">{{ t('raceDetails.noVideo') }}</div>
-
-            <form v-if="canManageRace" class="form race-video-upload" @submit.prevent="uploadRaceVideo">
-              <label class="field">
-                <span>{{ t('raceDetails.videoFile') }}</span>
-                <input ref="raceVideoInput" type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.mp4,.webm,.mov,.mkv" @change="setRaceVideo" />
-              </label>
-              <button class="button primary" type="submit" :disabled="actionPending || !raceVideoFile">
-                <Upload :size="16" />
-                {{ race.video_url ? t('raceDetails.replaceVideo') : t('raceDetails.uploadVideo') }}
-              </button>
-              <button v-if="race.video_url" class="button danger" type="button" :disabled="actionPending" @click="deleteRaceVideo">
-                <Trash2 :size="16" />
-                {{ t('raceDetails.deleteVideo') }}
-              </button>
-            </form>
-          </section>
-        </div>
-
         <aside class="race-vote-column">
           <section class="card race-fan-vote-panel">
             <div class="section-header race-fan-vote-header">
@@ -1374,7 +1676,7 @@ watch(visibleParticipants, () => {
         </aside>
       </div>
 
-      <section v-if="!isLmuRace" class="card race-participants-panel">
+      <section v-if="showRaceParticipants" class="card race-participants-panel">
         <div class="section-header">
           <div>
             <h2>{{ race.is_team_event ? t('raceDetails.teams') : t('raceDetails.participants') }}</h2>
@@ -1512,7 +1814,54 @@ watch(visibleParticipants, () => {
         <div v-else-if="participantsExpanded && !race.is_team_event && !visibleParticipants.length" class="empty-row">{{ participants.length ? t('common.noMatches') : t('raceDetails.noRegisteredPilots') }}</div>
       </section>
 
-      <section class="card race-results-panel">
+      <section v-if="race.status !== 'finished'" id="race-operational-details" class="card race-operational-details">
+        <div class="section-header">
+          <div>
+            <h2>{{ race.status === 'ongoing' && raceOperationalTab === 'session' ? t('raceDetails.sessionTab') : t('raceDetails.eventInfoTab') }}</h2>
+            <p class="muted">{{ gameLabel(t, race.game) }} · {{ race.track }} · {{ race.car_class }}</p>
+          </div>
+        </div>
+        <div class="race-operational-grid">
+          <article v-if="race.status !== 'ongoing' || raceOperationalTab === 'information'">
+            <span>{{ t('raceDetails.infoRaceTime') }}</span>
+            <strong>{{ formatDate(race.datetime_start) }}</strong>
+          </article>
+          <article v-if="race.status !== 'ongoing' || raceOperationalTab === 'information'">
+            <span>{{ t('raceDetails.infoRegistration') }}</span>
+            <strong>{{ formatDate(race.registration_start) }} – {{ formatDate(race.datetime_end) }}</strong>
+          </article>
+          <article v-if="race.status !== 'ongoing' || raceOperationalTab === 'information'">
+            <span>{{ t('raceDetails.infoWeather') }}</span>
+            <strong>{{ weatherSummary(race) }} · {{ weatherTemperature(race) }}</strong>
+          </article>
+          <article v-if="race.status !== 'ongoing' || raceOperationalTab === 'information'">
+            <span>{{ t('raceDetails.infoRating') }}</span>
+            <strong>{{ race.is_official ? t('raceDetails.ratingCounted') : t('raceDetails.ratingNotCounted') }}</strong>
+          </article>
+          <article v-if="race.description" class="race-operational-description">
+            <span>{{ t('raceDetails.infoDescription') }}</span>
+            <strong>{{ race.description }}</strong>
+          </article>
+          <article>
+            <span>{{ t('fields.server') }}</span>
+            <a v-if="race.server_link" :href="race.server_link" target="_blank" rel="noopener noreferrer">{{ race.server_link }}</a>
+            <strong v-else>{{ t('common.none') }}</strong>
+          </article>
+          <article class="race-operational-mods">
+            <span>{{ t('fields.mods') }}</span>
+            <div v-if="race.mods_pack?.length" class="race-mod-links">
+              <a v-for="mod in race.mods_pack" :key="mod" :href="modHref(mod)" target="_blank" rel="noopener noreferrer">{{ mod }}</a>
+            </div>
+            <strong v-else>{{ t('common.none') }}</strong>
+          </article>
+          <article v-if="isLmuRace && race.lmu_results_at">
+            <span>{{ t('raceDetails.infoLmuResults') }}</span>
+            <strong>{{ formatDate(race.lmu_results_at) }}</strong>
+          </article>
+        </div>
+      </section>
+
+      <section v-if="resultRows.length || qualificationRows.length || canEditManualResults || race.status === 'finished'" class="card race-results-panel">
         <div class="section-header">
           <div>
             <h2>{{ t('raceDetails.results') }}</h2>
@@ -1584,16 +1933,9 @@ watch(visibleParticipants, () => {
           <button class="button primary" type="submit" :disabled="actionPending || !manualRows.length">{{ t('raceDetails.saveManualResults') }}</button>
         </form>
 
-        <div v-if="resultRows.length || qualificationRows.length" class="race-results-shell">
-          <div v-if="resultTabItems.length > 1 && !isLmuRace" class="race-results-tabs">
-            <button v-for="tab in resultTabItems" :key="tab.id" class="tab-button" type="button" :class="{ active: resultsTab === tab.id }" @click="resultsTab = tab.id">
-              <span>{{ tab.label }}</span>
-              <strong>{{ tab.count }}</strong>
-            </button>
-          </div>
-
-          <div class="race-results-podium">
-            <article v-for="row in activeResultRows.slice(0, 3)" :key="`podium-${resultsTab}-${row.user_id || row.player_id || row.position}`" class="result-podium-card" :class="resultPodiumClass(row)">
+        <div v-if="resultRows.length || qualificationRows.length || race.status === 'finished'" class="race-results-shell">
+          <div v-if="podiumRows.length && resultsTab !== 'information'" class="race-results-podium">
+            <article v-for="row in podiumRows.slice(0, 3)" :key="`podium-${row.user_id || row.player_id || row.position}`" class="result-podium-card" :class="resultPodiumClass(row)">
               <span class="result-position-badge" :class="resultPodiumClass(row)">{{ row.position || '-' }}</span>
               <div class="result-podium-driver">
                 <span class="user-name-line">
@@ -1607,24 +1949,71 @@ watch(visibleParticipants, () => {
                 <span>{{ resultPilotSubtitle(row) }}</span>
               </div>
               <div class="result-podium-times">
-                <strong class="result-podium-time">{{ resultsTab === 'qualification' ? resultBestLapLabel(row) : resultFinishLabel(row) }}</strong>
-                <span v-if="resultsTab === 'race'" class="result-podium-best-lap">
+                <strong class="result-podium-time">{{ podiumUsesQualification ? resultBestLapLabel(row) : resultFinishLabel(row) }}</strong>
+                <span v-if="!podiumUsesQualification" class="result-podium-best-lap">
                   <span class="result-podium-best-lap-label">{{ t('raceDetails.bestLap') }}</span>
                   <strong>{{ resultBestLapLabel(row) }}</strong>
                 </span>
-                <span v-if="resultsTab === 'race' && Number.isFinite(Number(resultQualificationBestLapMs(row)))" class="result-podium-best-lap">
+                <span v-if="!podiumUsesQualification && Number.isFinite(Number(resultQualificationBestLapMs(row)))" class="result-podium-best-lap">
                   <span class="result-podium-best-lap-label">{{ t('raceDetails.qualificationBestLap') }}</span>
                   <strong>{{ resultQualificationBestLapLabel(row) }}</strong>
                 </span>
               </div>
-              <span v-if="resultsTab === 'race'" class="result-podium-rating-line">
+              <span v-if="!podiumUsesQualification" class="result-podium-rating-line">
                 <span class="result-podium-rating-label">{{ t('raceDetails.ratingDelta') }}</span>
                 <span class="rating-delta" :class="resultRatingDeltaClass(row)">{{ resultRatingDelta(row) }}</span>
               </span>
             </article>
           </div>
 
-          <div v-if="activeResultRows.length > 3" class="race-results-table-wrap">
+          <div v-if="resultsTab === 'information'" class="race-results-info-grid">
+            <article>
+              <span>{{ t('raceDetails.infoSimulator') }}</span>
+              <strong>{{ gameLabel(t, race.game) }}</strong>
+            </article>
+            <article>
+              <span>{{ t('raceDetails.infoTrackClass') }}</span>
+              <strong>{{ race.track }} · {{ race.car_class }}</strong>
+            </article>
+            <article>
+              <span>{{ t('raceDetails.infoRaceTime') }}</span>
+              <strong>{{ formatDate(race.datetime_start) }}</strong>
+            </article>
+            <article>
+              <span>{{ t('raceDetails.infoRegistration') }}</span>
+              <strong>{{ formatDate(race.registration_start) }} – {{ formatDate(race.datetime_end) }}</strong>
+            </article>
+            <article>
+              <span>{{ t('raceDetails.infoWeather') }}</span>
+              <strong>{{ weatherSummary(race) }} · {{ weatherTemperature(race) }}</strong>
+            </article>
+            <article>
+              <span>{{ t('raceDetails.infoRating') }}</span>
+              <strong>{{ race.is_official ? t('raceDetails.ratingCounted') : t('raceDetails.ratingNotCounted') }}</strong>
+            </article>
+            <article v-if="race.description" class="race-results-info-description">
+              <span>{{ t('raceDetails.infoDescription') }}</span>
+              <strong>{{ race.description }}</strong>
+            </article>
+            <article v-if="isLmuRace && race.lmu_results_at">
+              <span>{{ t('raceDetails.infoLmuResults') }}</span>
+              <strong>{{ formatDate(race.lmu_results_at) }}</strong>
+            </article>
+            <article>
+              <span>{{ t('fields.server') }}</span>
+              <a v-if="race.server_link" :href="race.server_link" target="_blank" rel="noopener noreferrer">{{ race.server_link }}</a>
+              <strong v-else>{{ t('common.none') }}</strong>
+            </article>
+            <article class="race-results-info-mods">
+              <span>{{ t('fields.mods') }}</span>
+              <div v-if="race.mods_pack?.length" class="race-mod-links">
+                <a v-for="mod in race.mods_pack" :key="mod" :href="modHref(mod)" target="_blank" rel="noopener noreferrer">{{ mod }}</a>
+              </div>
+              <strong v-else>{{ t('common.none') }}</strong>
+            </article>
+          </div>
+
+          <div v-else-if="activeResultRows.length > 3" class="race-results-table-wrap">
             <table class="race-results-table">
               <thead>
                 <tr>
@@ -1706,9 +2095,11 @@ watch(visibleParticipants, () => {
               </tbody>
             </table>
           </div>
+          <div v-else-if="resultsTab !== 'information' && !activeResultRows.length" class="empty-row">{{ t('raceDetails.noResults') }}</div>
         </div>
-        <div v-else-if="race.status === 'finished'" class="empty-row">{{ t('raceDetails.noResults') }}</div>
       </section>
+      </div>
+      </div>
 
       <RacePenaltyListModal
         :open="penaltiesOpen"
@@ -1729,3 +2120,1975 @@ watch(visibleParticipants, () => {
     </template>
   </section>
 </template>
+
+<style scoped>
+.race-details-page {
+  gap: 16px;
+}
+
+.race-details-hero {
+  position: relative;
+  gap: 18px;
+  overflow: hidden;
+  padding: 24px 26px;
+  border: 1px solid #1a4d9c;
+  border-radius: 20px;
+  color: #f5f8ff;
+  background: linear-gradient(112deg, #07172d 0%, #0b2854 64%, #123c7c 100%);
+  box-shadow: 0 16px 34px rgba(4, 18, 42, 0.16);
+}
+
+.race-details-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.race-details-hero .section-header {
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.race-details-title {
+  display: grid;
+  gap: 9px;
+}
+
+.race-details-title h1 {
+  color: #f7f9ff;
+  font-size: 2.35rem;
+  letter-spacing: 0;
+  line-height: 1.08;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.race-details-title p,
+.race-details-hero > p,
+.race-details-hero .muted {
+  color: #c6d7f1;
+}
+
+.race-details-hero .race-track-link {
+  color: #e0ebff;
+}
+
+.race-details-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  max-width: 620px;
+}
+
+.race-details-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  align-items: stretch;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(208, 224, 250, 0.2);
+  color: #d8e5fa;
+}
+
+.race-details-meta > span:not(.status-badge) {
+  display: flex;
+  min-width: 0;
+  min-height: 38px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid rgba(208, 224, 250, 0.15);
+  border-radius: 9px;
+  background: rgba(3, 15, 34, 0.28);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.race-details-meta .status-badge {
+  align-self: center;
+  justify-self: start;
+}
+
+.race-details-hero .race-details-weather-summary {
+  padding: 10px 12px;
+  border: 1px solid rgba(208, 224, 250, 0.15);
+  border-radius: 8px;
+  background: rgba(3, 15, 34, 0.28);
+}
+
+.race-details-hero > p:last-child {
+  overflow-wrap: anywhere;
+}
+
+.race-details-hero .race-mods-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.race-details-hero .race-mod-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.race-details-hero .race-mod-links a,
+.race-details-hero > p a {
+  color: #d7e6ff;
+  overflow-wrap: anywhere;
+}
+
+.race-track-media {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.1fr);
+  align-items: stretch;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 16px;
+}
+
+.race-track-media .race-track-image-display {
+  min-width: 0;
+  min-height: 180px;
+  max-height: 25vh;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin: 0;
+  background: #07172d;
+}
+
+.race-track-media .race-track-image-trigger {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.race-track-media .race-track-image {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 25vh;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  object-fit: contain;
+}
+
+.race-track-image-empty {
+  display: grid;
+  min-height: 180px;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 20px;
+  color: #cbd9ee;
+  text-align: center;
+}
+
+.race-track-media-copy {
+  display: grid;
+  align-content: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 20px 24px;
+}
+
+.race-track-media-kicker {
+  color: var(--brand-blue);
+  font-size: var(--small-text-size);
+  font-weight: 900;
+}
+
+.race-track-media-copy h2 {
+  margin: 0;
+  font-size: 1.65rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.race-track-media-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px;
+}
+
+.race-track-media-stats > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--brand-blue) 16%, var(--border));
+  background: color-mix(in srgb, var(--brand-blue) 6%, var(--panel));
+}
+
+.race-track-media-stats span {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-weight: 850;
+}
+
+.race-track-media-stats strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.race-track-media .race-track-image-control {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--panel);
+}
+
+.race-details-content-grid {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.race-details-content-grid[data-status='finished'] {
+  grid-template-columns: minmax(0, 1fr) minmax(290px, 350px);
+  grid-template-areas:
+    'results video'
+    'results vote'
+    'participants participants';
+  align-items: start;
+}
+
+.race-details-content-grid[data-status='finished'] > .race-main-layout {
+  display: contents;
+}
+
+.race-details-content-grid[data-status='finished'] .race-main-column {
+  grid-area: video;
+  min-width: 0;
+}
+
+.race-details-content-grid[data-status='finished'] .race-vote-column {
+  grid-area: vote;
+  min-width: 0;
+}
+
+.race-details-content-grid[data-status='finished'] .race-results-panel {
+  grid-area: results;
+  min-width: 0;
+}
+
+.race-details-content-grid[data-status='finished'] .race-participants-panel {
+  grid-area: participants;
+  min-width: 0;
+}
+
+.race-details-content-grid[data-status='finished'] .race-video-panel,
+.race-details-content-grid[data-status='finished'] .race-fan-vote-panel {
+  align-content: start;
+}
+
+.race-results-shell {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.race-results-tabs {
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+
+.race-results-tabs .tab-button {
+  min-height: 42px;
+}
+
+.race-results-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.race-results-info-grid article {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel-muted) 44%, var(--panel));
+}
+
+.race-results-info-grid article > span {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-weight: 900;
+}
+
+.race-results-info-grid article > strong {
+  min-width: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.race-results-info-grid .race-results-info-description {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 980px) {
+  .race-details-content-grid[data-status='finished'] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'results'
+      'video'
+      'vote'
+      'participants';
+  }
+}
+
+@media (max-width: 680px) {
+  .race-details-hero {
+    gap: 14px;
+    padding: 18px 14px;
+    border-radius: 15px;
+  }
+
+  .race-details-hero .section-header {
+    align-items: stretch;
+  }
+
+  .race-details-title h1 {
+    font-size: 1.8rem;
+  }
+
+  .race-details-actions {
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .race-details-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .race-track-media {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-track-media .race-track-image-display,
+  .race-track-media .race-track-image-trigger {
+    min-height: 140px;
+  }
+
+  .race-track-media .race-track-image-control {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .race-track-image-copy {
+    grid-column: 1 / -1;
+  }
+
+  .race-track-media-copy {
+    padding: 16px;
+  }
+
+  .race-details-content-grid,
+  .race-details-content-grid[data-status='finished'] {
+    gap: 12px;
+  }
+
+  .race-results-info-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-results-info-grid .race-results-info-description {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .race-details-title h1 {
+    font-size: 1.55rem;
+  }
+
+  .race-details-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-track-media .race-track-image-control {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.race-details-page .race-details-hero {
+  position: relative;
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid #1a4d9c;
+  border-radius: 18px;
+  color: #f5f8ff;
+  background: linear-gradient(116deg, #07172d 0%, #0b2854 68%, #123b78 100%);
+  box-shadow: 0 16px 34px rgba(4, 18, 42, 0.16);
+}
+
+.race-details-page .race-details-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--small-text-size);
+  font-weight: 800;
+}
+
+.race-details-page .race-details-breadcrumb a {
+  color: var(--brand-blue);
+  text-decoration: none;
+}
+
+.race-details-page .race-details-breadcrumb > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.race-details-page .race-details-hero::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, #1652d8, #6fa5ff 52%, transparent);
+  content: '';
+}
+
+.race-details-page .race-hero-main {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 275px);
+  align-items: stretch;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.race-details-page .race-hero-main::after {
+  position: absolute;
+  z-index: 0;
+  right: 0;
+  bottom: 8px;
+  left: 50%;
+  height: 92px;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.055);
+  content: attr(data-track-name);
+  font-size: 88px;
+  font-weight: 1000;
+  line-height: 1;
+  text-overflow: clip;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.race-details-page .race-details-title {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  gap: 9px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 24px 26px 20px;
+}
+
+.race-details-page .race-hero-kicker {
+  color: #a9caff;
+  font-size: var(--small-text-size);
+  font-weight: 900;
+}
+
+.race-details-page .race-details-title h1 {
+  max-width: 100%;
+  color: #f7f9ff;
+  font-size: 2.3rem;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.race-details-page .race-title-heading-row {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.race-details-page .race-title-heading-row h1 {
+  flex: 1 1 320px;
+  min-width: 0;
+  margin: 0;
+}
+
+.race-details-page .race-penalties-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.race-details-page .race-hero-track-line {
+  color: #c6d7f1;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.race-details-page .race-hero-track-line .race-track-link {
+  color: #e0ebff;
+}
+
+.race-details-page .race-hero-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 3px;
+}
+
+.race-details-page .race-hero-chip {
+  display: inline-flex;
+  min-height: 27px;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid rgba(205, 224, 255, 0.28);
+  border-radius: 999px;
+  color: #dbe8fc;
+  background: rgba(255, 255, 255, 0.055);
+  font-size: var(--tiny-text-size);
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.race-details-page .race-hero-status {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 7px;
+  min-width: 0;
+  padding: 22px 24px;
+  border-left: 1px solid rgba(199, 219, 255, 0.2);
+  background: rgba(2, 14, 39, 0.2);
+}
+
+.race-details-page .race-hero-status > span {
+  color: #a9caff;
+  font-size: var(--tiny-text-size);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.race-details-page .race-hero-status strong {
+  color: #fff;
+  font-size: 1.75rem;
+  line-height: 1.1;
+}
+
+.race-details-page .race-details-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: none;
+  padding: 11px 26px;
+  border-top: 1px solid rgba(199, 219, 255, 0.19);
+}
+
+.race-details-page .race-details-actions .button {
+  min-height: 36px;
+  padding: 7px 12px;
+  border-color: rgba(190, 214, 252, 0.28);
+  color: #e6efff;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.race-details-page .race-details-actions .button.primary {
+  border-color: #2865dd;
+  color: #fff;
+  background: #1652d8;
+}
+
+.race-details-page .race-details-actions .button.danger {
+  border-color: rgba(251, 75, 93, 0.55);
+  color: #ffd6db;
+  background: rgba(179, 31, 55, 0.22);
+}
+
+.race-details-page .race-track-media {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(290px, 0.9fr);
+  align-items: stretch;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.race-details-page .race-track-media .race-track-image-display {
+  display: flex;
+  height: min(25vh, 250px);
+  min-height: min(25vh, 180px);
+  max-height: 25vh;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin: 0;
+  background: #07172d;
+}
+
+.race-details-page .race-track-media .race-track-image-trigger {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.race-details-page .race-track-media .race-track-image {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 25vh;
+  border: 0;
+  border-radius: 0;
+  object-fit: contain;
+}
+
+.race-details-page .race-track-image-empty {
+  display: grid;
+  min-height: min(25vh, 180px);
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  color: #cbd9ee;
+}
+
+.race-details-page .race-track-media-copy {
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 19px 22px;
+}
+
+.race-details-page .race-track-media-kicker {
+  color: var(--brand-blue);
+  font-size: var(--tiny-text-size);
+  font-weight: 900;
+}
+
+.race-details-page .race-track-media-copy h2 {
+  margin: 0;
+  font-size: 1.55rem;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.race-details-page .race-track-media-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px;
+}
+
+.race-details-page .race-track-media-stats > div {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--brand-blue) 16%, var(--border));
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--brand-blue) 5%, var(--panel));
+}
+
+.race-details-page .race-track-media-stats span {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-weight: 850;
+}
+
+.race-details-page .race-track-media-stats strong {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.race-details-page .race-track-media .race-track-image-control {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--panel);
+}
+
+.race-details-page .race-results-tabs.race-results-tabs-top {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+}
+
+.race-details-page .race-results-tabs-top .tab-button {
+  display: inline-flex;
+  min-width: 126px;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.race-details-page .race-results-tabs-top .tab-button.active {
+  color: #fff;
+  background: linear-gradient(120deg, #1652d8, #0d2f8f);
+}
+
+.race-details-page .race-results-tabs-top .tab-button.active strong {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.race-details-page .race-details-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 350px);
+  grid-template-areas:
+    'details participants'
+    'results results';
+  align-items: start;
+  gap: 14px;
+  min-width: 0;
+}
+
+.race-details-page .race-details-content-grid.has-registration {
+  grid-template-areas:
+    'registration participants'
+    'details details'
+    'results results';
+}
+
+.race-details-page .race-details-content-grid.is-lmu:not([data-status='finished']) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'registration'
+    'details'
+    'results';
+}
+
+.race-details-page .race-details-content-grid.is-lmu:not(.has-registration):not([data-status='finished']) {
+  grid-template-areas:
+    'details'
+    'results';
+}
+
+.race-details-page .race-details-content-grid:not([data-status='finished']) .race-registration-panel {
+  grid-area: registration;
+  min-width: 0;
+}
+
+.race-details-page .race-details-content-grid:not([data-status='finished']) .race-operational-details {
+  grid-area: details;
+  min-width: 0;
+}
+
+.race-details-page .race-details-content-grid:not([data-status='finished']) .race-participants-panel {
+  grid-area: participants;
+  min-width: 0;
+}
+
+.race-details-page .race-details-content-grid:not([data-status='finished']) .race-results-panel {
+  grid-area: results;
+  min-width: 0;
+}
+
+.race-details-page .race-details-content-grid[data-status='finished'] {
+  grid-template-columns: minmax(0, 1fr) minmax(290px, 350px);
+  grid-template-areas:
+    'results video'
+    'results vote'
+    'participants participants';
+}
+
+.race-details-page .race-details-content-grid[data-status='finished'] > .race-main-layout {
+  display: contents;
+}
+
+.race-details-page .race-details-content-grid[data-status='finished'] .race-main-column {
+  grid-area: video;
+  min-width: 0;
+}
+
+.race-details-page .race-details-content-grid[data-status='finished'] .race-vote-column {
+  grid-area: vote;
+  min-width: 0;
+}
+
+.race-details-page .race-details-content-grid[data-status='finished'] .race-results-panel {
+  grid-area: results;
+  min-width: 0;
+}
+
+.race-details-page .race-details-content-grid.is-lmu[data-status='finished'] {
+  grid-template-areas:
+    'results video'
+    'results vote';
+}
+
+.race-details-page .race-details-content-grid[data-status='finished'] .race-participants-panel {
+  grid-area: participants;
+  min-width: 0;
+}
+
+.race-details-page .race-details-content-grid[data-status='finished'] .race-video-panel,
+.race-details-page .race-details-content-grid[data-status='finished'] .race-fan-vote-panel {
+  align-content: start;
+}
+
+.race-details-page .race-registration-panel,
+.race-details-page .race-operational-details,
+.race-details-page .race-participants-panel,
+.race-details-page .race-video-panel,
+.race-details-page .race-results-panel,
+.race-details-page .race-fan-vote-panel {
+  min-width: 0;
+  border-radius: 14px;
+}
+
+.race-details-page .race-registration-panel,
+.race-details-page .race-operational-details,
+.race-details-page .race-participants-panel,
+.race-details-page .race-results-panel {
+  padding: 18px;
+}
+
+.race-details-page .race-operational-details > .section-header,
+.race-details-page .race-results-panel > .section-header {
+  align-items: flex-start;
+  margin-bottom: 2px;
+}
+
+.race-details-page .race-operational-grid,
+.race-details-page .race-results-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.race-details-page .race-operational-grid article,
+.race-details-page .race-results-info-grid article {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel-muted) 44%, var(--panel));
+}
+
+.race-details-page .race-operational-grid article > span,
+.race-details-page .race-results-info-grid article > span {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-weight: 900;
+}
+
+.race-details-page .race-operational-grid article > strong,
+.race-details-page .race-results-info-grid article > strong,
+.race-details-page .race-operational-grid article > a,
+.race-details-page .race-results-info-grid article > a {
+  min-width: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.race-details-page .race-operational-description,
+.race-details-page .race-results-info-description,
+.race-details-page .race-operational-mods,
+.race-details-page .race-results-info-mods {
+  grid-column: 1 / -1;
+}
+
+.race-details-page .race-mod-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.race-details-page .race-mod-links a {
+  overflow-wrap: anywhere;
+}
+
+.race-details-page .race-results-shell {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.race-details-page .race-results-panel .section-header h2 {
+  font-size: 1.3rem;
+}
+
+.race-details-page .race-results-podium {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
+}
+
+.race-details-page .race-results-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.race-details-page .race-results-table {
+  min-width: 760px;
+}
+
+.race-details-page .race-participants-panel .section-header {
+  align-items: center;
+}
+
+.race-details-page .race-video-panel,
+.race-details-page .race-fan-vote-panel {
+  padding: 15px;
+}
+
+.race-details-page .race-video-frame video {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  border-radius: var(--control-radius);
+  background: #020914;
+}
+
+@media (max-width: 1100px) {
+  .race-details-page .race-details-content-grid[data-status='finished'] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'results'
+      'video'
+      'vote'
+      'participants';
+  }
+
+  .race-details-page .race-details-content-grid:not([data-status='finished']) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'registration'
+      'details'
+      'participants'
+      'results';
+  }
+
+  .race-details-page .race-details-content-grid:not([data-status='finished']):not(.has-registration) {
+    grid-template-areas:
+      'details'
+      'participants'
+      'results';
+  }
+
+  .race-details-page .race-details-content-grid:not([data-status='finished']).is-lmu.has-registration {
+    grid-template-areas:
+      'registration'
+      'details'
+      'results';
+  }
+
+  .race-details-page .race-details-content-grid:not([data-status='finished']).is-lmu:not(.has-registration) {
+    grid-template-areas:
+      'details'
+      'results';
+  }
+
+  .race-details-page .race-details-content-grid.is-lmu[data-status='finished'] {
+    grid-template-areas:
+      'results'
+      'video'
+      'vote';
+  }
+}
+
+@media (max-width: 680px) {
+  .race-details-page .race-details-hero {
+    border-radius: 15px;
+  }
+
+  .race-details-page .race-hero-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-details-page .race-details-title {
+    padding: 20px 16px 16px;
+  }
+
+  .race-details-page .race-details-title h1 {
+    font-size: 1.75rem;
+  }
+
+  .race-details-page .race-hero-status {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 5px 12px;
+    padding: 12px 16px;
+    border-top: 1px solid rgba(199, 219, 255, 0.2);
+    border-left: 0;
+  }
+
+  .race-details-page .race-hero-status > span {
+    grid-column: 1;
+  }
+
+  .race-details-page .race-hero-status strong {
+    grid-column: 1;
+    grid-row: 2;
+    font-size: 1.25rem;
+  }
+
+  .race-details-page .race-details-actions {
+    padding: 10px 14px;
+  }
+
+  .race-details-page .race-details-actions .button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .race-details-page .race-track-media {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-details-page .race-track-media .race-track-image-display {
+    height: min(25vh, 220px);
+    min-height: min(25vh, 140px);
+  }
+
+  .race-details-page .race-track-media-copy {
+    gap: 10px;
+    padding: 15px;
+  }
+
+  .race-details-page .race-track-media .race-track-image-control {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .race-details-page .race-track-image-copy {
+    grid-column: 1 / -1;
+  }
+
+  .race-details-page .race-results-tabs.race-results-tabs-top {
+    width: 100%;
+    justify-content: stretch;
+    border-radius: 14px;
+  }
+
+  .race-details-page .race-results-tabs-top .tab-button {
+    min-width: 0;
+    flex: 1 1 100px;
+    padding-inline: 9px;
+  }
+
+  .race-details-page .race-registration-panel,
+  .race-details-page .race-operational-details,
+  .race-details-page .race-participants-panel,
+  .race-details-page .race-results-panel {
+    padding: 14px;
+  }
+
+  .race-details-page .race-operational-grid,
+  .race-details-page .race-results-info-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-details-page .race-operational-description,
+  .race-details-page .race-results-info-description,
+  .race-details-page .race-operational-mods,
+  .race-details-page .race-results-info-mods {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .race-details-page .race-details-title h1 {
+    font-size: 1.55rem;
+  }
+
+  .race-details-page .race-results-podium {
+    gap: 5px;
+  }
+
+  .race-details-page .race-results-podium .result-podium-card {
+    padding: 9px 6px;
+  }
+
+  .race-details-page .race-track-media .race-track-image-control {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.race-details-page .race-hero-weather {
+  padding: 10px 26px 14px;
+  border-top: 1px solid rgba(199, 219, 255, 0.19);
+  color: #f4f7ff;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.race-details-page .race-hero-weather-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.race-details-page .race-weather-icon {
+  flex: 0 0 auto;
+  color: #f7d66b;
+}
+
+.race-details-page .race-weather-icon.weather-partly_cloudy,
+.race-details-page .race-weather-icon.weather-overcast {
+  color: #c9dcfa;
+}
+
+.race-details-page .race-weather-icon.weather-light_rain,
+.race-details-page .race-weather-icon.weather-heavy_rain {
+  color: #89caff;
+}
+
+.race-details-page .race-weather-icon.weather-storm {
+  color: #ffd18a;
+}
+
+.race-details-page .race-weather-condition {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.race-details-page .race-weather-condition > span {
+  color: #a9c2ea;
+  font-size: var(--tiny-text-size);
+  font-weight: 850;
+}
+
+.race-details-page .race-weather-condition > strong {
+  overflow-wrap: anywhere;
+}
+
+.race-details-page .race-weather-temperature {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 16px;
+  padding-left: 16px;
+  border-left: 1px solid rgba(199, 219, 255, 0.2);
+  font-variant-numeric: tabular-nums;
+}
+
+.race-details-page .race-weather-temperature svg {
+  color: #a9caff;
+}
+
+.race-details-page .race-weather-toggle {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 7px 11px;
+  border: 1px solid rgba(190, 214, 252, 0.3);
+  border-radius: 9px;
+  color: #e6efff;
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+}
+
+.race-details-page .race-weather-toggle:hover {
+  border-color: #6fa5ff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.race-details-page .race-weather-details {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.race-details-page .race-weather-probability {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(190, 214, 252, 0.18);
+  border-radius: 9px;
+  background: rgba(2, 14, 39, 0.3);
+}
+
+.race-details-page .race-weather-probability > span {
+  color: #c6d7f1;
+  font-size: var(--tiny-text-size);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.race-details-page .race-hero-overview {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.85fr) minmax(0, 3.4fr);
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid rgba(199, 219, 255, 0.19);
+  color: #f4f7ff;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.race-details-page .race-hero-overview.has-two-facts {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+
+.race-details-page .race-hero-weather,
+.race-details-page .race-overview-fact {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(190, 214, 252, 0.2);
+  border-radius: 11px;
+  background: rgba(2, 14, 39, 0.28);
+}
+
+.race-details-page .race-hero-weather {
+  min-height: 92px;
+  padding: 0;
+  border-top: 1px solid rgba(190, 214, 252, 0.2);
+}
+
+.race-details-page .race-overview-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(92px, auto);
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+
+.race-details-page .race-hero-overview.has-two-facts .race-overview-facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.race-details-page .race-hero-overview.weather-details-expanded .race-overview-facts {
+  align-self: start;
+}
+
+.race-details-page .race-overview-fact {
+  display: flex;
+  min-height: 92px;
+  flex-direction: column;
+}
+
+.race-details-page .race-overview-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: inherit;
+  color: #e6efff;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.race-details-page .race-overview-toggle:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.race-details-page .race-overview-toggle:focus-visible {
+  outline: 2px solid #8bb8ff;
+  outline-offset: -3px;
+}
+
+.race-details-page .race-overview-toggle > span:first-of-type {
+  min-width: 0;
+  color: #b9d1f5;
+  font-size: var(--tiny-text-size);
+  font-weight: 850;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.race-details-page .race-overview-toggle > svg:last-child {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: #a9caff;
+}
+
+.race-details-page .race-weather-card-toggle > span:first-of-type {
+  color: #f4f7ff;
+}
+
+.race-details-page .race-weather-card-toggle > .race-weather-icon {
+  flex: 0 0 auto;
+}
+
+.race-details-page .race-weather-collapsed-summary {
+  min-width: 0;
+  margin-left: auto;
+  color: #e6efff;
+  font-size: var(--tiny-text-size);
+  font-weight: 750;
+  line-height: 1.25;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.race-details-page .race-hero-weather-body {
+  padding: 0 10px 10px;
+}
+
+.race-details-page .race-hero-weather-summary {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.race-details-page .race-weather-condition > span {
+  display: none;
+}
+
+.race-details-page .race-weather-condition > strong {
+  color: #f4f7ff;
+  line-height: 1.3;
+}
+
+.race-details-page .race-weather-temperature {
+  gap: 5px;
+  margin-left: auto;
+  padding-left: 9px;
+  border-left: 1px solid rgba(199, 219, 255, 0.2);
+  white-space: nowrap;
+}
+
+.race-details-page .race-weather-toggle {
+  min-height: 32px;
+  margin-left: 0;
+  padding: 5px 8px;
+  font-size: var(--tiny-text-size);
+}
+
+.race-details-page .race-weather-details {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.race-details-page .race-weather-probability {
+  padding: 7px;
+}
+
+.race-details-page .race-overview-fact-value {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 50px;
+  align-items: center;
+  padding: 0 10px 10px;
+}
+
+.race-details-page .race-overview-fact-value strong {
+  min-width: 0;
+  color: #f4f7ff;
+  font-size: 0.86rem;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.race-details-page .race-overview-fact.is-collapsed .race-overview-toggle {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 1080px) {
+  .race-details-page .race-hero-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-details-page .race-hero-overview.has-two-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-details-page .race-overview-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .race-details-page .race-hero-overview {
+    gap: 8px;
+    padding: 10px 12px 14px;
+  }
+
+  .race-details-page .race-overview-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .race-details-page .race-weather-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 380px) {
+  .race-details-page .race-overview-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.race-details-page .race-details-content-grid:not([data-status='finished']) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'registration'
+    'participants'
+    'details'
+    'results';
+}
+
+.race-details-page .race-details-content-grid:not([data-status='finished']):not(.has-registration) {
+  grid-template-areas:
+    'details'
+    'participants'
+    'results';
+}
+
+.race-details-page .race-details-content-grid.is-lmu:not([data-status='finished']) {
+  grid-template-areas:
+    'registration'
+    'details'
+    'results';
+}
+
+.race-details-page .race-details-content-grid.is-lmu:not(.has-registration):not([data-status='finished']) {
+  grid-template-areas:
+    'details'
+    'results';
+}
+
+.race-details-page .race-details-content-grid[data-status='finished'] {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  grid-template-areas:
+    'results media'
+    'participants participants';
+  align-items: start;
+}
+
+.race-details-page .race-details-content-grid[data-status='finished'] > .race-main-layout {
+  display: grid;
+  grid-area: media;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  width: 100%;
+}
+
+.race-details-page .race-details-content-grid[data-status='finished'] .race-main-column,
+.race-details-page .race-details-content-grid[data-status='finished'] .race-vote-column {
+  grid-area: auto;
+  min-width: 0;
+}
+
+.race-details-page .race-details-content-grid.is-lmu[data-status='finished'] {
+  grid-template-areas: 'results media';
+}
+
+.race-details-page .race-track-media {
+  position: relative;
+  isolation: isolate;
+  grid-template-columns: minmax(0, 2.2fr) minmax(240px, 1.1fr) minmax(260px, 1.2fr);
+  grid-template-rows: minmax(220px, auto) auto;
+}
+
+.race-details-page .race-track-image-display {
+  position: relative;
+  isolation: isolate;
+}
+
+.race-details-page .race-track-media > * {
+  position: relative;
+  z-index: 1;
+}
+
+.race-details-page .race-track-media:not(.has-race-video) {
+  grid-template-columns: minmax(0, 1.7fr) minmax(240px, 1fr);
+}
+
+.race-details-page .race-track-media .race-track-image-display {
+  display: block;
+  height: 100%;
+  min-height: 220px;
+  max-height: none;
+  margin: 0;
+  overflow: hidden;
+  background: #07172d;
+}
+
+.race-details-page .race-track-media .race-track-image-trigger {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 220px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: #07172d;
+}
+
+.race-details-page .race-track-media .race-track-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: cover;
+  transition: transform 150ms ease;
+}
+
+.race-details-page .race-track-media .race-track-image-display::after {
+  content: none;
+}
+
+.race-details-page .race-track-media .race-track-image-control {
+  grid-template-columns: minmax(0, 1fr) repeat(3, auto);
+}
+
+.race-details-page .race-track-image-viewer {
+  width: 100%;
+  height: min(700px, calc(100dvh - 190px));
+  min-height: 0;
+  overflow: hidden;
+  background: #07172d;
+}
+
+.race-details-page .race-track-image-viewer img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.race-details-page .race-track-video-panel {
+  display: grid;
+  grid-template-rows: auto minmax(132px, 1fr) auto;
+  align-content: stretch;
+  gap: 8px;
+  min-height: 0;
+  padding: 10px 12px;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.race-details-page .race-track-video-panel .section-header {
+  align-items: flex-start;
+  margin: 0;
+}
+
+.race-details-page .race-track-video-panel .race-video-frame {
+  min-width: 0;
+  height: 100%;
+  min-height: 132px;
+  overflow: hidden;
+  background: #020914;
+}
+
+.race-details-page .race-track-video-panel .race-video-frame video {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+}
+
+.race-details-page .race-track-video-panel > .empty-row {
+  display: grid;
+  min-height: 132px;
+  place-items: center;
+}
+
+.race-details-page .race-track-video-panel .race-video-upload {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  align-items: end;
+  gap: 8px;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .race-details-page .race-track-media,
+  .race-details-page .race-track-media:not(.has-race-video) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+  }
+
+  .race-details-page .race-track-media .race-track-image-display {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    height: clamp(220px, 35vw, 320px);
+    min-height: 220px;
+  }
+
+  .race-details-page .race-track-media .race-track-image-control {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .race-details-page .race-track-image-copy {
+    grid-column: 1 / -1;
+  }
+
+  .race-details-page .race-track-media .race-track-image-trigger {
+    height: 100%;
+  }
+
+  .race-details-page .race-track-media .race-track-image {
+    height: 100%;
+  }
+
+  .race-details-page .race-track-media-copy {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .race-details-page .race-track-video-panel {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    min-height: 0;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .race-details-page .race-track-media {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+  }
+
+  .race-details-page .race-track-media .race-track-image-display {
+    height: 220px;
+    min-height: 220px;
+  }
+
+  .race-details-page .race-track-image-viewer {
+    width: 100%;
+    height: min(620px, calc(100dvh - 190px));
+  }
+
+  .race-details-page .race-title-heading-row {
+    align-items: flex-start;
+  }
+
+  .race-details-page .race-hero-main::after {
+    bottom: 6px;
+    height: 66px;
+    font-size: 62px;
+  }
+
+  .race-details-page .race-track-video-panel {
+    min-height: 0;
+    grid-column: auto;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .race-details-page .race-track-media .race-track-image-control {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-details-page .race-track-image-copy {
+    grid-column: 1;
+  }
+
+}
+
+@media (max-width: 1100px) {
+  .race-details-page .race-details-content-grid[data-status='finished'] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'results'
+      'media'
+      'participants';
+  }
+
+  .race-details-page .race-details-content-grid.is-lmu[data-status='finished'] {
+    grid-template-areas:
+      'results'
+      'media';
+  }
+}
+
+@media (max-width: 680px) {
+  .race-details-page .race-hero-weather {
+    padding: 10px 14px 12px;
+  }
+
+  .race-details-page .race-hero-weather-summary {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .race-details-page .race-weather-temperature {
+    margin-left: auto;
+    padding-left: 10px;
+  }
+
+  .race-details-page .race-weather-toggle {
+    flex: 1 0 100%;
+    margin-left: 0;
+  }
+
+  .race-details-page .race-weather-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .race-details-page .race-hero-status {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .race-details-page .race-hero-status strong {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+
+.race-details-page .race-results-table-wrap {
+  width: 100%;
+  min-width: 0;
+}
+
+.race-details-page .race-results-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.race-details-page .race-results-table th,
+.race-details-page .race-results-table td {
+  padding: 8px 6px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.race-details-page .race-results-table th:first-child,
+.race-details-page .race-results-table td:first-child {
+  width: 44px;
+  text-align: center;
+}
+
+.race-details-page .race-results-table th:nth-child(2),
+.race-details-page .race-results-table td:nth-child(2) {
+  width: 210px;
+}
+
+@media (max-width: 1600px) {
+  .race-details-page .race-details-content-grid[data-status='finished'] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'results'
+      'media'
+      'participants';
+  }
+
+  .race-details-page .race-details-content-grid.is-lmu[data-status='finished'] {
+    grid-template-areas:
+      'results'
+      'media';
+  }
+}
+
+.race-details-page .race-details-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'track'
+    'tabs'
+    'details'
+    'participants'
+    'results';
+  gap: 14px;
+  min-width: 0;
+}
+
+.race-details-page .race-details-layout > .race-track-media {
+  grid-area: track;
+}
+
+.race-details-page .race-details-tabs {
+  display: grid;
+  grid-area: tabs;
+  gap: 10px;
+  min-width: 0;
+}
+
+.race-details-page .race-details-content-grid:not([data-status='finished']) {
+  display: contents;
+}
+
+.race-details-page .race-details-content-grid[data-status='finished'] {
+  grid-area: content;
+}
+
+.race-details-page .race-details-layout.has-registration:not([data-status='finished']) {
+  grid-template-areas:
+    'registration'
+    'track'
+    'tabs'
+    'participants'
+    'details'
+    'results';
+}
+
+.race-details-page .race-details-layout:not([data-status='finished']):not(.has-tabs) {
+  grid-template-areas:
+    'track'
+    'details'
+    'participants'
+    'results';
+}
+
+.race-details-page .race-details-layout.has-registration:not([data-status='finished']):not(.has-tabs) {
+  grid-template-areas:
+    'registration'
+    'track'
+    'participants'
+    'details'
+    'results';
+}
+
+.race-details-page .race-details-layout.is-lmu:not([data-status='finished']) {
+  grid-template-areas:
+    'track'
+    'tabs'
+    'details'
+    'results';
+}
+
+.race-details-page .race-details-layout.is-lmu.has-registration:not([data-status='finished']) {
+  grid-template-areas:
+    'registration'
+    'track'
+    'tabs'
+    'details'
+    'results';
+}
+
+.race-details-page .race-details-layout.is-lmu:not([data-status='finished']):not(.has-tabs) {
+  grid-template-areas:
+    'track'
+    'details'
+    'results';
+}
+
+.race-details-page .race-details-layout.is-lmu.has-registration:not([data-status='finished']):not(.has-tabs) {
+  grid-template-areas:
+    'registration'
+    'track'
+    'details'
+    'results';
+}
+
+.race-details-page .race-details-layout[data-status='finished'] {
+  grid-template-areas:
+    'track'
+    'tabs'
+    'content';
+}
+
+.race-details-page .race-operational-details {
+  scroll-margin-top: calc(var(--topbar-height) + 16px);
+}
+
+.race-details-page .race-registration-panel .button.primary.race-register-button {
+  border-color: #087a46;
+  color: #fff;
+  background: #087a46;
+  box-shadow: 0 8px 18px rgba(8, 122, 70, 0.2);
+}
+
+.race-details-page .race-registration-panel .button.primary.race-register-button:hover:not(:disabled) {
+  border-color: #075f3b;
+  background: #075f3b;
+}
+
+@media (min-width: 681px) {
+  .race-details-page .race-results-podium .result-podium-card {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+    height: auto;
+    min-height: 200px;
+    padding: 10px 12px;
+  }
+
+  .race-details-page .race-results-podium .result-podium-card.is-silver {
+    grid-column: 1;
+    align-self: end;
+    min-height: 235px;
+  }
+
+  .race-details-page .race-results-podium .result-podium-card.is-gold {
+    grid-column: 2;
+    align-self: end;
+    min-height: 285px;
+  }
+
+  .race-details-page .race-results-podium .result-podium-card.is-bronze {
+    grid-column: 3;
+    align-self: end;
+    min-height: 200px;
+  }
+}
+</style>

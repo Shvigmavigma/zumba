@@ -5174,6 +5174,16 @@ textarea {
   width: min(880px, calc(100vw - 32px));
 }
 
+.moderation-reject-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.moderation-rejection-reason {
+  margin: 4px 0 0;
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+
 .moderation-user-dialog h3 {
   margin: 0 0 10px;
 }
@@ -13727,7 +13737,8 @@ body,
 
 .main-news-strip .news-dots {
   gap: 6px;
-  padding: 0;
+  min-height: 32px;
+  padding: 0 10px;
   border: 0;
   background: transparent;
   backdrop-filter: none;
@@ -13736,8 +13747,8 @@ body,
 .main-news-strip .news-dot,
 .main-news-strip .news-dot.is-active {
   position: relative;
-  width: 24px;
-  height: 24px;
+  width: 30px;
+  height: 30px;
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -13748,8 +13759,8 @@ body,
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.58);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
@@ -13765,7 +13776,7 @@ body,
 .main-news-strip .news-dot.is-active::after {
   background: #ffffff;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.26), 0 6px 14px rgba(0, 0, 0, 0.22);
-  transform: translate(-50%, -50%) scaleX(3);
+  transform: translate(-50%, -50%) scaleX(2.4);
 }
 
 :root[data-theme='light'] .main-news-strip .news-dot.is-active::after {
@@ -14123,10 +14134,15 @@ body,
   box-shadow: none;
 }
 
-.timezone-picker .country-combobox-trigger:focus-visible {
+.timezone-picker:has(.country-combobox-trigger:focus-visible) {
   outline: 2px solid color-mix(in srgb, var(--brand-blue) 45%, transparent);
   outline-offset: 2px;
-  border-radius: 999px;
+}
+
+.timezone-picker .country-combobox-trigger:focus-visible,
+.timezone-picker.is-open .country-combobox-trigger {
+  outline: 0;
+  border-color: transparent;
 }
 
 .timezone-picker .country-combobox-leading {
@@ -18537,4 +18553,62 @@ body,
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
+}
+
+.main-races-section .main-race-grid {
+  grid-auto-rows: var(--main-race-slot-height);
+}
+
+.main-races-section .main-race-card {
+  height: var(--main-race-slot-height);
+  min-height: var(--main-race-slot-height);
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.main-races-section .main-race-action-panel {
+  align-content: center;
+  gap: 4px;
+  grid-template-rows: none;
+  grid-auto-rows: max-content;
+  padding: 6px 8px;
+}
+
+.main-races-section .main-race-action-panel .main-registered-badge,
+.main-races-section .main-race-action-panel .race-status-badge {
+  min-height: 26px;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.1;
+}
+
+.main-races-section .main-race-registration-start {
+  gap: 2px;
+  padding: 4px 6px;
+}
+
+.main-races-section .main-race-registration-start strong {
+  font-size: 12px;
+}
+
+.main-races-section .main-race-open {
+  min-height: 34px;
+  padding: 4px 10px;
+}
+
+@media (max-width: 1060px) {
+  .main-races-section .main-race-grid {
+    grid-auto-rows: auto;
+  }
+
+  .main-races-section .main-race-card {
+    height: auto;
+    min-height: 0;
+    grid-template-rows: auto;
+    overflow: visible;
+  }
+
+  .main-races-section .main-race-action-panel {
+    padding: 10px;
+  }
 }

@@ -64,6 +64,7 @@ async def init_db() -> None:
         # persisted cleared profile requests as the JSON literal ``null``.
         # Normalize those rows so they cannot be mistaken for active requests.
         await conn.execute(text("UPDATE users SET pending_profile_changes = NULL WHERE pending_profile_changes = 'null'::jsonb"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_rejection JSONB"))
         await conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE"))
         await conn.execute(text("UPDATE news_items SET is_pinned = FALSE WHERE is_pinned IS NULL"))
         await conn.execute(text("ALTER TABLE news_items ALTER COLUMN is_pinned SET DEFAULT FALSE"))
@@ -80,6 +81,8 @@ async def init_db() -> None:
         await conn.execute(text("ALTER TABLE moderation_history ADD COLUMN IF NOT EXISTS device_fingerprint VARCHAR(64)"))
         await conn.execute(text("ALTER TABLE moderation_history ADD COLUMN IF NOT EXISTS device_label VARCHAR(120)"))
         await conn.execute(text("ALTER TABLE moderation_history ADD COLUMN IF NOT EXISTS ip_fingerprint VARCHAR(64)"))
+        await conn.execute(text("ALTER TABLE moderation_history ADD COLUMN IF NOT EXISTS rejection_reason TEXT"))
+        await conn.execute(text("ALTER TABLE moderation_history ADD COLUMN IF NOT EXISTS request_snapshot JSONB"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_moderation_history_device_fingerprint ON moderation_history (device_fingerprint)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_moderation_history_ip_fingerprint ON moderation_history (ip_fingerprint)"))
         await conn.execute(text("UPDATE users SET avatar_upload_count = 0 WHERE avatar_upload_count IS NULL"))

@@ -4,6 +4,7 @@ import { Edit3, RefreshCw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
+import AccountModerationNotice from '../components/AccountModerationNotice.vue'
 import ProfileAnalytics from '../components/ProfileAnalytics.vue'
 import PilotRoles from '../components/PilotRoles.vue'
 import UserAvatar from '../components/UserAvatar.vue'
@@ -137,6 +138,8 @@ onMounted(() => {
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
+
+    <AccountModerationNotice scope="profile" />
 
     <article v-if="user" class="card pilot-profile-card profile-overview-card">
       <button class="avatar-open-button pilot-profile-avatar-button" type="button" :title="t('avatar.open')" @click="avatarViewerOpen = true">

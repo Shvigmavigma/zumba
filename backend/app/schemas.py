@@ -164,6 +164,26 @@ class UserPublic(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class UserRejectionRead(BaseModel):
+    request_type: Literal["registration", "profile"]
+    reason: str
+    request_snapshot: dict[str, Any] = Field(default_factory=dict)
+    rejected_at: datetime
+    resubmit_after: datetime | None = None
+
+
+class ModerationRejectRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def reason_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Rejection reason is required")
+        return value
+
+
 class UserPrivate(UserPublic):
     email: EmailStr
     updated_at: datetime
@@ -171,6 +191,7 @@ class UserPrivate(UserPublic):
     timeout_start: datetime | None
     timeout_end: datetime | None
     pending_profile_changes: dict | None = None
+    last_rejection: UserRejectionRead | None = None
     show_pilot_roles: bool = True
 
 
@@ -218,6 +239,8 @@ class ModerationHistoryRead(BaseModel):
     pilot_number: int
     steam_id: str | None = None
     pending_profile_changes: dict | None = None
+    rejection_reason: str | None = None
+    request_snapshot: dict[str, Any] | None = None
     device_label: str | None = None
     device_id: str | None = None
     same_device_account_count: int = Field(default=1, ge=1)
@@ -537,10 +560,22 @@ class RaceAssetClass(BaseModel):
         return self
 
 
+class TrackImageCrop(BaseModel):
+    zoom: float = Field(default=1, ge=1, le=3)
+    x: float = Field(default=50, ge=0, le=100)
+    y: float = Field(default=50, ge=0, le=100)
+
+
+class TrackImageCropUpdate(TrackImageCrop):
+    game: AssetGameCode
+    track: str = Field(min_length=1, max_length=160)
+
+
 class RaceAssetGameConfig(BaseModel):
     tracks: list[str] = Field(default_factory=list)
     classes: list[RaceAssetClass] = Field(default_factory=list)
     track_images: dict[str, str] = Field(default_factory=dict)
+    track_image_crops: dict[str, TrackImageCrop] = Field(default_factory=dict)
     track_ids: dict[str, str] = Field(default_factory=dict)
     expected_average_lap_ms: dict[str, int] = Field(default_factory=dict)
 
@@ -564,6 +599,11 @@ class RaceAssetGameConfig(BaseModel):
             for track, image_url in self.track_images.items()
             if track.strip().lower() in allowed_tracks and str(image_url).strip()
         }
+        self.track_image_crops = {
+            allowed_tracks[track.strip().lower()]: crop
+            for track, crop in self.track_image_crops.items()
+            if track.strip().lower() in allowed_tracks
+        }
         self.expected_average_lap_ms = {
             allowed_tracks[track.strip().lower()]: int(lap_ms)
             for track, lap_ms in self.expected_average_lap_ms.items()
@@ -586,6 +626,7 @@ class RaceAssetsConfig(RaceAssetGameConfig):
                 "tracks": value.get("tracks", []),
                 "classes": value.get("classes", []),
                 "track_images": value.get("track_images", {}),
+                "track_image_crops": value.get("track_image_crops", {}),
                 "track_ids": value.get("track_ids", {}),
                 "expected_average_lap_ms": value.get("expected_average_lap_ms", {}),
                 "car_model_ids": value.get("car_model_ids", {}),
@@ -610,19 +651,24 @@ class RaceAssetsConfig(RaceAssetGameConfig):
         }
         allowed_games = ("ACC", "AC", "iRacing", "LMU")
         self.games = {game: self.games.get(game, RaceAssetGameConfig()) for game in allowed_games}
-        if not self.tracks and not self.classes and not self.track_images and not self.expected_average_lap_ms:
+        if not self.tracks and not self.classes and not self.track_images and not self.track_image_crops and not self.expected_average_lap_ms:
             acc = self.games["ACC"]
             self.tracks = list(acc.tracks)
             self.classes = list(acc.classes)
             self.track_images = dict(acc.track_images)
+            self.track_image_crops = dict(acc.track_image_crops)
             self.track_ids = dict(acc.track_ids)
             self.expected_average_lap_ms = dict(acc.expected_average_lap_ms)
-        elif not self.expected_average_lap_ms:
-            self.expected_average_lap_ms = dict(self.games["ACC"].expected_average_lap_ms)
+        else:
+            if not self.track_image_crops:
+                self.track_image_crops = dict(self.games["ACC"].track_image_crops)
+            if not self.expected_average_lap_ms:
+                self.expected_average_lap_ms = dict(self.games["ACC"].expected_average_lap_ms)
         self.games["ACC"] = RaceAssetGameConfig(
             tracks=self.tracks,
             classes=self.classes,
             track_images=self.track_images,
+            track_image_crops=self.track_image_crops,
             track_ids=self.track_ids,
             expected_average_lap_ms=self.expected_average_lap_ms,
         )

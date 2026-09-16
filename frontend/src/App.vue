@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { CalendarDays, Calculator, Clock3, Flag, Home, Languages, ListChecks, LogIn, LogOut, Medal, Moon, MoreHorizontal, Newspaper, Shield, Sun, Trophy, User, Users, Vote } from 'lucide-vue-next'
 import CountryCombobox from './components/CountryCombobox.vue'
+import AccountModerationNotice from './components/AccountModerationNotice.vue'
 import { api } from './api'
 import { statusLabel } from './i18nLabels'
 import { brandingSettings, ensureBrandingSettings } from './brandingSettings'
@@ -315,10 +316,7 @@ watch(navItems, () => {
     </header>
 
     <main class="page">
-      <div v-if="state.user?.status === 'unapproved'" class="account-review-notice" role="status">
-        <Shield :size="18" />
-        <span>{{ t('profile.accountUnderReview') }}</span>
-      </div>
+      <AccountModerationNotice scope="global" />
       <RouterView />
     </main>
   </div>

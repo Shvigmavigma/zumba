@@ -1,0 +1,191 @@
+{
+    "sessionType": "R",
+    "trackName": null,
+    "sessionIndex": 2,
+    "sessionResult": {
+        "bestlap": 102287,
+        "bestSplits": [
+            33102,
+            34967,
+            34218
+        ],
+        "isWetSession": 0,
+        "type": 1,
+        "leaderBoardLines": [{
+                "car": {
+                    "carId": 1001,
+                    "raceNumber": 67,
+                    "carModel": 2,
+                    "cupCategory": 0,
+                    "teamName": "",
+                    "drivers": [{
+                        "firstName": "SUPER",
+                        "lastName": "LEGENDA",
+                        "shortName": "SHV",
+                        "playerId": "S76561199473417726"
+                    }]
+                },
+                "currentDriver": {
+                    "firstName": "SUPER",
+                    "lastName": "LEGENDA",
+                    "shortName": "SHV",
+                    "playerId": "S76561199473417726"
+                },
+                "currentDriverIndex": 0,
+                "timing": {
+                    "lastLap": 102644,
+                    "lastSplits": [
+                        33214,
+                        34988,
+                        34442
+                    ],
+                    "bestLap": 102287,
+                    "bestSplits": [
+                        33102,
+                        34967,
+                        34218
+                    ],
+                    "totalTime": 14432782,
+                    "lapCount": 14,
+                    "lastSplitId": 0
+                },
+                "missingMandatoryPitstop": 0,
+                "driverTotalTimes": [
+                    0
+                ]
+            },
+            {
+                "car": {
+                    "carId": 1002,
+                    "raceNumber": 710,
+                    "carModel": 35,
+                    "cupCategory": 0,
+                    "teamName": "",
+                    "drivers": [{
+                        "firstName": "Anatoly",
+                        "lastName": "Krotov",
+                        "shortName": "KON",
+                        "playerId": "S76561199345546594"
+                    }]
+                },
+                "currentDriver": {
+                    "firstName": "Anatoly",
+                    "lastName": "Krotov",
+                    "shortName": "KON",
+                    "playerId": "S76561199345546594"
+                },
+                "currentDriverIndex": 0,
+                "timing": {
+                    "lastLap": 102911,
+                    "lastSplits": [
+                        33315,
+                        35071,
+                        34525
+                    ],
+                    "bestLap": 102431,
+                    "bestSplits": [
+                        33188,
+                        34982,
+                        34261
+                    ],
+                    "totalTime": 14489106,
+                    "lapCount": 14,
+                    "lastSplitId": 0
+                },
+                "missingMandatoryPitstop": 0,
+                "driverTotalTimes": [
+                    0
+                ]
+            },
+            {
+                "car": {
+                    "carId": 1003,
+                    "raceNumber": 43,
+                    "carModel": 12,
+                    "cupCategory": 0,
+                    "teamName": "",
+                    "drivers": [{
+                        "firstName": "Арсений",
+                        "lastName": "Покидышев",
+                        "shortName": "SEM",
+                        "playerId": "S76561199087092455"
+                    }]
+                },
+                "currentDriver": {
+                    "firstName": "Арсений",
+                    "lastName": "Покидышев",
+                    "shortName": "SEM",
+                    "playerId": "S76561199087092455"
+                },
+                "currentDriverIndex": 0,
+                "timing": {
+                    "lastLap": 103122,
+                    "lastSplits": [
+                        33401,
+                        35113,
+                        34608
+                    ],
+                    "bestLap": 102876,
+                    "bestSplits": [
+                        33275,
+                        35044,
+                        34557
+                    ],
+                    "totalTime": 14520671,
+                    "lapCount": 14,
+                    "lastSplitId": 0
+                },
+                "missingMandatoryPitstop": 0,
+                "driverTotalTimes": [
+                    0
+                ]
+            },
+            {
+                "car": {
+                    "carId": 1004,
+                    "raceNumber": 777,
+                    "carModel": 12,
+                    "cupCategory": 0,
+                    "teamName": "",
+                    "drivers": [{
+                        "firstName": "Commentator",
+                        "lastName": "Пианино",
+                        "shortName": "PIA",
+                        "playerId": "S76561198993311881"
+                    }]
+                },
+                "currentDriver": {
+                    "firstName": "Commentator",
+                    "lastName": "Пианино",
+                    "shortName": "PIA",
+                    "playerId": "S76561198993311881"
+                },
+                "currentDriverIndex": 0,
+                "timing": {
+                    "lastLap": 103447,
+                    "lastSplits": [
+                        33515,
+                        35214,
+                        34718
+                    ],
+                    "bestLap": 103214,
+                    "bestSplits": [
+                        33402,
+                        35118,
+                        34694
+                    ],
+                    "totalTime": 14577328,
+                    "lapCount": 14,
+                    "lastSplitId": 0
+                },
+                "missingMandatoryPitstop": 0,
+                "driverTotalTimes": [
+                    0
+                ]
+            }
+        ]
+    },
+    "laps": [],
+    "penalties": [],
+    "post_race_penalties": []
+}

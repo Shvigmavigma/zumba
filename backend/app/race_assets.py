@@ -188,6 +188,7 @@ def preserve_track_metadata(previous: RaceAssetGameConfig, incoming: RaceAssetGa
     previous_by_name = {track.lower(): track for track in previous.tracks}
     track_ids: dict[str, str] = {}
     track_images = dict(incoming.track_images)
+    track_image_crops = dict(incoming.track_image_crops)
     expected_average_lap_ms: dict[str, int] = {}
     for index, track in enumerate(incoming.tracks):
         old_track = previous_by_name.get(track.lower())
@@ -198,6 +199,10 @@ def preserve_track_metadata(previous: RaceAssetGameConfig, incoming: RaceAssetGa
             image_url = previous.track_images.get(old_track)
             if image_url:
                 track_images[track] = image_url
+        if track not in track_image_crops and old_track:
+            crop = previous.track_image_crops.get(old_track)
+            if crop:
+                track_image_crops[track] = crop
         expected_lap = incoming.expected_average_lap_ms.get(track)
         if expected_lap is None and old_track and old_track.lower() != track.lower():
             expected_lap = previous.expected_average_lap_ms.get(old_track)
@@ -207,6 +212,7 @@ def preserve_track_metadata(previous: RaceAssetGameConfig, incoming: RaceAssetGa
         tracks=incoming.tracks,
         classes=incoming.classes,
         track_images=track_images,
+        track_image_crops=track_image_crops,
         track_ids=track_ids,
         expected_average_lap_ms=expected_average_lap_ms,
     )
@@ -235,6 +241,7 @@ async def save_race_assets(session: AsyncSession, payload: RaceAssetsConfig) -> 
     normalized.tracks = list(acc.tracks)
     normalized.classes = list(acc.classes)
     normalized.track_images = dict(acc.track_images)
+    normalized.track_image_crops = dict(acc.track_image_crops)
     normalized.track_ids = dict(acc.track_ids)
     normalized = normalize_race_assets(normalized.model_dump())
     if setting is None:
@@ -252,6 +259,7 @@ def assets_for_game(config: RaceAssetsConfig, game: str) -> RaceAssetGameConfig:
             tracks=config.tracks,
             classes=config.classes,
             track_images=config.track_images,
+            track_image_crops=config.track_image_crops,
             track_ids=config.track_ids,
             expected_average_lap_ms=config.expected_average_lap_ms,
         )

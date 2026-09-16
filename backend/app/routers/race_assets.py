@@ -9,7 +9,7 @@ from app.db import get_session
 from app.deps import require_admin, require_moder_plus
 from app.rate_limit import limiter
 from app.race_assets import get_race_assets, save_race_assets
-from app.schemas import AssetGameCode, RaceAssetsConfig
+from app.schemas import AssetGameCode, RaceAssetsConfig, TrackImageCrop, TrackImageCropUpdate
 
 
 router = APIRouter()
@@ -114,6 +114,30 @@ async def upload_track_image(
     saved = await save_race_assets(session, config)
     remove_track_image_file(previous)
     return saved
+
+
+@router.patch("/track-image/crop", response_model=RaceAssetsConfig)
+@limiter.limit("30/minute")
+async def update_track_image_crop(
+    payload: TrackImageCropUpdate,
+    request: Request,
+    _: object = Depends(require_moder_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    config = await get_race_assets(session)
+    game_config = config.games.get(payload.game)
+    track_name = next(
+        (name for name in (game_config.track_images if game_config else {}) if name.lower() == payload.track.strip().lower()),
+        None,
+    )
+    if game_config is None or track_name is None:
+        raise HTTPException(status_code=404, detail="Track image not found")
+
+    crop = TrackImageCrop(zoom=payload.zoom, x=payload.x, y=payload.y)
+    game_config.track_image_crops = {**game_config.track_image_crops, track_name: crop}
+    if payload.game == "ACC":
+        config.track_image_crops = dict(game_config.track_image_crops)
+    return await save_race_assets(session, config)
 
 
 @router.delete("/track-image", response_model=RaceAssetsConfig)
