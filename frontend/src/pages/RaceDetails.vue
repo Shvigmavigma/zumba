@@ -170,8 +170,7 @@ const qualificationRows = computed(() => {
       .filter((row) => Number.isFinite(Number(row.qualification_best_lap_ms)))
       .sort((left, right) => Number(left.qualification_position || 9999) - Number(right.qualification_position || 9999))
       .map((row, index) => ({ ...row, position: row.qualification_position || index + 1, best_lap_ms: row.qualification_best_lap_ms, source: 'qualification' }))
-    const leaderLap = manualRows[0]?.best_lap_ms
-    return manualRows.map((row) => ({ ...row, gap_ms: Number(row.best_lap_ms) - Number(leaderLap) }))
+    return manualRows
   }
   const mapped = lines.map((line, index) => {
     const driver = accLineDriver(line)
@@ -204,11 +203,7 @@ const qualificationRows = computed(() => {
       source: 'qualification'
     }
   })
-  const leaderLap = mapped.find((row) => Number.isFinite(Number(row.best_lap_ms)))?.best_lap_ms
-  return mapped.map((row) => ({
-    ...row,
-    gap_ms: Number.isFinite(Number(row.best_lap_ms)) && Number.isFinite(Number(leaderLap)) ? Number(row.best_lap_ms) - Number(leaderLap) : null
-  }))
+  return mapped
 })
 const raceOverviewFacts = computed(() => {
   const currentRace = race.value
@@ -670,12 +665,6 @@ function resultPodiumClass(row) {
     'is-silver': position === 2,
     'is-bronze': position === 3
   }
-}
-
-function resultGap(row) {
-  if (resultIsDidNotFinish(row, resultFinishMs(row))) return t('raceDetails.didNotFinish')
-  if (row.gap_ms === 0) return t('raceDetails.leaderGap')
-  return Number.isFinite(Number(row.gap_ms)) ? `+${formatDuration(row.gap_ms)}` : '-'
 }
 
 function pilotTeamChip(item) {
@@ -2055,7 +2044,6 @@ watch(visibleParticipants, () => {
                   <th v-if="resultsTab === 'race'">{{ t('raceDetails.srPenalty') }}</th>
                   <th v-if="resultsTab === 'race'">{{ t('raceDetails.adjustedTime') }}</th>
                   <th v-if="resultsTab === 'race'">{{ t('raceDetails.ratingDelta') }}</th>
-                  <th>{{ t('raceDetails.gap') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -2117,7 +2105,6 @@ watch(visibleParticipants, () => {
                   </td>
                   <td v-if="resultsTab === 'race'" :data-label="t('raceDetails.adjustedTime')">{{ resultTimeLabel(row, row.adjusted_finish_ms ?? row.finish_ms) }}</td>
                   <td v-if="resultsTab === 'race'" :data-label="t('raceDetails.ratingDelta')"><span class="rating-delta" :class="resultRatingDeltaClass(row)">{{ resultRatingDelta(row) }}</span></td>
-                  <td :data-label="t('raceDetails.gap')">{{ resultGap(row) }}</td>
                 </tr>
               </tbody>
             </table>
