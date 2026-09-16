@@ -1,8 +1,9 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from unittest import TestCase
 
 from app.models import RaceStatus
 from app.routers.races import scheduled_race_status
+from app.schemas import RaceUpdate
 
 
 class RaceScheduleTests(TestCase):
@@ -15,3 +16,9 @@ class RaceScheduleTests(TestCase):
         self.assertEqual(scheduled_race_status(registration_start, registration_end, race_time, registration_start + timedelta(hours=1)), RaceStatus.registration_open)
         self.assertEqual(scheduled_race_status(registration_start, registration_end, race_time, registration_end + timedelta(hours=1)), RaceStatus.not_started)
         self.assertEqual(scheduled_race_status(registration_start, registration_end, race_time, race_time), RaceStatus.ongoing)
+
+    def test_session_times_are_parsed_as_local_clock_times(self):
+        update = RaceUpdate.model_validate({"practice_start_time": "19:00", "race_session_end_time": "20:15"})
+
+        self.assertEqual(update.practice_start_time, time(19, 0))
+        self.assertEqual(update.race_session_end_time, time(20, 15))

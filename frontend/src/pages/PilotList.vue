@@ -395,7 +395,7 @@ async function deleteTrackImage() {
         <span role="columnheader">{{ t('fields.ratingRaces') }}</span>
       </div>
 
-      <article v-for="pilot in pilots" :key="pilot.id" class="pilot-roster-row" role="row">
+      <article v-for="pilot in pilots" :key="pilot.id" class="pilot-roster-row" :class="{ 'is-current-user': Number(pilot.id) === Number(state.user?.id) }" role="row">
         <span class="pilot-roster-number" role="cell" data-label="#">{{ pilotNumber(pilot) }}</span>
 
         <div class="pilot-roster-driver" role="cell" :data-label="t('roles.pilot')">
