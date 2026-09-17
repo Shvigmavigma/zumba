@@ -32,7 +32,7 @@ function pilotLicense() {
 }
 
 function rerValue(game) {
-  return pilot.value?.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(pilot.value, game))
+  return formatRating(ratingForGame(pilot.value, game))
 }
 
 const ratingRows = computed(() => RATING_GAMES.map((game) => ({
@@ -120,7 +120,7 @@ onMounted(async () => {
           <span>RER</span>
           <div>
             <span v-for="row in ratingRows" :key="row.game" class="pill">
-              {{ row.game }} {{ rerValue(row.game) }} · {{ pilot.exclude_from_rer ? t('common.rerExcluded') : row.license.name }} · {{ pilot.exclude_from_rer ? '-' : row.races }}
+              {{ row.game }} {{ rerValue(row.game) }} · {{ row.license.name }} · {{ row.races }}
             </span>
           </div>
         </div>

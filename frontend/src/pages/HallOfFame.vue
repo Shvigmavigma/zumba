@@ -309,7 +309,7 @@ watch(visibleTeams, () => {
                   :class="{ 'is-priority': ratingGame === game }"
                 >
                   <small>{{ game }}</small>
-                  <strong>{{ pilot.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(pilot, game)) }}</strong>
+                  <strong>{{ formatRating(ratingForGame(pilot, game)) }}</strong>
                 </span>
               </div>
             </td>

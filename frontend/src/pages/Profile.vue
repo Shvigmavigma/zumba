@@ -53,8 +53,8 @@ const profileFields = computed(() => {
     { label: t('profile.favoriteCar'), value: user.value.favorite_car },
     { label: t('common.role'), value: roleLabel(t, user.value.role) },
     { label: t('common.status'), value: statusLabel(t, user.value.status) },
-    { label: 'ACC RER', value: user.value.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(user.value, 'ACC')) },
-    { label: t('fields.license'), value: user.value.exclude_from_rer ? t('common.rerExcluded') : profileLicense.value?.name },
+    { label: 'ACC RER', value: formatRating(ratingForGame(user.value, 'ACC')) },
+    { label: t('fields.license'), value: profileLicense.value?.name },
     { label: 'SR', value: Number.isFinite(Number(user.value.sr)) ? Number(user.value.sr).toFixed(1) : null },
     { label: t('fields.ratingRaces'), value: ratingRaceCountForGame(user.value, 'ACC') },
     { label: t('fields.joinedAt'), value: formatDateTime(user.value.created_at) },
@@ -67,7 +67,7 @@ const profileFields = computed(() => {
 const profileLicense = computed(() => ratingLicenseTier(ratingForGame(user.value, 'ACC'), licenseTiers.value))
 
 function rerValue(target, game) {
-  return target?.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(target, game))
+  return formatRating(ratingForGame(target, game))
 }
 
 function formatDateTime(value) {
@@ -175,7 +175,7 @@ onMounted(() => {
           <span>RER</span>
           <div>
             <span v-for="row in ratingRows" :key="row.game" class="pill">
-              {{ row.game }} {{ rerValue(user, row.game) }} · {{ user.exclude_from_rer ? t('common.rerExcluded') : row.license.name }} · {{ user.exclude_from_rer ? '-' : row.races }}
+              {{ row.game }} {{ rerValue(user, row.game) }} · {{ row.license.name }} · {{ row.races }}
             </span>
           </div>
         </div>

@@ -115,7 +115,7 @@ function memberRating(member) {
 }
 
 function memberRerLabel(member) {
-  return member?.exclude_from_rer ? t('common.rerExcluded') : formatRating(memberRating(member))
+  return formatRating(memberRating(member))
 }
 
 function fillEditForm(team) {

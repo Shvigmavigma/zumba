@@ -2003,7 +2003,7 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
                     <PilotRoles :roles="user.pilot_roles" />
                     <LicenseBadge :user="user" :game="userRatingGame" />
                   </span>
-                  <span>#{{ formatPilotNumber(user.pilot_number) }} · RER {{ user.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(user, userRatingGame)) }} · {{ teamShortName(user.team_name, user.team_abbreviation) }}</span>
+                  <span>#{{ formatPilotNumber(user.pilot_number) }} · RER {{ formatRating(ratingForGame(user, userRatingGame)) }} · {{ teamShortName(user.team_name, user.team_abbreviation) }}</span>
                   <span
                     v-if="user.device_label || user.same_device_account_count > 1 || user.same_ip_account_count > 1"
                     class="admin-user-device"

@@ -22,7 +22,7 @@ from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
 from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, ModerationRejectRequest, PilotRoleAssignmentUpdate, PilotRoleCreate, PilotRoleRead, PilotRoleUpdate, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminRead, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
 from app.security import hash_password, verify_password
-from app.services import recalculate_all_ratings, result_rows
+from app.services import record_rating_adjustments, recalculate_all_ratings, result_rows, user_game_rating_state
 from app.team_livery_uploads import (
     create_team_livery_archives_export,
     remove_team_livery_archive_file,
@@ -1143,6 +1143,7 @@ async def update_user_profile(
     overall_rating = data.pop("rating", None)
     sr_value = data.pop("sr", None)
     game_ratings = data.pop("game_ratings", None)
+    previous_ratings = {game: user_game_rating_state(user, game)[0] for game in RACE_GAMES}
 
     if requested_team_id is not None:
         team = await session.get(Team, requested_team_id)
@@ -1176,7 +1177,12 @@ async def update_user_profile(
     elif requested_status is not None and requested_status != UserStatus.timeout:
         user.timeout_start = None
         user.timeout_end = None
-    if game_ratings is not None or requested_game_race_counts is not None:
+    if (
+        game_ratings is not None
+        or requested_game_race_counts is not None
+        or overall_rating is not None
+        or requested_race_count is not None
+    ):
         normalized_ratings = default_game_ratings()
         existing_ratings = user.game_ratings if isinstance(user.game_ratings, dict) else {}
         for game in RACE_GAMES:
@@ -1187,10 +1193,18 @@ async def update_user_profile(
         if game_ratings is not None:
             for game, rating in game_ratings.items():
                 normalized_ratings[game]["rating"] = int(rating)
+        elif overall_rating is not None:
+            normalized_ratings[RACE_GAMES[0]]["rating"] = int(overall_rating)
         if requested_game_race_counts is not None:
             for game, count in requested_game_race_counts.items():
                 normalized_ratings[game]["race_count"] = int(count)
+        elif requested_race_count is not None:
+            normalized_ratings[RACE_GAMES[0]]["race_count"] = int(requested_race_count)
         user.game_ratings = normalized_ratings
+        user.rating = normalized_ratings[RACE_GAMES[0]]["rating"]
+        user.rating_race_count = normalized_ratings[RACE_GAMES[0]]["race_count"]
+        current_ratings = {game: int(normalized_ratings[game]["rating"]) for game in RACE_GAMES}
+        record_rating_adjustments(user, previous_ratings, current_ratings)
     user.pending_profile_changes = None
     if rer_setting_changed:
         await session.flush()
