@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     max_logo_upload_mb: int = 5
     max_user_avatar_upload_mb: int = 5
     max_team_avatar_upload_mb: int = 30
+    max_team_livery_image_mb: int = 10
+    max_team_livery_archive_mb: int = 500
     max_race_video_upload_mb: int = 300
     twitch_channel_login: str = "bmrlracing"
     twitch_client_id: str = ""

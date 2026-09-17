@@ -81,6 +81,7 @@ def pilot_payload(user: User, team_name: str | None, team_abbreviation: str | No
         rating=int(round(float(user.rating))),
         rating_race_count=user.rating_race_count,
         game_ratings=user.game_ratings or {},
+        exclude_from_rer=user.exclude_from_rer,
         avatar_color=user.avatar_color,
         avatar_url=user.avatar_url,
         team_id=user.team_id,
@@ -192,13 +193,40 @@ async def hall_of_fame(request: Request, session: AsyncSession = Depends(get_ses
             .where(User.team_id.in_(team_ids))
             .group_by(User.team_id)
         )
-        average_rating_rows = await session.execute(
-            select(User.team_id, func.avg(User.rating))
-            .where(User.team_id.in_(team_ids))
-            .group_by(User.team_id)
+        team_rating_rows = await session.execute(
+            select(User.team_id, User.rating, User.game_ratings)
+            .where(User.team_id.in_(team_ids), User.exclude_from_rer.is_(False))
         )
         member_counts = {int(team_id): int(count) for team_id, count in member_count_rows if team_id is not None}
-        average_ratings = {int(team_id): int(round(float(average or 0))) for team_id, average in average_rating_rows if team_id is not None}
+        team_rating_values: dict[int, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+        team_overall_rating_values: dict[int, list[float]] = defaultdict(list)
+        for team_id, rating, game_ratings in team_rating_rows:
+            if team_id is None:
+                continue
+            normalized_team_id = int(team_id)
+            base_rating = float(rating or 0)
+            team_overall_rating_values[normalized_team_id].append(base_rating)
+            ratings = game_ratings if isinstance(game_ratings, dict) else {}
+            for game in RACE_GAMES:
+                item = ratings.get(game)
+                game_rating = item.get("rating", base_rating) if isinstance(item, dict) else base_rating
+                try:
+                    team_rating_values[normalized_team_id][game].append(float(game_rating))
+                except (TypeError, ValueError):
+                    team_rating_values[normalized_team_id][game].append(base_rating)
+        average_ratings = {
+            team_id: int(round(sum(values) / len(values)))
+            for team_id, values in team_overall_rating_values.items()
+            if values
+        }
+        ratings_by_game = {
+            team_id: {
+                game: int(round(sum(values) / len(values)))
+                for game, values in game_values.items()
+                if values
+            }
+            for team_id, game_values in team_rating_values.items()
+        }
 
         for team in loaded_teams:
             stats = team_stats[team.id]
@@ -223,6 +251,7 @@ async def hall_of_fame(request: Request, session: AsyncSession = Depends(get_ses
                     owner_id=team.owner_id,
                     member_count=member_counts.get(team.id, 0),
                     average_rating=average_ratings.get(team.id, 0),
+                    ratings_by_game=ratings_by_game.get(team.id, {}),
                     points=stats["points"],
                     gold=stats["gold"],
                     silver=stats["silver"],

@@ -5,11 +5,12 @@ import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
 import AccountModerationNotice from '../components/AccountModerationNotice.vue'
+import LicenseBadge from '../components/LicenseBadge.vue'
 import ProfileAnalytics from '../components/ProfileAnalytics.vue'
 import PilotRoles from '../components/PilotRoles.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
-import { DEFAULT_LICENSE_TIERS, RATING_GAMES, formatPilotNumber, formatRating, licenseBadgeStyle, normalizeLicenseTiers, pilotName, ratingForGame, ratingLicenseTier, ratingRaceCountForGame, teamShortName } from '../pilotDisplay'
+import { DEFAULT_LICENSE_TIERS, RATING_GAMES, formatPilotNumber, formatRating, normalizeLicenseTiers, pilotName, ratingForGame, ratingLicenseTier, ratingRaceCountForGame, teamShortName } from '../pilotDisplay'
 import { setSession, state } from '../store'
 import { formatDateTime as formatDateTimeInZone } from '../timezone'
 
@@ -52,8 +53,8 @@ const profileFields = computed(() => {
     { label: t('profile.favoriteCar'), value: user.value.favorite_car },
     { label: t('common.role'), value: roleLabel(t, user.value.role) },
     { label: t('common.status'), value: statusLabel(t, user.value.status) },
-    { label: 'ACC RER', value: formatRating(ratingForGame(user.value, 'ACC')) },
-    { label: t('fields.license'), value: profileLicense.value?.name },
+    { label: 'ACC RER', value: user.value.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(user.value, 'ACC')) },
+    { label: t('fields.license'), value: user.value.exclude_from_rer ? t('common.rerExcluded') : profileLicense.value?.name },
     { label: 'SR', value: Number.isFinite(Number(user.value.sr)) ? Number(user.value.sr).toFixed(1) : null },
     { label: t('fields.ratingRaces'), value: ratingRaceCountForGame(user.value, 'ACC') },
     { label: t('fields.joinedAt'), value: formatDateTime(user.value.created_at) },
@@ -64,6 +65,10 @@ const profileFields = computed(() => {
   ]
 })
 const profileLicense = computed(() => ratingLicenseTier(ratingForGame(user.value, 'ACC'), licenseTiers.value))
+
+function rerValue(target, game) {
+  return target?.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(target, game))
+}
 
 function formatDateTime(value) {
   if (!value) return t('common.none')
@@ -152,8 +157,8 @@ onMounted(() => {
         </div>
 
         <div class="pilot-profile-badges">
-          <span class="pill">ACC RER {{ formatRating(ratingForGame(user, 'ACC')) }}</span>
-          <span class="license-badge" :style="licenseBadgeStyle(profileLicense)">{{ profileLicense.name }}</span>
+          <span class="pill">ACC RER {{ rerValue(user, 'ACC') }}</span>
+          <LicenseBadge :user="user" game="ACC" />
           <span class="pill">SR {{ Number(user.sr).toFixed(1) }}</span>
           <span class="pill">#{{ formatPilotNumber(user.pilot_number) }}</span>
           <span class="team-mini-chip" :title="user.team_name || t('common.none')">{{ teamShortName(user.team_name, user.team_abbreviation) }}</span>
@@ -170,7 +175,7 @@ onMounted(() => {
           <span>RER</span>
           <div>
             <span v-for="row in ratingRows" :key="row.game" class="pill">
-              {{ row.game }} {{ formatRating(row.rating) }} · {{ row.license.name }} · {{ row.races }}
+              {{ row.game }} {{ rerValue(user, row.game) }} · {{ user.exclude_from_rer ? t('common.rerExcluded') : row.license.name }} · {{ user.exclude_from_rer ? '-' : row.races }}
             </span>
           </div>
         </div>

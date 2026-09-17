@@ -9,8 +9,16 @@ from app.avatar_uploads import ensure_avatar_upload_allowed, mark_avatar_uploade
 from app.config import get_settings
 from app.db import get_session
 from app.deps import get_optional_user, require_admin, require_moder_plus, require_pilot_plus
-from app.models import AppSetting, Role, Team, TeamApplication, TeamApplicationStatus, TeamCreationRequest, User
+from app.models import AppSetting, Role, Team, TeamApplication, TeamApplicationStatus, TeamCreationRequest, TeamLiveryArchive, TeamLiveryImage, User
 from app.rate_limit import limiter
+from app.team_livery_uploads import (
+    MAX_LIVERY_IMAGES,
+    create_team_livery_archive,
+    remove_team_livery_archive_file,
+    remove_team_livery_image_file,
+    save_team_livery_image,
+    team_livery_archive_path,
+)
 from app.schemas import (
     TeamApplicationRead,
     TeamConfigRead,
@@ -19,6 +27,8 @@ from app.schemas import (
     TeamCreationRequestRead,
     TeamDetailRead,
     TeamMemberRead,
+    TeamLiveryArchiveRead,
+    TeamLiveryImageRead,
     TeamOwnerTransfer,
     TeamRead,
     TeamUpdate,
@@ -77,7 +87,7 @@ async def load_average_ratings(session: AsyncSession, team_ids: list[int]) -> di
         return {}
     rows = await session.execute(
         select(User.team_id, func.avg(User.rating))
-        .where(User.team_id.in_(team_ids))
+        .where(User.team_id.in_(team_ids), User.exclude_from_rer.is_(False))
         .group_by(User.team_id)
     )
     return {int(team_id): int(round(float(average or 0))) for team_id, average in rows if team_id is not None}
@@ -285,7 +295,8 @@ async def build_team_detail(
     ).all()
     my_applications = await load_current_user_applications(session, [team.id], current_user)
     pending_applications = await load_pending_applications(session, team) if can_manage_team(current_user, team) else []
-    average_rating = sum(float(member.rating or 0) for member in members) / len(members) if members else 0
+    rated_members = [member for member in members if not member.exclude_from_rer]
+    average_rating = sum(float(member.rating or 0) for member in rated_members) / len(rated_members) if rated_members else 0
     payload = team_payload(
         team,
         member_count,
@@ -304,6 +315,28 @@ async def build_team_detail(
         member_payload.update(team_name=team.name, team_abbreviation=team.abbreviation)
         payload["members"].append(TeamMemberRead(**member_payload))
     payload["applications"] = pending_applications
+    livery_image_count = int(
+        await session.scalar(
+            select(func.count()).select_from(TeamLiveryImage).where(TeamLiveryImage.team_id == team.id)
+        )
+        or 0
+    )
+    livery_images = []
+    livery_archive = None
+    if can_manage_team(current_user, team):
+        livery_images = (
+            await session.scalars(
+                select(TeamLiveryImage)
+                .where(TeamLiveryImage.team_id == team.id)
+                .order_by(TeamLiveryImage.created_at.asc(), TeamLiveryImage.id.asc())
+            )
+        ).all()
+        livery_archive = await session.scalar(
+            select(TeamLiveryArchive).where(TeamLiveryArchive.team_id == team.id)
+        )
+    payload["livery_image_count"] = livery_image_count
+    payload["livery_images"] = [TeamLiveryImageRead.model_validate(image) for image in livery_images]
+    payload["livery_archive"] = TeamLiveryArchiveRead.model_validate(livery_archive) if livery_archive else None
     return TeamDetailRead(**payload)
 
 
@@ -610,6 +643,125 @@ async def upload_team_avatar(
     return await build_team_detail(session, team, user)
 
 
+@router.get("/{team_id}/liveries", response_model=list[TeamLiveryImageRead])
+@limiter.limit("60/minute")
+async def get_team_liveries(
+    team_id: int,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    team = await get_team_or_404(session, team_id)
+    livery_images = (
+        await session.scalars(
+            select(TeamLiveryImage)
+            .where(TeamLiveryImage.team_id == team.id)
+            .order_by(TeamLiveryImage.created_at.asc(), TeamLiveryImage.id.asc())
+        )
+    ).all()
+    return [TeamLiveryImageRead.model_validate(image) for image in livery_images]
+
+
+@router.post("/{team_id}/liveries", response_model=TeamDetailRead)
+@limiter.limit("30/minute")
+async def upload_team_livery(
+    team_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    user: User = Depends(require_pilot_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    team = await get_team_or_404(session, team_id, for_update=True)
+    if not can_manage_team(user, team):
+        raise HTTPException(status_code=403, detail="Only the team owner or moderators can manage team liveries")
+    livery_count = int(
+        await session.scalar(
+            select(func.count()).select_from(TeamLiveryImage).where(TeamLiveryImage.team_id == team.id)
+        )
+        or 0
+    )
+    if livery_count >= MAX_LIVERY_IMAGES:
+        raise HTTPException(status_code=409, detail=f"A team can have at most {MAX_LIVERY_IMAGES} livery images")
+
+    image_url, original_filename = await save_team_livery_image(file, team.id, settings.max_team_livery_image_mb)
+    session.add(TeamLiveryImage(team_id=team.id, image_url=image_url, original_filename=original_filename))
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        remove_team_livery_image_file(image_url)
+        raise
+    await session.refresh(team)
+    return await build_team_detail(session, team, user)
+
+
+@router.delete("/{team_id}/liveries/{livery_id}", response_model=TeamDetailRead)
+@limiter.limit("30/minute")
+async def delete_team_livery(
+    team_id: int,
+    livery_id: int,
+    request: Request,
+    user: User = Depends(require_pilot_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    team = await get_team_or_404(session, team_id, for_update=True)
+    if not can_manage_team(user, team):
+        raise HTTPException(status_code=403, detail="Only the team owner or moderators can manage team liveries")
+    livery = await session.scalar(
+        select(TeamLiveryImage).where(TeamLiveryImage.id == livery_id, TeamLiveryImage.team_id == team.id)
+    )
+    if livery is None:
+        raise HTTPException(status_code=404, detail="Team livery image not found")
+    image_url = livery.image_url
+    await session.delete(livery)
+    await session.commit()
+    remove_team_livery_image_file(image_url)
+    await session.refresh(team)
+    return await build_team_detail(session, team, user)
+
+
+@router.post("/{team_id}/livery-archive", response_model=TeamDetailRead)
+@limiter.limit("10/minute")
+async def upload_team_livery_archive(
+    team_id: int,
+    request: Request,
+    files: list[UploadFile] = File(...),
+    user: User = Depends(require_pilot_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    team = await get_team_or_404(session, team_id, for_update=True)
+    if not can_manage_team(user, team):
+        raise HTTPException(status_code=403, detail="Only the team owner or moderators can manage team liveries")
+
+    previous_archive = await session.scalar(
+        select(TeamLiveryArchive).where(TeamLiveryArchive.team_id == team.id)
+    )
+    previous_filename = previous_archive.archive_filename if previous_archive else None
+    filename, size_bytes, temporary_path = await create_team_livery_archive(
+        files,
+        team,
+        settings.max_team_livery_archive_mb,
+    )
+    archive = previous_archive or TeamLiveryArchive(team_id=team.id)
+    archive.archive_filename = filename
+    archive.size_bytes = size_bytes
+    archive.uploaded_at = datetime.now(timezone.utc)
+    if previous_archive is None:
+        session.add(archive)
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        temporary_path.unlink(missing_ok=True)
+        raise
+
+    target_path = team_livery_archive_path(team.id, filename)
+    temporary_path.replace(target_path)
+    if previous_filename and previous_filename != filename:
+        remove_team_livery_archive_file(team.id, previous_filename)
+    await session.refresh(team)
+    return await build_team_detail(session, team, user)
+
+
 @router.patch("/{team_id}/owner", response_model=TeamDetailRead)
 @limiter.limit("20/minute")
 async def transfer_team_ownership(
@@ -758,10 +910,24 @@ async def delete_team(
     if not can_manage_team(user, team):
         raise HTTPException(status_code=403, detail="Only the team owner or moderators can delete this team")
     avatar_url = team.avatar_url
+    livery_urls = list(
+        (
+            await session.scalars(
+                select(TeamLiveryImage.image_url).where(TeamLiveryImage.team_id == team.id)
+            )
+        ).all()
+    )
+    livery_archive = await session.scalar(
+        select(TeamLiveryArchive).where(TeamLiveryArchive.team_id == team.id)
+    )
+    livery_archive_filename = livery_archive.archive_filename if livery_archive else None
     await session.execute(update(User).where(User.team_id == team.id).values(team_id=None))
     await session.delete(team)
     await session.commit()
     remove_avatar_file(avatar_url)
+    for image_url in livery_urls:
+        remove_team_livery_image_file(image_url)
+    remove_team_livery_archive_file(team.id, livery_archive_filename)
 
 
 @router.delete("/{team_id}/members/{user_id}", response_model=TeamDetailRead)

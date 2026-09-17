@@ -21,6 +21,22 @@ function apiErrorMessage(message) {
     'Car is not allowed': {
       ru: 'Эта машина недоступна для выбранного класса чемпионата.',
       en: 'This car is not available for the selected championship class.'
+    },
+    'A team can have at most 4 livery images': {
+      ru: 'У команды может быть максимум 4 изображения ливреи.',
+      en: 'A team can have at most 4 livery images.'
+    },
+    'Choose a livery folder': {
+      ru: 'Выберите папку с ливреей.',
+      en: 'Choose a livery folder.'
+    },
+    'Livery archive is larger than 500 MB': {
+      ru: 'Архив ливреи больше 500 МБ.',
+      en: 'The livery archive is larger than 500 MB.'
+    },
+    'No team livery archives are available': {
+      ru: 'Актуальных архивов ливрей пока нет.',
+      en: 'No team livery archives are available.'
     }
   }
   return friendly[text]?.[locale] || text

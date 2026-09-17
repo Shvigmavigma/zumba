@@ -115,10 +115,24 @@ const usesSimulatorJsonResults = computed(() => race.value?.game === 'ACC')
 // backend restores the previous rating/SR bonus before recalculating it.
 const canEditManualResults = computed(() => canManageRace.value && Boolean(race.value))
 const canShowRegistrationPanel = computed(() => Boolean(state.user) && (race.value?.status === 'registration_open' || (isChampionshipStage.value && race.value?.status === 'not_started')))
-const resultRows = computed(() => {
+const rawResultRows = computed(() => {
   if (Array.isArray(race.value?.results)) return race.value.results
   return race.value?.results?.rows || []
 })
+function resultRowIsExcluded(row) {
+  if (row?.exclude_from_rer === true) return true
+  const userId = Number(row?.user_id)
+  if (!Number.isInteger(userId) || userId <= 0) return false
+  return participants.value.find((item) => Number(item.user_id) === userId)?.exclude_from_rer === true
+}
+
+function visibleResultRows(rows) {
+  return rows
+    .filter((row) => !resultRowIsExcluded(row))
+    .map((row, index) => ({ ...row, position: index + 1 }))
+}
+
+const resultRows = computed(() => visibleResultRows(rawResultRows.value))
 const resultParticipants = computed(() => {
   const seen = new Set()
   return resultRows.value
@@ -136,6 +150,7 @@ const resultParticipants = computed(() => {
         avatar_url: row.avatar_url || participant?.avatar_url || '',
         rating: row.rating ?? participant?.rating,
         game_ratings: row.game_ratings || participant?.game_ratings,
+        exclude_from_rer: participant?.exclude_from_rer ?? row.exclude_from_rer ?? false,
         sr: row.sr ?? participant?.sr,
         car_model: row.car_model ?? participant?.car_model,
         team_id: row.team_id || participant?.team_id,
@@ -149,7 +164,7 @@ const resultParticipants = computed(() => {
 const penaltyParticipants = computed(() => resultParticipants.value.length ? resultParticipants.value : participants.value)
 const raceRowsByPlayer = computed(() => {
   const rows = new Map()
-  resultRows.value.forEach((row) => {
+  rawResultRows.value.forEach((row) => {
     const key = normalizeAccPlayerId(row.player_id)
     if (key) rows.set(key, row)
   })
@@ -157,7 +172,7 @@ const raceRowsByPlayer = computed(() => {
 })
 const raceRowsByNumber = computed(() => {
   const rows = new Map()
-  resultRows.value.forEach((row) => {
+  rawResultRows.value.forEach((row) => {
     const key = Number(row.race_number)
     if (Number.isFinite(key)) rows.set(key, row)
   })
@@ -180,7 +195,9 @@ const qualificationRows = computed(() => {
     // ACC race numbers provide the safe fallback link to the stored result.
     const raceNumber = Number(line.car?.raceNumber)
     const raceRow = raceRowsByPlayer.value.get(normalized) || raceRowsByNumber.value.get(raceNumber)
-    const participant = raceRow?.user_id ? participants.value.find((item) => item.user_id === raceRow.user_id) : null
+    const participant = raceRow?.user_id
+      ? participants.value.find((item) => item.user_id === raceRow.user_id)
+      : participants.value.find((item) => Number(item.pilot_number) === raceNumber)
     const timing = line.timing || {}
     return {
       position: index + 1,
@@ -190,6 +207,7 @@ const qualificationRows = computed(() => {
       avatar_color: participant?.avatar_color || raceRow?.avatar_color || '#2563eb',
       avatar_url: participant?.avatar_url || raceRow?.avatar_url || '',
       rating: participant?.rating ?? raceRow?.rating,
+      exclude_from_rer: participant?.exclude_from_rer ?? raceRow?.exclude_from_rer ?? false,
       sr: participant?.sr ?? raceRow?.sr,
       team_id: participant?.team_id || raceRow?.team_id,
       team_name: participant?.team_name || raceRow?.team_name,
@@ -203,7 +221,7 @@ const qualificationRows = computed(() => {
       source: 'qualification'
     }
   })
-  return mapped
+  return visibleResultRows(mapped)
 })
 const raceOverviewFacts = computed(() => {
   const currentRace = race.value
@@ -449,7 +467,8 @@ function fanVotePilotName(item) {
 function fanVotePilotSubtitle(item) {
   const team = teamShortName(item.team_name, item.team_abbreviation)
   const number = item.pilot_number !== null && item.pilot_number !== undefined ? `#${formatPilotNumber(item.pilot_number)}` : `ID ${item.user_id}`
-  return [number, `RER ${formatRating(ratingForGame(item, raceRatingGame.value))}`, `SR ${item.sr ?? '-'}`, team].filter(Boolean).join(' - ')
+  const rer = item.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(item, raceRatingGame.value))
+  return [number, `RER ${rer}`, `SR ${item.sr ?? '-'}`, team].filter(Boolean).join(' - ')
 }
 
 function pilotNumberDraft(value) {
@@ -573,6 +592,15 @@ function resultPilotRoles(row) {
   return participantById(row.user_id)?.pilot_roles || row.pilot_roles || participants.value.find((item) => item.user_id === row.user_id)?.pilot_roles || []
 }
 
+function resultPilotUser(row) {
+  const participant = participantById(row.user_id) || participants.value.find((item) => item.user_id === row.user_id)
+  return {
+    ...(participant || {}),
+    ...row,
+    exclude_from_rer: participant?.exclude_from_rer ?? row.exclude_from_rer ?? false
+  }
+}
+
 function resultPilotId(row) {
   const userId = Number(row?.user_id)
   return Number.isInteger(userId) && userId > 0 ? userId : null
@@ -604,12 +632,13 @@ function resultPilotTeamId(row) {
 }
 
 function resultPilotRatingValue(row) {
-  const participant = participantById(row.user_id)
-  return row.rating_new ?? ratingForGame(participant, raceRatingGame.value) ?? ratingForGame(row, raceRatingGame.value)
+  const pilot = resultPilotUser(row)
+  if (pilot.exclude_from_rer) return null
+  return row.rating_new ?? ratingForGame(pilot, raceRatingGame.value)
 }
 
 function resultPilotRating(row) {
-  return formatRating(resultPilotRatingValue(row))
+  return resultPilotUser(row).exclude_from_rer ? t('common.rerExcluded') : formatRating(resultPilotRatingValue(row))
 }
 
 function resultPenalty(row) {
@@ -644,6 +673,7 @@ async function openResultPenalty(row) {
 }
 
 function resultRatingDelta(row) {
+  if (resultPilotUser(row).exclude_from_rer) return '-'
   const delta = Number(row.rating_delta ?? 0)
   if (!Number.isFinite(delta)) return '-'
   const rounded = Math.round(delta)
@@ -1767,7 +1797,7 @@ watch(visibleParticipants, () => {
             <UserAvatar class="pilot-avatar-slot" :src="item.team_avatar_url" :color="item.team_avatar_color" :label="item.team_name" />
             <div class="race-participant-main">
               <strong>{{ item.team_name }} <span v-if="item.team_abbreviation">({{ item.team_abbreviation }})</span></strong>
-              <span class="user-name-line"><template v-for="(driver, index) in item.drivers || []" :key="driver.user_id || index"><span>{{ participantName(driver) }}</span><PilotRoles :roles="driver.pilot_roles" /><span v-if="index < (item.drivers || []).length - 1"> → </span></template></span>
+              <span class="user-name-line"><template v-for="(driver, index) in item.drivers || []" :key="driver.user_id || index"><span>{{ participantName(driver) }}</span><LicenseBadge :user="driver" :game="raceRatingGame" /><PilotRoles :roles="driver.pilot_roles" /><span v-if="index < (item.drivers || []).length - 1"> → </span></template></span>
             </div>
             <div class="race-participant-stat">
               <span>#</span>
@@ -1792,7 +1822,7 @@ watch(visibleParticipants, () => {
                 <LicenseBadge :user="item" :game="raceRatingGame" />
                 <PilotRoles :roles="item.pilot_roles" />
               </span>
-              <span>{{ participantSubtitle(item) }} · RER {{ formatRating(ratingForGame(item, raceRatingGame)) }} · {{ pilotTeamChip(item) }}</span>
+              <span>{{ participantSubtitle(item) }} · RER {{ item.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(item, raceRatingGame)) }} · {{ pilotTeamChip(item) }}</span>
             </div>
             <div class="race-participant-stat">
               <span>SR</span>
@@ -1800,7 +1830,7 @@ watch(visibleParticipants, () => {
             </div>
             <div class="race-participant-stat">
               <span>RER</span>
-              <strong>{{ formatRating(ratingForGame(item, raceRatingGame)) }}</strong>
+                <strong>{{ item.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(item, raceRatingGame)) }}</strong>
             </div>
             <div class="race-participant-country">
               <span>{{ t('fields.country') }}</span>
@@ -1920,7 +1950,7 @@ watch(visibleParticipants, () => {
                 <LicenseBadge :user="pilot" :game="raceRatingGame" />
                 <PilotRoles :roles="pilot.pilot_roles" />
               </span>
-              <small>#{{ formatPilotNumber(pilot.pilot_number) }} - RER {{ formatRating(ratingForGame(pilot, raceRatingGame)) }}</small>
+              <small>#{{ formatPilotNumber(pilot.pilot_number) }} - RER {{ pilot.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(pilot, raceRatingGame)) }}</small>
             </button>
           </div>
           <div class="manual-results-table">
@@ -1959,7 +1989,7 @@ watch(visibleParticipants, () => {
                     <strong>{{ resultPilotName(row) }}</strong>
                   </RouterLink>
                   <strong v-else>{{ resultPilotName(row) }}</strong>
-                  <LicenseBadge :rating="resultPilotRatingValue(row)" />
+                  <LicenseBadge :user="resultPilotUser(row)" :game="raceRatingGame" />
                   <PilotRoles :roles="resultPilotRoles(row)" />
                 </span>
                 <span>{{ resultPilotSubtitle(row) }}</span>
@@ -2058,7 +2088,7 @@ watch(visibleParticipants, () => {
                             <strong>{{ resultPilotName(row) }}</strong>
                           </RouterLink>
                           <strong v-else>{{ resultPilotName(row) }}</strong>
-                          <LicenseBadge :rating="resultPilotRatingValue(row)" />
+                          <LicenseBadge :user="resultPilotUser(row)" :game="raceRatingGame" />
                           <PilotRoles :roles="resultPilotRoles(row)" />
                         </span>
                         <span class="result-driver-meta">

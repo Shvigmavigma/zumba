@@ -17,12 +17,17 @@ from app.config import get_settings
 from app.database_backup import create_database_backup
 from app.db import get_session
 from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, get_current_user, is_system_admin, require_admin, require_moder_plus, require_pilot_plus, require_system_admin
-from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, PilotRoleBadge, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamRaceRegistration, User, UserStatus, default_game_ratings, utc_now
+from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, PilotRoleBadge, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamLiveryArchive, TeamLiveryImage, TeamRaceRegistration, User, UserStatus, default_game_ratings, utc_now
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
 from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, ModerationRejectRequest, PilotRoleAssignmentUpdate, PilotRoleCreate, PilotRoleRead, PilotRoleUpdate, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminRead, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
 from app.security import hash_password, verify_password
 from app.services import recalculate_all_ratings, result_rows
+from app.team_livery_uploads import (
+    create_team_livery_archives_export,
+    remove_team_livery_archive_file,
+    remove_team_livery_image_file,
+)
 
 
 router = APIRouter()
@@ -844,6 +849,16 @@ async def download_database_backup(
     return await create_database_backup()
 
 
+@router.get("/admin/team-livery-archives")
+@limiter.limit("20/minute")
+async def download_team_livery_archives(
+    request: Request,
+    _: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    return await create_team_livery_archives_export(session)
+
+
 @router.get("/{user_id}", response_model=UserPublic)
 @limiter.limit("600/minute")
 async def get_user(user_id: int, request: Request, session: AsyncSession = Depends(get_session)):
@@ -1079,6 +1094,8 @@ async def update_user_profile(
     if not is_system_admin(admin) and full_account_fields.intersection(data):
         raise HTTPException(status_code=403, detail="Only the system administrator can edit full account fields")
 
+    rer_setting_changed = "exclude_from_rer" in data and bool(data["exclude_from_rer"]) != bool(user.exclude_from_rer)
+
     team_id_provided = "team_id" in data
     steam_id_provided = "steam_id" in data
     ban_end_provided = "ban_end" in data
@@ -1100,6 +1117,8 @@ async def update_user_profile(
             raise HTTPException(status_code=403, detail="The system administrator role cannot be changed")
         if requested_status not in (None, UserStatus.active):
             raise HTTPException(status_code=403, detail="The system administrator status cannot be changed")
+        if data.get("exclude_from_rer") not in (None, user.exclude_from_rer):
+            raise HTTPException(status_code=403, detail="The system administrator RER setting cannot be changed")
         requested_role = None
         requested_status = None
 
@@ -1173,6 +1192,9 @@ async def update_user_profile(
                 normalized_ratings[game]["race_count"] = int(count)
         user.game_ratings = normalized_ratings
     user.pending_profile_changes = None
+    if rer_setting_changed:
+        await session.flush()
+        await recalculate_all_ratings(session)
     await session.commit()
     await session.refresh(user)
     team_name, team_abbreviation = await user_team_info(session, user)
@@ -1323,6 +1345,7 @@ async def delete_user_account(
 
     user_avatar_url = user.avatar_url
     deleted_team_avatar_urls: list[str] = []
+    deleted_team_livery_files: list[tuple[int, list[str], str | None]] = []
     owned_team_ids = list((await session.scalars(select(Team.id).where(Team.owner_id == user.id))).all())
     for team_id in owned_team_ids:
         next_owner = await session.scalar(
@@ -1335,6 +1358,19 @@ async def delete_user_account(
             team_avatar_url = await session.scalar(select(Team.avatar_url).where(Team.id == team_id))
             if team_avatar_url:
                 deleted_team_avatar_urls.append(team_avatar_url)
+            livery_urls = list(
+                (
+                    await session.scalars(
+                        select(TeamLiveryImage.image_url).where(TeamLiveryImage.team_id == team_id)
+                    )
+                ).all()
+            )
+            livery_archive = await session.scalar(
+                select(TeamLiveryArchive).where(TeamLiveryArchive.team_id == team_id)
+            )
+            deleted_team_livery_files.append(
+                (team_id, livery_urls, livery_archive.archive_filename if livery_archive else None)
+            )
             await session.execute(delete(Team).where(Team.id == team_id))
         else:
             await session.execute(update(Team).where(Team.id == team_id).values(owner_id=next_owner.id))
@@ -1364,6 +1400,10 @@ async def delete_user_account(
     remove_avatar_file(user_avatar_url)
     for avatar_url in deleted_team_avatar_urls:
         remove_avatar_file(avatar_url)
+    for team_id, livery_urls, archive_filename in deleted_team_livery_files:
+        for image_url in livery_urls:
+            remove_team_livery_image_file(image_url)
+        remove_team_livery_archive_file(team_id, archive_filename)
 
 
 @router.patch("/{user_id}/role", response_model=UserPrivate)

@@ -153,6 +153,7 @@ class UserPublic(BaseModel):
     status: UserStatus
     avatar_color: str
     avatar_url: str | None = None
+    exclude_from_rer: bool = False
     games: list[str] = Field(default_factory=list)
     favorite_car: str | None = None
     team_id: int | None = None
@@ -303,6 +304,7 @@ class UserAdminUpdate(UserUpdate):
     game_rating_race_counts: dict[GameCode, int] | None = None
     ban_end: datetime | None = None
     timeout_end: datetime | None = None
+    exclude_from_rer: bool | None = None
 
     @field_validator("game_ratings")
     @classmethod
@@ -416,6 +418,7 @@ class TeamMemberRead(BaseModel):
     team_abbreviation: str | None = None
     avatar_color: str
     avatar_url: str | None = None
+    exclude_from_rer: bool = False
     games: list[str] = Field(default_factory=list)
     pilot_roles: list[PilotRoleRead] = Field(default_factory=list)
     created_at: datetime
@@ -452,6 +455,23 @@ class TeamCreationRequestRead(BaseModel):
     requester: TeamMemberRead
 
 
+class TeamLiveryImageRead(BaseModel):
+    id: int
+    image_url: str
+    original_filename: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TeamLiveryArchiveRead(BaseModel):
+    archive_filename: str
+    size_bytes: int = Field(ge=0)
+    uploaded_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class TeamRead(BaseModel):
     id: int
     name: str
@@ -478,6 +498,9 @@ class TeamRead(BaseModel):
 class TeamDetailRead(TeamRead):
     members: list[TeamMemberRead]
     applications: list[TeamApplicationRead] = Field(default_factory=list)
+    livery_image_count: int = Field(default=0, ge=0)
+    livery_images: list[TeamLiveryImageRead] = Field(default_factory=list)
+    livery_archive: TeamLiveryArchiveRead | None = None
 
 
 class TeamConfigRead(BaseModel):
@@ -823,6 +846,7 @@ class FanVoteOptionRead(BaseModel):
     avatar_url: str | None = None
     rating: int
     game_ratings: dict[str, GameRatingRead] = Field(default_factory=dict)
+    exclude_from_rer: bool = False
     sr: float
     votes: int = 0
     percentage: float = 0
@@ -1043,6 +1067,7 @@ class ChampionshipStandingRead(BaseModel):
     avatar_url: str | None = None
     rating: int
     game_ratings: dict[str, GameRatingRead] = Field(default_factory=dict)
+    exclude_from_rer: bool = False
     sr: float
     points: int
     pole_points: int = 0
@@ -1120,11 +1145,13 @@ class PenaltyDetailRead(PenaltyRead):
     target_avatar_color: str | None = None
     target_avatar_url: str | None = None
     target_rating: int | None = None
+    target_exclude_from_rer: bool = False
     target_team_name: str | None = None
     target_team_abbreviation: str | None = None
     issuer_login: str | None = None
     issuer_nickname: str | None = None
     issuer_rating: int | None = None
+    issuer_exclude_from_rer: bool = False
     issuer_team_name: str | None = None
     issuer_team_abbreviation: str | None = None
 
@@ -1363,6 +1390,7 @@ class HallOfFamePilotRead(BaseModel):
     rating: int = Field(ge=int(MIN_RATING), le=int(MAX_RATING))
     rating_race_count: int = Field(ge=0)
     game_ratings: dict[str, GameRatingRead] = Field(default_factory=dict)
+    exclude_from_rer: bool = False
     avatar_color: str
     avatar_url: str | None = None
     team_id: int | None = None
@@ -1386,6 +1414,7 @@ class HallOfFameTeamRead(BaseModel):
     owner_id: int | None
     member_count: int = Field(ge=0)
     average_rating: int = Field(ge=0)
+    ratings_by_game: dict[str, int] = Field(default_factory=dict)
     points: int = Field(ge=0)
     gold: int = Field(ge=0)
     silver: int = Field(ge=0)

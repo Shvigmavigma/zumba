@@ -2,13 +2,14 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Bell, Check, Crown, LogOut, Plus, Save, Search, Send, Trash2, Upload, UserCheck, UserMinus, Users, X, XCircle } from 'lucide-vue-next'
-import { api } from '../api'
+import { Archive, Bell, Check, Crown, Download, Images, LogOut, Plus, Save, Search, Send, Trash2, Upload, UserCheck, UserMinus, Users, X, XCircle } from 'lucide-vue-next'
+import { API_BASE, api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PilotRoles from '../components/PilotRoles.vue'
 import PaginationControls from '../components/PaginationControls.vue'
 import TeamAvatar from '../components/TeamAvatar.vue'
+import TeamLiveryViewer from '../components/TeamLiveryViewer.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { gameOptions } from '../i18nLabels'
 import { filterPilots, formatPilotNumber, formatRating, pilotName, ratingForGame, sortPilots, teamShortName } from '../pilotDisplay'
@@ -34,6 +35,11 @@ const deleteSaving = ref(false)
 const teamAvatarFile = ref(null)
 const teamAvatarSaving = ref(false)
 const teamAvatarViewerOpen = ref(false)
+const teamLiveryViewerOpen = ref(false)
+const teamLiverySaving = ref(false)
+const teamLiveryArchiveSaving = ref(false)
+const teamLiveryLoading = ref(false)
+const teamLiveryLoaded = ref(false)
 const busyApplications = ref({})
 const busyMembers = ref({})
 const busyCreateRequests = ref({})
@@ -61,6 +67,10 @@ const canModerateTeams = computed(() => ['admin', 'moder'].includes(state.user?.
 const canCreateTeam = computed(() => state.user?.status === 'active' && !state.user?.team_id && config.value.my_create_request_status !== 'pending')
 const selectedIsOwner = computed(() => Boolean(selectedTeam.value?.is_owner))
 const selectedCanManage = computed(() => Boolean(selectedTeam.value?.can_manage))
+const selectedLiveries = computed(() => selectedTeam.value?.livery_images || [])
+const selectedLiveryCount = computed(() => Number(selectedTeam.value?.livery_image_count ?? selectedLiveries.value.length))
+const selectedLiveryArchive = computed(() => selectedTeam.value?.livery_archive || null)
+const TEAM_LIVERY_CACHE_NAME = 'bmrl-team-liveries-v1'
 const transferOwnerId = ref('')
 const transferCandidates = computed(() => selectedTeam.value?.members?.filter((member) => member.id !== selectedTeam.value.owner_id) || [])
 const teamTotalPages = computed(() => Math.max(1, Math.ceil(teams.value.length / teamPageSize)))
@@ -104,6 +114,10 @@ function memberRating(member) {
   return ratingForGame(member, memberRatingGame.value)
 }
 
+function memberRerLabel(member) {
+  return member?.exclude_from_rer ? t('common.rerExcluded') : formatRating(memberRating(member))
+}
+
 function fillEditForm(team) {
   editForm.value = {
     name: team?.name || '',
@@ -128,6 +142,65 @@ function setEditAbbreviation(event) {
 
 function setTeamAvatarFile(event) {
   teamAvatarFile.value = event.target.files?.[0] || null
+}
+
+function teamLiveryCacheKey(teamId) {
+  return `${API_BASE}/teams/${teamId}/liveries`
+}
+
+function teamLiveryStorageKey(teamId) {
+  return `${TEAM_LIVERY_CACHE_NAME}:${teamId}`
+}
+
+async function readTeamLiveryCache(teamId) {
+  if (typeof window === 'undefined') return null
+  if ('caches' in window) {
+    try {
+      const cache = await window.caches.open(TEAM_LIVERY_CACHE_NAME)
+      const response = await cache.match(teamLiveryCacheKey(teamId))
+      if (response) {
+        const cached = await response.json()
+        if (Array.isArray(cached?.images)) return cached.images
+      }
+    } catch {
+      // Fall back to local storage below.
+    }
+  }
+  try {
+    const cached = JSON.parse(window.localStorage.getItem(teamLiveryStorageKey(teamId)) || 'null')
+    return Array.isArray(cached?.images) ? cached.images : null
+  } catch {
+    return null
+  }
+}
+
+async function writeTeamLiveryCache(teamId, images) {
+  if (typeof window === 'undefined') return
+  const cached = JSON.stringify({ images })
+  try {
+    window.localStorage.setItem(teamLiveryStorageKey(teamId), cached)
+  } catch {
+    // Cache storage below may still be available.
+  }
+  if (!('caches' in window)) return
+  try {
+    const cache = await window.caches.open(TEAM_LIVERY_CACHE_NAME)
+    await cache.put(
+      teamLiveryCacheKey(teamId),
+      new Response(cached, { headers: { 'Content-Type': 'application/json' } })
+    )
+  } catch {
+    // Cache storage is optional; the server remains the source of truth.
+  }
+}
+
+function setSelectedTeamLiveries(images) {
+  if (!selectedTeam.value) return
+  selectedTeam.value = {
+    ...selectedTeam.value,
+    livery_images: images,
+    livery_image_count: images.length
+  }
 }
 
 function memberTitle(member) {
@@ -192,6 +265,7 @@ async function load() {
     const selectedId = selectedTeam.value?.id || (Number.isInteger(queryTeamId) && queryTeamId > 0 ? queryTeamId : null)
     if (selectedId && loadedTeams.some((team) => team.id === selectedId)) {
       selectedTeam.value = await api(`/teams/${selectedId}`)
+      teamLiveryLoaded.value = false
       fillEditForm(selectedTeam.value)
     } else if (selectedId) {
       selectedTeam.value = null
@@ -208,6 +282,8 @@ async function openTeam(team) {
   error.value = ''
   try {
     selectedTeam.value = await api(`/teams/${team.id}`)
+    teamLiveryViewerOpen.value = false
+    teamLiveryLoaded.value = false
     memberPage.value = 1
     fillEditForm(selectedTeam.value)
   } catch (err) {
@@ -324,6 +400,100 @@ async function uploadTeamAvatar() {
     error.value = err.message
   } finally {
     teamAvatarSaving.value = false
+  }
+}
+
+async function loadTeamLivery() {
+  if (!selectedTeam.value || selectedCanManage.value || teamLiveryLoading.value || !selectedLiveryCount.value) return
+  const teamId = selectedTeam.value.id
+  teamLiveryLoading.value = true
+  error.value = ''
+  try {
+    const cachedImages = await readTeamLiveryCache(teamId)
+    const images = cachedImages && cachedImages.length === selectedLiveryCount.value
+      ? cachedImages
+      : await api(`/teams/${teamId}/liveries`)
+    setSelectedTeamLiveries(Array.isArray(images) ? images : [])
+    await writeTeamLiveryCache(teamId, selectedLiveries.value)
+    teamLiveryLoaded.value = true
+    if (selectedLiveries.value.length) teamLiveryViewerOpen.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    teamLiveryLoading.value = false
+  }
+}
+
+async function uploadTeamLiveries(event) {
+  const files = Array.from(event.target.files || [])
+  if (!selectedTeam.value || !files.length) return
+  const availableSlots = 4 - selectedLiveries.value.length
+  if (files.length > availableSlots) {
+    error.value = t('teams.liveryMaximum')
+    event.target.value = ''
+    return
+  }
+
+  teamLiverySaving.value = true
+  error.value = ''
+  saved.value = false
+  try {
+    for (const file of files) {
+      const payload = new FormData()
+      payload.append('file', file)
+      selectedTeam.value = await api(`/teams/${selectedTeam.value.id}/liveries`, {
+        method: 'POST',
+        body: payload
+      })
+    }
+    await writeTeamLiveryCache(selectedTeam.value.id, selectedLiveries.value)
+    saved.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    teamLiverySaving.value = false
+    event.target.value = ''
+  }
+}
+
+async function deleteTeamLivery(image) {
+  if (!selectedTeam.value || !image || !window.confirm(t('teams.deleteLiveryConfirm'))) return
+  teamLiverySaving.value = true
+  error.value = ''
+  saved.value = false
+  try {
+    selectedTeam.value = await api(`/teams/${selectedTeam.value.id}/liveries/${image.id}`, { method: 'DELETE' })
+    await writeTeamLiveryCache(selectedTeam.value.id, selectedLiveries.value)
+    saved.value = true
+    if (!selectedLiveries.value.length) teamLiveryViewerOpen.value = false
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    teamLiverySaving.value = false
+  }
+}
+
+async function uploadTeamLiveryArchive(event) {
+  const files = Array.from(event.target.files || [])
+  if (!selectedTeam.value || !files.length) return
+  teamLiveryArchiveSaving.value = true
+  error.value = ''
+  saved.value = false
+  try {
+    const payload = new FormData()
+    for (const file of files) {
+      payload.append('files', file, file.webkitRelativePath || file.name)
+    }
+    selectedTeam.value = await api(`/teams/${selectedTeam.value.id}/livery-archive`, {
+      method: 'POST',
+      body: payload
+    })
+    saved.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    teamLiveryArchiveSaving.value = false
+    event.target.value = ''
   }
 }
 
@@ -569,7 +739,7 @@ watch(visibleTeamMembers, () => {
           </span>
           <span class="team-member-stat">
             <strong>#{{ formatPilotNumber(requestItem.requester.pilot_number) }}</strong>
-            <span>RER {{ formatRating(memberRating(requestItem.requester)) }}</span>
+            <span>RER {{ memberRerLabel(requestItem.requester) }}</span>
           </span>
           <div class="team-application-actions">
             <button class="icon-button" type="button" :title="t('teams.approveCreateRequest')" :disabled="busyCreateRequests[requestItem.id]" @click="approveCreateRequest(requestItem)">
@@ -646,6 +816,53 @@ watch(visibleTeamMembers, () => {
           </div>
         </div>
 
+        <section class="team-livery-panel">
+          <div class="team-livery-panel-head">
+            <div class="team-livery-panel-title">
+              <span class="team-livery-panel-icon"><Images :size="17" /></span>
+              <span>
+                <strong>{{ t('teams.liveryTitle') }}</strong>
+                <small>{{ t('teams.liveryCount', { count: selectedLiveryCount }) }}</small>
+              </span>
+            </div>
+            <button v-if="selectedLiveries.length" class="button small team-livery-open-button" type="button" @click="teamLiveryViewerOpen = true">
+              <Images :size="15" />
+              {{ t('teams.openLiveries') }}
+            </button>
+            <button v-else-if="!selectedCanManage && selectedLiveryCount && !teamLiveryLoaded" class="button small team-livery-open-button" type="button" :disabled="teamLiveryLoading" @click="loadTeamLivery">
+              <Download :size="15" />
+              {{ teamLiveryLoading ? t('teams.loadingLivery') : t('teams.loadLivery') }}
+            </button>
+          </div>
+          <div class="team-livery-strip">
+            <button v-for="(image, index) in selectedLiveries" :key="image.id" class="team-livery-preview" type="button" :title="image.original_filename || t('teams.liveryImageAlt', { number: index + 1 })" @click="teamLiveryViewerOpen = true">
+              <img :src="image.image_url" :alt="image.original_filename || t('teams.liveryImageAlt', { number: index + 1 })" />
+            </button>
+            <span v-if="!selectedLiveries.length && selectedLiveryCount" class="team-livery-deferred-copy">{{ t('teams.liveryDeferred') }}</span>
+            <span v-else-if="!selectedLiveries.length" class="team-livery-empty-copy">{{ t('teams.liveryEmpty') }}</span>
+            <label v-if="selectedCanManage && selectedLiveries.length < 4" class="button small team-livery-upload-button" :class="{ 'is-disabled': teamLiverySaving }" :for="`team-livery-upload-${selectedTeam.id}`">
+              <Upload :size="15" />
+              {{ selectedLiveries.length ? t('teams.addLivery') : t('teams.uploadLivery') }}
+            </label>
+            <span v-else-if="selectedCanManage" class="team-livery-limit">{{ t('teams.liveryMaximum') }}</span>
+            <input :id="`team-livery-upload-${selectedTeam.id}`" class="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple :disabled="teamLiverySaving" @change="uploadTeamLiveries" />
+          </div>
+          <div v-if="selectedCanManage" class="team-livery-archive-row">
+            <div class="team-livery-archive-info">
+              <span class="team-livery-panel-icon is-archive"><Archive :size="16" /></span>
+              <span>
+                <strong>{{ t('teams.liveryArchiveTitle') }}</strong>
+                <small>{{ selectedLiveryArchive ? t('teams.liveryArchiveUploaded', { filename: selectedLiveryArchive.archive_filename }) : t('teams.liveryArchiveEmpty') }}</small>
+              </span>
+            </div>
+            <label class="button small" :class="{ 'is-disabled': teamLiveryArchiveSaving }" :for="`team-livery-archive-${selectedTeam.id}`">
+              <Archive :size="15" />
+              {{ selectedLiveryArchive ? t('teams.replaceLiveryArchive') : t('teams.uploadLiveryArchive') }}
+            </label>
+            <input :id="`team-livery-archive-${selectedTeam.id}`" class="visually-hidden" type="file" webkitdirectory directory multiple :disabled="teamLiveryArchiveSaving" @change="uploadTeamLiveryArchive" />
+          </div>
+        </section>
+
         <form v-if="selectedCanManage" class="team-edit-panel" @submit.prevent="saveTeam">
           <div class="section-header">
             <h2>{{ t('teams.editTitle') }}</h2>
@@ -704,7 +921,7 @@ watch(visibleTeamMembers, () => {
               <select v-model="transferOwnerId" :disabled="!transferCandidates.length" required>
                 <option value="">{{ t('teams.chooseMember') }}</option>
                 <option v-for="member in transferCandidates" :key="member.id" :value="member.id">
-                  {{ memberTitle(member) }} · #{{ formatPilotNumber(member.pilot_number) }} · RER {{ formatRating(memberRating(member)) }}
+                  {{ memberTitle(member) }} · #{{ formatPilotNumber(member.pilot_number) }} · RER {{ memberRerLabel(member) }}
                 </option>
               </select>
             </label>
@@ -734,7 +951,7 @@ watch(visibleTeamMembers, () => {
                   <LicenseBadge :user="application.user" :game="memberRatingGame" />
                   <PilotRoles :roles="application.user.pilot_roles" />
                 </span>
-                <span>{{ application.user.login }} · #{{ formatPilotNumber(application.user.pilot_number) }} · RER {{ formatRating(memberRating(application.user)) }} · {{ teamShortName(application.user.team_name, application.user.team_abbreviation) }}</span>
+                <span>{{ application.user.login }} · #{{ formatPilotNumber(application.user.pilot_number) }} · RER {{ memberRerLabel(application.user) }} · {{ teamShortName(application.user.team_name, application.user.team_abbreviation) }}</span>
               </span>
               <span class="team-member-stat">
                 <strong>{{ application.user.sr.toFixed(1) }}</strong>
@@ -784,7 +1001,7 @@ watch(visibleTeamMembers, () => {
                 <span>{{ member.login }} · #{{ formatPilotNumber(member.pilot_number) }} · {{ teamShortName(memberTeamName(member), memberTeamAbbreviation(member)) }}</span>
               </RouterLink>
               <span class="team-member-stat">
-                <strong>{{ formatRating(memberRating(member)) }}</strong>
+                <strong>{{ memberRerLabel(member) }}</strong>
                 <span>RER {{ memberRatingGame }}</span>
               </span>
               <span class="team-member-stat">
@@ -827,6 +1044,14 @@ watch(visibleTeamMembers, () => {
       :fallback-color="selectedTeam?.avatar_color"
       team
       @close="teamAvatarViewerOpen = false"
+    />
+    <TeamLiveryViewer
+      :open="teamLiveryViewerOpen"
+      :team-name="selectedTeam?.name || t('teams.newTeam')"
+      :images="selectedLiveries"
+      :can-manage="selectedCanManage"
+      @close="teamLiveryViewerOpen = false"
+      @delete="deleteTeamLivery"
     />
   </section>
 </template>

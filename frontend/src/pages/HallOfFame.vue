@@ -9,12 +9,13 @@ import PilotRoles from '../components/PilotRoles.vue'
 import TeamAvatar from '../components/TeamAvatar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { gameOptions } from '../i18nLabels'
-import { OVERALL_RATING_GAME, formatPilotNumber, formatRating, pilotName, ratingForGame, teamHref, teamShortName } from '../pilotDisplay'
+import { OVERALL_RATING_GAME, RATING_GAMES, formatPilotNumber, formatRating, pilotName, ratingForGame, teamHref, teamShortName } from '../pilotDisplay'
 
 const { t } = useI18n()
 
 const data = ref({ pilots: [], teams: [] })
 const activeTab = ref('pilots')
+const ratingMode = ref('rating')
 const search = ref('')
 const ratingGame = ref(OVERALL_RATING_GAME)
 const loading = ref(false)
@@ -47,15 +48,41 @@ function statValue(item, field) {
   return Number(statSource(item)?.[field] || 0)
 }
 
+function isTeam(item) {
+  return item?.member_count !== undefined
+}
+
+function teamRatingForGame(team, game) {
+  if (game === OVERALL_RATING_GAME) {
+    const ratings = RATING_GAMES
+      .map((itemGame) => Number(team?.ratings_by_game?.[itemGame]))
+      .filter((rating) => Number.isFinite(rating))
+    return ratings.length ? Math.max(...ratings) : team?.average_rating
+  }
+  return team?.ratings_by_game?.[game] ?? team?.average_rating
+}
+
+function ratingValue(item) {
+  return isTeam(item) ? teamRatingForGame(item, ratingGame.value) : ratingForGame(item, ratingGame.value)
+}
+
+function medalCompare(left, right) {
+  return (
+    statValue(right, 'points') - statValue(left, 'points') ||
+    statValue(right, 'gold') - statValue(left, 'gold') ||
+    statValue(right, 'silver') - statValue(left, 'silver') ||
+    statValue(right, 'bronze') - statValue(left, 'bronze')
+  )
+}
+
 function rankItems(items) {
   return [...items]
-    .filter((item) => statValue(item, 'points') > 0)
+    .filter((item) => ratingMode.value === 'rating' || statValue(item, 'points') > 0)
     .sort((left, right) => (
-      statValue(right, 'points') - statValue(left, 'points') ||
-      statValue(right, 'gold') - statValue(left, 'gold') ||
-      statValue(right, 'silver') - statValue(left, 'silver') ||
-      statValue(right, 'bronze') - statValue(left, 'bronze') ||
-      Number(ratingForGame(right, ratingGame.value) || 0) - Number(ratingForGame(left, ratingGame.value) || 0) ||
+      (ratingMode.value === 'rating'
+        ? Number(ratingValue(right) || 0) - Number(ratingValue(left) || 0)
+        : medalCompare(left, right)) ||
+      medalCompare(left, right) ||
       String(left.nickname || left.name || '').localeCompare(String(right.nickname || right.name || ''), undefined, { sensitivity: 'base' })
     ))
 }
@@ -90,7 +117,7 @@ function pilotSearchText(pilot) {
     statValue(pilot, 'gold'),
     statValue(pilot, 'silver'),
     statValue(pilot, 'bronze'),
-    ratingForGame(pilot, ratingGame.value),
+    ...RATING_GAMES.map((game) => ratingForGame(pilot, game)),
     pilot.sr
   ]
     .filter((value) => value !== undefined && value !== null)
@@ -106,7 +133,7 @@ function teamSearchText(team) {
     statValue(team, 'gold'),
     statValue(team, 'silver'),
     statValue(team, 'bronze'),
-    team.average_rating,
+    ...RATING_GAMES.map((game) => teamRatingForGame(team, game)),
     bestPilotFor(team)?.login,
     bestPilotFor(team)?.nickname,
     bestPilotFor(team)?.first_name,
@@ -169,10 +196,20 @@ watch(visibleTeams, () => {
         <h1>{{ t('nav.hallOfFame') }}</h1>
         <p class="muted">{{ t('hallOfFame.subtitle') }}</p>
       </div>
-      <button class="button" type="button" :disabled="loading" @click="load">
-        <RefreshCw :size="16" />
-        {{ t('common.reload') }}
-      </button>
+      <div class="hall-header-actions">
+        <div class="hall-mode-toggle" role="group" :aria-label="t('hallOfFame.mode')">
+          <button type="button" :class="{ active: ratingMode === 'rating' }" :aria-pressed="ratingMode === 'rating'" @click="ratingMode = 'rating'">
+            {{ t('hallOfFame.byRating') }}
+          </button>
+          <button type="button" :class="{ active: ratingMode === 'medals' }" :aria-pressed="ratingMode === 'medals'" @click="ratingMode = 'medals'">
+            {{ t('hallOfFame.byMedals') }}
+          </button>
+        </div>
+        <button class="button" type="button" :disabled="loading" @click="load">
+          <RefreshCw :size="16" />
+          {{ t('common.reload') }}
+        </button>
+      </div>
     </div>
 
     <div class="hall-summary-grid">
@@ -210,9 +247,12 @@ watch(visibleTeams, () => {
         <Search :size="16" />
         <input v-model="search" type="search" :placeholder="t('hallOfFame.searchPlaceholder')" />
       </label>
-      <select v-model="ratingGame" class="pilot-list-sort" :aria-label="t('fields.game')">
-        <option v-for="option in ratingGameOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-      </select>
+      <label class="hall-priority-control">
+        <span>{{ t('hallOfFame.priorityGame') }}</span>
+        <select v-model="ratingGame" class="pilot-list-sort" :aria-label="t('hallOfFame.priorityGame')">
+          <option v-for="option in ratingGameOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
+      </label>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -220,18 +260,18 @@ watch(visibleTeams, () => {
     <div v-if="loading" class="card hall-empty">{{ t('common.loading') }}</div>
 
     <div v-else-if="activeTab === 'pilots'" class="hall-table-wrap card">
-      <table class="hall-table">
+      <table class="hall-table" :class="{ 'is-rating-mode': ratingMode === 'rating', 'is-medals-mode': ratingMode === 'medals' }">
         <thead>
           <tr>
             <th>{{ t('hallOfFame.rank') }}</th>
             <th>{{ t('roles.pilot') }}</th>
             <th>{{ t('fields.team') }}</th>
-            <th>{{ t('hallOfFame.goldShort') }}</th>
-            <th>{{ t('hallOfFame.silverShort') }}</th>
-            <th>{{ t('hallOfFame.bronzeShort') }}</th>
-            <th>{{ t('hallOfFame.podiums') }}</th>
-            <th>RER</th>
-            <th>SR</th>
+            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.goldShort') }}</th>
+            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.silverShort') }}</th>
+            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.bronzeShort') }}</th>
+            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.podiums') }}</th>
+            <th v-if="ratingMode === 'rating'">{{ t('hallOfFame.ratings') }}</th>
+            <th v-if="ratingMode === 'rating'">SR</th>
           </tr>
         </thead>
         <tbody>
@@ -256,12 +296,24 @@ watch(visibleTeams, () => {
               </RouterLink>
               <span v-else class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span>
             </td>
-            <td><span class="hall-medal-value gold">{{ statValue(pilot, 'gold') }}</span></td>
-            <td><span class="hall-medal-value silver">{{ statValue(pilot, 'silver') }}</span></td>
-            <td><span class="hall-medal-value bronze">{{ statValue(pilot, 'bronze') }}</span></td>
-            <td>{{ statValue(pilot, 'podiums') }}</td>
-            <td>{{ formatRating(ratingForGame(pilot, ratingGame)) }}</td>
-            <td>{{ Number(pilot.sr).toFixed(1) }}</td>
+            <td v-if="ratingMode === 'medals'"><span class="hall-medal-value gold">{{ statValue(pilot, 'gold') }}</span></td>
+            <td v-if="ratingMode === 'medals'"><span class="hall-medal-value silver">{{ statValue(pilot, 'silver') }}</span></td>
+            <td v-if="ratingMode === 'medals'"><span class="hall-medal-value bronze">{{ statValue(pilot, 'bronze') }}</span></td>
+            <td v-if="ratingMode === 'medals'">{{ statValue(pilot, 'podiums') }}</td>
+            <td v-if="ratingMode === 'rating'" class="hall-ratings-cell">
+              <div class="hall-rating-list">
+                <span
+                  v-for="game in RATING_GAMES"
+                  :key="game"
+                  class="hall-rating-chip"
+                  :class="{ 'is-priority': ratingGame === game }"
+                >
+                  <small>{{ game }}</small>
+                  <strong>{{ pilot.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(pilot, game)) }}</strong>
+                </span>
+              </div>
+            </td>
+            <td v-if="ratingMode === 'rating'">{{ Number(pilot.sr).toFixed(1) }}</td>
           </tr>
         </tbody>
       </table>
@@ -270,17 +322,17 @@ watch(visibleTeams, () => {
     </div>
 
     <div v-else class="hall-table-wrap card">
-      <table class="hall-table hall-team-table">
+      <table class="hall-table hall-team-table" :class="{ 'is-rating-mode': ratingMode === 'rating', 'is-medals-mode': ratingMode === 'medals' }">
         <thead>
           <tr>
             <th>{{ t('hallOfFame.rank') }}</th>
             <th>{{ t('fields.team') }}</th>
             <th>{{ t('fields.participants') }}</th>
-            <th>{{ t('hallOfFame.goldShort') }}</th>
-            <th>{{ t('hallOfFame.silverShort') }}</th>
-            <th>{{ t('hallOfFame.bronzeShort') }}</th>
-            <th>{{ t('hallOfFame.podiums') }}</th>
-            <th>{{ t('hallOfFame.averageRer') }}</th>
+            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.goldShort') }}</th>
+            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.silverShort') }}</th>
+            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.bronzeShort') }}</th>
+            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.podiums') }}</th>
+            <th v-if="ratingMode === 'rating'">{{ t('hallOfFame.ratings') }}</th>
             <th>{{ t('hallOfFame.bestPilot') }}</th>
           </tr>
         </thead>
@@ -297,22 +349,39 @@ watch(visibleTeams, () => {
               </div>
             </td>
             <td>{{ team.member_count }}</td>
-            <td><span class="hall-medal-value gold">{{ statValue(team, 'gold') }}</span></td>
-            <td><span class="hall-medal-value silver">{{ statValue(team, 'silver') }}</span></td>
-            <td><span class="hall-medal-value bronze">{{ statValue(team, 'bronze') }}</span></td>
-            <td>{{ statValue(team, 'podiums') }}</td>
-            <td>{{ formatRating(team.average_rating) }}</td>
+            <td v-if="ratingMode === 'medals'"><span class="hall-medal-value gold">{{ statValue(team, 'gold') }}</span></td>
+            <td v-if="ratingMode === 'medals'"><span class="hall-medal-value silver">{{ statValue(team, 'silver') }}</span></td>
+            <td v-if="ratingMode === 'medals'"><span class="hall-medal-value bronze">{{ statValue(team, 'bronze') }}</span></td>
+            <td v-if="ratingMode === 'medals'">{{ statValue(team, 'podiums') }}</td>
+            <td v-if="ratingMode === 'rating'" class="hall-ratings-cell">
+              <div class="hall-rating-list">
+                <span
+                  v-for="game in RATING_GAMES"
+                  :key="game"
+                  class="hall-rating-chip"
+                  :class="{ 'is-priority': ratingGame === game }"
+                >
+                  <small>{{ game }}</small>
+                  <strong>{{ formatRating(teamRatingForGame(team, game)) }}</strong>
+                </span>
+              </div>
+            </td>
             <td>
               <RouterLink v-if="bestPilotFor(team)" class="hall-best-link" :to="`/pilots/${bestPilotFor(team).id}`">
                 <UserAvatar mini :src="bestPilotFor(team).avatar_url" :color="bestPilotFor(team).avatar_color" :label="pilotTitle(bestPilotFor(team))" />
-                <span>
+                <span class="hall-best-content">
                   <span class="user-name-line">
                     <strong>{{ pilotTitle(bestPilotFor(team)) }}</strong>
                     <LicenseBadge :user="bestPilotFor(team)" :game="ratingGame" />
                     <PilotRoles :roles="bestPilotFor(team)?.pilot_roles" />
-                  </span>
-                  <small>#{{ formatPilotNumber(bestPilotFor(team).pilot_number) }} - {{ teamShortName(bestPilotFor(team).team_name, bestPilotFor(team).team_abbreviation) }}</small>
-                </span>
+                   </span>
+                   <small>#{{ formatPilotNumber(bestPilotFor(team).pilot_number) }} - {{ teamShortName(bestPilotFor(team).team_name, bestPilotFor(team).team_abbreviation) }}</small>
+                   <span v-if="ratingMode === 'medals'" class="hall-best-achievements" :aria-label="t('hallOfFame.achievements')">
+                     <span class="hall-best-medal gold" :title="t('hallOfFame.goldMedal')"><Medal :size="13" /> {{ statValue(bestPilotFor(team), 'gold') }}</span>
+                     <span class="hall-best-medal silver" :title="t('hallOfFame.silverMedal')"><Medal :size="13" /> {{ statValue(bestPilotFor(team), 'silver') }}</span>
+                     <span class="hall-best-medal bronze" :title="t('hallOfFame.bronzeMedal')"><Medal :size="13" /> {{ statValue(bestPilotFor(team), 'bronze') }}</span>
+                   </span>
+                 </span>
               </RouterLink>
               <span v-else>{{ t('common.none') }}</span>
             </td>

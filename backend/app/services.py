@@ -233,7 +233,15 @@ def build_rating_changes(
     game: str,
     rating_change_coefficient: float = RATING_DELTA_SCALE,
 ) -> tuple[list[dict], float]:
-    eligible_rows = [row for row in race_rows if int(row.get("user_id") or 0) in users and rating_time_ms(row) is not None]
+    # Excluded pilots remain visible in results but never affect RER or the
+    # strength of field used for the other participants.
+    eligible_rows = [
+        row
+        for row in race_rows
+        if (user := users.get(int(row.get("user_id") or 0))) is not None
+        and not user.exclude_from_rer
+        and rating_time_ms(row) is not None
+    ]
     participant_count = len(eligible_rows)
     if participant_count < 2:
         return [], 0
