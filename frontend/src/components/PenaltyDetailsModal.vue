@@ -75,7 +75,8 @@ function issuerName(penalty) {
 }
 
 function userMetaWithRerStatus(rating, excludeFromRer, teamName, teamAbbreviation) {
-  return `RER ${excludeFromRer ? t('common.rerExcluded') : formatRating(rating)} · ${teamShortName(teamName, teamAbbreviation)}`
+  const rerStatus = excludeFromRer ? ` · ${t('common.rerExcluded')}` : ''
+  return `RER ${formatRating(rating)}${rerStatus} · ${teamShortName(teamName, teamAbbreviation)}`
 }
 </script>
 

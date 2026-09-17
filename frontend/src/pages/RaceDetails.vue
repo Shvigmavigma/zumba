@@ -467,7 +467,7 @@ function fanVotePilotName(item) {
 function fanVotePilotSubtitle(item) {
   const team = teamShortName(item.team_name, item.team_abbreviation)
   const number = item.pilot_number !== null && item.pilot_number !== undefined ? `#${formatPilotNumber(item.pilot_number)}` : `ID ${item.user_id}`
-  const rer = item.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(item, raceRatingGame.value))
+  const rer = formatRating(ratingForGame(item, raceRatingGame.value))
   return [number, `RER ${rer}`, `SR ${item.sr ?? '-'}`, team].filter(Boolean).join(' - ')
 }
 
@@ -633,12 +633,11 @@ function resultPilotTeamId(row) {
 
 function resultPilotRatingValue(row) {
   const pilot = resultPilotUser(row)
-  if (pilot.exclude_from_rer) return null
   return row.rating_new ?? ratingForGame(pilot, raceRatingGame.value)
 }
 
 function resultPilotRating(row) {
-  return resultPilotUser(row).exclude_from_rer ? t('common.rerExcluded') : formatRating(resultPilotRatingValue(row))
+  return formatRating(resultPilotRatingValue(row))
 }
 
 function resultPenalty(row) {
@@ -1822,7 +1821,7 @@ watch(visibleParticipants, () => {
                 <LicenseBadge :user="item" :game="raceRatingGame" />
                 <PilotRoles :roles="item.pilot_roles" />
               </span>
-              <span>{{ participantSubtitle(item) }} · RER {{ item.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(item, raceRatingGame)) }} · {{ pilotTeamChip(item) }}</span>
+              <span>{{ participantSubtitle(item) }} · RER {{ formatRating(ratingForGame(item, raceRatingGame)) }} · {{ pilotTeamChip(item) }}</span>
             </div>
             <div class="race-participant-stat">
               <span>SR</span>
@@ -1830,7 +1829,7 @@ watch(visibleParticipants, () => {
             </div>
             <div class="race-participant-stat">
               <span>RER</span>
-                <strong>{{ item.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(item, raceRatingGame)) }}</strong>
+                <strong>{{ formatRating(ratingForGame(item, raceRatingGame)) }}</strong>
             </div>
             <div class="race-participant-country">
               <span>{{ t('fields.country') }}</span>
@@ -1950,7 +1949,7 @@ watch(visibleParticipants, () => {
                 <LicenseBadge :user="pilot" :game="raceRatingGame" />
                 <PilotRoles :roles="pilot.pilot_roles" />
               </span>
-              <small>#{{ formatPilotNumber(pilot.pilot_number) }} - RER {{ pilot.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(pilot, raceRatingGame)) }}</small>
+            <small>#{{ formatPilotNumber(pilot.pilot_number) }} - RER {{ formatRating(ratingForGame(pilot, raceRatingGame)) }}</small>
             </button>
           </div>
           <div class="manual-results-table">

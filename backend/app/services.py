@@ -62,6 +62,38 @@ def set_user_game_rating(user: User, game: str, rating: float, race_count: int) 
         user.rating_race_count = normalized_count
 
 
+def record_rating_adjustments(user: User, previous_ratings: dict[str, int], current_ratings: dict[str, int]) -> None:
+    raw_adjustments = user.rating_adjustments if isinstance(user.rating_adjustments, dict) else {}
+    adjustments = {
+        game: int(value)
+        for game, value in raw_adjustments.items()
+        if game in RACE_GAMES and isinstance(value, (int, float))
+    }
+    for game in RACE_GAMES:
+        delta = int(current_ratings.get(game, DEFAULT_RATING)) - int(previous_ratings.get(game, DEFAULT_RATING))
+        if delta:
+            next_value = adjustments.get(game, 0) + delta
+            if next_value:
+                adjustments[game] = next_value
+            else:
+                adjustments.pop(game, None)
+    user.rating_adjustments = adjustments
+
+
+def reset_ratings_for_recalculation(user: User) -> None:
+    ratings = default_game_ratings()
+    raw_adjustments = user.rating_adjustments if isinstance(user.rating_adjustments, dict) else {}
+    for game in RACE_GAMES:
+        try:
+            adjustment = int(raw_adjustments.get(game, 0))
+        except (TypeError, ValueError):
+            adjustment = 0
+        ratings[game]["rating"] = clamp_rating(DEFAULT_RATING + adjustment)
+    user.game_ratings = ratings
+    user.rating = ratings[RACE_GAMES[0]]["rating"]
+    user.rating_race_count = ratings[RACE_GAMES[0]]["race_count"]
+
+
 def clamp_sr(value: float) -> float:
     return round(min(MAX_SR, max(MIN_SR, value)), 1)
 
@@ -400,9 +432,9 @@ async def recalculate_all_ratings(session: AsyncSession) -> None:
     await recalculate_all_sr(session)
     users = list((await session.scalars(select(User))).all())
     for user in users:
-        user.rating = DEFAULT_RATING
-        user.rating_race_count = 0
-        user.game_ratings = default_game_ratings()
+        if user.exclude_from_rer:
+            continue
+        reset_ratings_for_recalculation(user)
 
     races = list(
         (

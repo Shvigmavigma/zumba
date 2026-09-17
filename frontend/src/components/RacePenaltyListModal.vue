@@ -88,7 +88,7 @@ function penaltyTargetName(penalty) {
 
 function penaltyTargetSubtitle(penalty) {
   const target = participantById(penalty.target_id)
-  return target ? `${participantSubtitle(target)} · RER ${target.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(target, props.game))} · ${teamShortName(target.team_name, target.team_abbreviation)}` : `ID ${penalty.target_id}`
+  return target ? `${participantSubtitle(target)} · RER ${formatRating(ratingForGame(target, props.game))}${target.exclude_from_rer ? ` · ${t('common.rerExcluded')}` : ''} · ${teamShortName(target.team_name, target.team_abbreviation)}` : `ID ${penalty.target_id}`
 }
 
 function penaltyTargetColor(penalty) {

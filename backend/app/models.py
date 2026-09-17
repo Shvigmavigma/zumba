@@ -151,6 +151,7 @@ class User(Base):
     rating: Mapped[float] = mapped_column(Numeric(8, 2), default=DEFAULT_RATING, server_default=str(DEFAULT_RATING), index=True)
     rating_race_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     game_ratings: Mapped[dict] = mapped_column(JSONB, default=default_game_ratings, server_default=text(DEFAULT_GAME_RATINGS_SQL))
+    rating_adjustments: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
     discord: Mapped[str | None] = mapped_column(String(100))
     steam_id: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     role: Mapped[Role] = enum_column(Role)
