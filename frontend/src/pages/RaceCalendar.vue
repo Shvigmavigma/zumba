@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import PaginationControls from '../components/PaginationControls.vue'
@@ -62,6 +62,7 @@ const days = computed(() => {
 const todayKey = computed(() => dateKeyInTimeZone(new Date()))
 const raceGameOptions = computed(() => gameOptions(t, true))
 const canFilterMyGames = computed(() => Boolean(state.user?.games?.length))
+const canManageRaces = computed(() => ['admin', 'moder'].includes(state.user?.role))
 const monthLabel = computed(() => cursor.value.toLocaleDateString(state.locale, { month: 'long', year: 'numeric' }))
 const selectedLabel = computed(() => new Date(`${selected.value}T00:00:00`).toLocaleDateString(state.locale, { day: 'numeric', month: 'long', year: 'numeric' }))
 const calendarDateField = computed(() => ({
@@ -254,7 +255,7 @@ watch(selectedRaces, () => {
           <span v-for="label in weekdayLabels" :key="label">{{ label }}</span>
         </div>
         <div class="calendar-grid">
-          <button
+          <div
             v-for="day in days"
             :key="dateKey(day)"
             class="calendar-day"
@@ -264,11 +265,21 @@ watch(selectedRaces, () => {
               today: dateKey(day) === todayKey,
               'has-races': dayRaces(day).length
             }"
-            type="button"
-            @click="selected = dateKey(day)"
+            role="group"
           >
             <span class="calendar-date-row">
-              <strong>{{ day.getDate() }}</strong>
+              <button class="calendar-day-select" type="button" @click="selected = dateKey(day)">
+                <strong>{{ day.getDate() }}</strong>
+              </button>
+              <RouterLink
+                v-if="canManageRaces"
+                class="calendar-day-add"
+                to="/races/new"
+                :title="t('common.add')"
+                :aria-label="t('common.add')"
+              >
+                <Plus :size="14" />
+              </RouterLink>
             </span>
             <span v-if="dayGameCounts(day).length" class="calendar-game-counts">
               <span
@@ -282,13 +293,19 @@ watch(selectedRaces, () => {
               </span>
             </span>
             <span class="calendar-race-stack">
-              <span v-for="race in dayRaces(day).slice(0, 2)" :key="race.id" class="pill calendar-race-pill">
-                <small v-if="race.is_team_event" class="calendar-team-mark">{{ t('raceFilters.teamShort') }}</small>
-                {{ race.name }}
-              </span>
+              <template v-for="race in dayRaces(day).slice(0, 2)" :key="race.id">
+                <a v-if="isExternalRace(race)" class="pill calendar-race-pill" :href="raceOpenHref(race)" target="_blank" rel="noopener noreferrer">
+                  <small v-if="race.is_team_event" class="calendar-team-mark">{{ t('raceFilters.teamShort') }}</small>
+                  <span>{{ race.name }}</span>
+                </a>
+                <RouterLink v-else class="pill calendar-race-pill" :to="raceOpenHref(race)">
+                  <small v-if="race.is_team_event" class="calendar-team-mark">{{ t('raceFilters.teamShort') }}</small>
+                  <span>{{ race.name }}</span>
+                </RouterLink>
+              </template>
               <span v-if="dayRaces(day).length > 2" class="calendar-more">+{{ dayRaces(day).length - 2 }}</span>
             </span>
-          </button>
+          </div>
         </div>
       </div>
 

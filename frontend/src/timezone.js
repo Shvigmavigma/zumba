@@ -42,6 +42,43 @@ function dateForTimeZone(value, timeZone) {
   return offset === null ? date : new Date(date.getTime() + (offset * 60 * 1000))
 }
 
+const scheduleTimeZone = 'Europe/Moscow'
+
+function timeZoneDateParts(value, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date(value))
+  return Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]))
+}
+
+function timeZoneOffsetMinutes(value, timeZone) {
+  const fixedOffset = fixedOffsetMinutes(timeZone)
+  if (fixedOffset !== null) return fixedOffset
+  const rawOffset = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    timeZoneName: 'shortOffset',
+    hour: '2-digit'
+  }).formatToParts(new Date(value)).find((part) => part.type === 'timeZoneName')?.value || 'GMT'
+  const match = /^GMT([+-])(\d{1,2})(?::?(\d{2}))?$/.exec(rawOffset)
+  if (!match) return 0
+  const minutes = (Number(match[2]) * 60) + Number(match[3] || 0)
+  return match[1] === '-' ? -minutes : minutes
+}
+
+function clockTimeDate(value, referenceDate) {
+  const match = /^(\d{1,2}):(\d{2})/.exec(String(value || ''))
+  if (!match) return null
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (hours > 23 || minutes > 59) return null
+  const parts = timeZoneDateParts(referenceDate || new Date(), scheduleTimeZone)
+  const localDate = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), hours, minutes)
+  return new Date(localDate - (timeZoneOffsetMinutes(referenceDate || new Date(), scheduleTimeZone) * 60 * 1000))
+}
+
 function formatterTimeZone(timeZone) {
   return fixedOffsetMinutes(timeZone) === null ? timeZone : 'UTC'
 }
@@ -135,6 +172,17 @@ export function formatTimeOnly(value) {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+export function formatTimeRangeInTimeZone(start, end, referenceDate) {
+  if (!start || !end) return '—'
+  const formatClock = (value) => {
+    const date = clockTimeDate(value, referenceDate)
+    return date ? formatTimeOnly(date) : ''
+  }
+  const startLabel = formatClock(start)
+  const endLabel = formatClock(end)
+  return startLabel && endLabel ? `${startLabel} - ${endLabel}` : '—'
 }
 
 export function dateKeyInTimeZone(value) {
