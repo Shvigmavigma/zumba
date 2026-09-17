@@ -163,6 +163,7 @@ class User(Base):
     avatar_color: Mapped[str] = mapped_column(String(7), default="#2563eb")
     avatar_url: Mapped[str | None] = mapped_column(String(255))
     show_pilot_roles: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    exclude_from_rer: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     avatar_upload_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     avatar_upload_window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     device_fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
@@ -268,6 +269,38 @@ class Team(Base):
     owner: Mapped[User | None] = relationship(back_populates="owned_teams", foreign_keys=[owner_id])
     members: Mapped[list[User]] = relationship(back_populates="team", foreign_keys="User.team_id")
     applications: Mapped[list["TeamApplication"]] = relationship(back_populates="team", cascade="all, delete-orphan")
+    livery_images: Mapped[list["TeamLiveryImage"]] = relationship(back_populates="team", cascade="all, delete-orphan")
+    livery_archive: Mapped["TeamLiveryArchive | None"] = relationship(
+        back_populates="team",
+        uselist=False,
+        cascade="all, delete-orphan",
+        single_parent=True,
+    )
+
+
+class TeamLiveryImage(Base):
+    __tablename__ = "team_livery_images"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    image_url: Mapped[str] = mapped_column(String(255))
+    original_filename: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    team: Mapped[Team] = relationship(back_populates="livery_images")
+
+
+class TeamLiveryArchive(Base):
+    __tablename__ = "team_livery_archives"
+    __table_args__ = (UniqueConstraint("team_id", name="uq_team_livery_archives_team"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    archive_filename: Mapped[str] = mapped_column(String(255))
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    team: Mapped[Team] = relationship(back_populates="livery_archive")
 
 
 class TeamCreationRequest(Base):

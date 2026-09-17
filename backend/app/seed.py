@@ -572,6 +572,7 @@ async def seed_defaults(session: AsyncSession) -> None:
                 role=Role.admin,
                 status=UserStatus.active,
                 avatar_color="#ef4444",
+                exclude_from_rer=True,
                 games=list(DEFAULT_USER_GAMES),
             )
         )
@@ -582,6 +583,7 @@ async def seed_defaults(session: AsyncSession) -> None:
         admin.timeout_start = None
         admin.timeout_end = None
         admin.sr = DEFAULT_SR
+        admin.exclude_from_rer = True
         admin.games = list(DEFAULT_USER_GAMES)
 
     default_banners = {

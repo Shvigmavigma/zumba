@@ -212,7 +212,8 @@ function parseCar(value) {
 }
 
 function pilotLine(user, pilotNumber = user.pilot_number) {
-  return [`#${formatPilotNumber(pilotNumber)}`, user.nickname, teamShortName(user.team_name, user.team_abbreviation), `RER ${formatRating(ratingForGame(user, selected.value?.game))}`].filter(Boolean).join(' - ')
+  const rer = user.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(user, selected.value?.game))
+  return [`#${formatPilotNumber(pilotNumber)}`, user.nickname, teamShortName(user.team_name, user.team_abbreviation), `RER ${rer}`].filter(Boolean).join(' - ')
 }
 
 function registrationPilotName(item) {
@@ -1182,7 +1183,7 @@ watch(standings, () => {
                   <td>{{ pilot.pole_points }}</td>
                   <td>{{ pilot.starts }}</td>
                   <td>{{ championshipCar(pilot.user_id) }}</td>
-                  <td>{{ formatRating(ratingForGame(pilot, selected.game)) }}</td>
+                  <td>{{ pilot.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(pilot, selected.game)) }}</td>
                   <td>{{ Number(pilot.sr).toFixed(1) }}</td>
                 </tr>
               </tbody>

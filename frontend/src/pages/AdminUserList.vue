@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Ban, ChevronDown, Download, Edit3, Eye, Monitor, Plus, Save, Shield, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
+import { Archive, Ban, ChevronDown, Download, Edit3, Eye, Monitor, Plus, Save, Shield, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
 import { api, apiDownload } from '../api'
 import { brandingSettings, setBrandingSettings } from '../brandingSettings'
 import AvatarViewer from '../components/AvatarViewer.vue'
@@ -103,6 +103,8 @@ const weatherImages = ref({
 const weatherImageFiles = ref({})
 const weatherImageSaving = ref({})
 const weatherImageSaved = ref({})
+const teamLiveryArchivesDownloading = ref(false)
+const teamLiveryArchivesDownloaded = ref(false)
 const collapsedAdminZones = ref({})
 const dangerDialog = ref(null)
 const dangerForm = ref({ confirmation: '', confirmation_repeat: '', password: '' })
@@ -790,6 +792,29 @@ async function runDangerAction() {
   }
 }
 
+async function downloadTeamLiveryArchives() {
+  if (teamLiveryArchivesDownloading.value) return
+  teamLiveryArchivesDownloading.value = true
+  teamLiveryArchivesDownloaded.value = false
+  error.value = ''
+  try {
+    const blob = await apiDownload('/users/admin/team-livery-archives')
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `bmrl-team-liveries-${new Date().toISOString().slice(0, 10)}.zip`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    teamLiveryArchivesDownloaded.value = true
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    teamLiveryArchivesDownloading.value = false
+  }
+}
+
 async function chooseRole(user, role) {
   if (user.role === role) return
   const previousRole = user.role
@@ -872,6 +897,7 @@ function openEditDialog(user) {
     favorite_car: user.favorite_car || '',
     avatar_color: user.avatar_color || '#2563eb',
     show_pilot_roles: user.show_pilot_roles !== false,
+    exclude_from_rer: user.exclude_from_rer === true,
     role: user.role || 'pilot',
     status: user.status || 'active',
     team_id: user.team_id ?? null,
@@ -918,6 +944,7 @@ async function saveUserProfile() {
       favorite_car: editForm.value.favorite_car || null,
       avatar_color: editForm.value.avatar_color,
       show_pilot_roles: editForm.value.show_pilot_roles,
+      exclude_from_rer: editForm.value.exclude_from_rer,
       sr: Number(editForm.value.sr),
       rating: Number(editForm.value.rating),
       game_ratings: Object.fromEntries(Object.entries(editForm.value.game_ratings || {}).map(([game, rating]) => [game, Number(rating)]))
@@ -1127,6 +1154,7 @@ function detailRows(user) {
     { label: t('profile.favoriteCar'), value: user.favorite_car },
     { label: t('adminUsers.avatarColor'), value: user.avatar_color },
     { label: t('adminUsers.rolesVisible'), value: user.show_pilot_roles ? t('common.yes') : t('common.no') },
+    { label: t('adminUsers.excludeFromRer'), value: user.exclude_from_rer ? t('common.yes') : t('common.no') },
     { label: t('fields.joinedAt'), value: formatDateTime(user.created_at) },
     { label: t('profile.updatedAt'), value: formatDateTime(user.updated_at) },
     { label: t('adminUsers.steamBlacklistSteamId'), value: user.steam_id },
@@ -1764,11 +1792,26 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
         <span>{{ t('adminUsers.teamLimitField') }}</span>
         <input v-model.number="teamLimit" type="number" min="1" max="100" required />
       </label>
-      <button class="button primary" type="submit" :disabled="teamLimitSaving">
-        <Save :size="16" />
-        {{ t('common.save') }}
-      </button>
-      <span v-if="settingsSaved" class="pill">{{ t('common.saved') }}</span>
+      <div class="admin-team-settings-actions">
+        <button class="button primary" type="submit" :disabled="teamLimitSaving">
+          <Save :size="16" />
+          {{ t('common.save') }}
+        </button>
+        <span v-if="settingsSaved" class="pill">{{ t('common.saved') }}</span>
+      </div>
+      <div class="admin-team-livery-export">
+        <div class="admin-team-livery-export-copy">
+          <strong>{{ t('adminUsers.teamLiveryArchivesTitle') }}</strong>
+          <p class="muted">{{ t('adminUsers.teamLiveryArchivesHint') }}</p>
+        </div>
+        <div class="admin-team-livery-export-actions">
+          <button class="button" type="button" :disabled="teamLiveryArchivesDownloading" @click="downloadTeamLiveryArchives">
+            <Archive :size="16" />
+            {{ teamLiveryArchivesDownloading ? t('adminUsers.teamLiveryArchivesDownloading') : t('adminUsers.downloadTeamLiveryArchives') }}
+          </button>
+          <span v-if="teamLiveryArchivesDownloaded" class="pill">{{ t('adminUsers.teamLiveryArchivesDownloaded') }}</span>
+        </div>
+      </div>
     </form>
 
     <form class="admin-settings-card card" :class="{ 'is-collapsed': isAdminZoneCollapsed('fan-vote') }" @submit.prevent="saveFanVoteConfig">
@@ -1960,7 +2003,7 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
                     <PilotRoles :roles="user.pilot_roles" />
                     <LicenseBadge :user="user" :game="userRatingGame" />
                   </span>
-                  <span>#{{ formatPilotNumber(user.pilot_number) }} · RER {{ formatRating(ratingForGame(user, userRatingGame)) }} · {{ teamShortName(user.team_name, user.team_abbreviation) }}</span>
+                  <span>#{{ formatPilotNumber(user.pilot_number) }} · RER {{ user.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(user, userRatingGame)) }} · {{ teamShortName(user.team_name, user.team_abbreviation) }}</span>
                   <span
                     v-if="user.device_label || user.same_device_account_count > 1 || user.same_ip_account_count > 1"
                     class="admin-user-device"
@@ -2307,6 +2350,10 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
           <label class="field admin-profile-toggle-field">
             <span>{{ t('profile.showRoles') }}</span>
             <input v-model="editForm.show_pilot_roles" type="checkbox" />
+          </label>
+          <label class="field admin-profile-toggle-field" :title="t('adminUsers.excludeFromRerHint')">
+            <span>{{ t('adminUsers.excludeFromRer') }}</span>
+            <input v-model="editForm.exclude_from_rer" type="checkbox" :disabled="editDialogUser.is_system_admin" />
           </label>
           <label class="field">
             <span>{{ t('fields.sr') }}</span>

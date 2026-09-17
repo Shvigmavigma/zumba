@@ -4,11 +4,12 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
+import LicenseBadge from '../components/LicenseBadge.vue'
 import ProfileAnalytics from '../components/ProfileAnalytics.vue'
 import PilotRoles from '../components/PilotRoles.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
-import { DEFAULT_LICENSE_TIERS, RATING_GAMES, formatPilotNumber, formatRating, licenseBadgeStyle, normalizeLicenseTiers, ratingForGame, ratingLicenseTier, ratingRaceCountForGame, teamShortName } from '../pilotDisplay'
+import { DEFAULT_LICENSE_TIERS, RATING_GAMES, formatPilotNumber, formatRating, normalizeLicenseTiers, ratingForGame, ratingLicenseTier, ratingRaceCountForGame, teamShortName } from '../pilotDisplay'
 import { formatShortDate } from '../timezone'
 
 const { t } = useI18n()
@@ -28,6 +29,10 @@ function gameList(user) {
 
 function pilotLicense() {
   return ratingLicenseTier(ratingForGame(pilot.value, 'ACC'), licenseTiers.value)
+}
+
+function rerValue(game) {
+  return pilot.value?.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(pilot.value, game))
 }
 
 const ratingRows = computed(() => RATING_GAMES.map((game) => ({
@@ -66,8 +71,8 @@ onMounted(async () => {
             <p class="muted">{{ pilot.nickname }} - {{ pilot.login }}</p>
           </div>
           <div class="toolbar">
-            <span class="pill">ACC RER {{ formatRating(ratingForGame(pilot, 'ACC')) }}</span>
-            <span class="license-badge" :style="licenseBadgeStyle(pilotLicense())">{{ pilotLicense().name }}</span>
+            <span class="pill">ACC RER {{ rerValue('ACC') }}</span>
+            <LicenseBadge :user="pilot" game="ACC" />
             <span class="pill">SR {{ pilot.sr }}</span>
           </div>
         </div>
@@ -95,11 +100,11 @@ onMounted(async () => {
           </div>
           <div>
             <dt>{{ t('fields.rating') }}</dt>
-            <dd>{{ formatRating(ratingForGame(pilot, 'ACC')) }}</dd>
+            <dd>{{ rerValue('ACC') }}</dd>
           </div>
           <div>
             <dt>{{ t('fields.license') }}</dt>
-            <dd><span class="license-badge" :style="licenseBadgeStyle(pilotLicense())">{{ pilotLicense().name }}</span></dd>
+            <dd><LicenseBadge :user="pilot" game="ACC" /></dd>
           </div>
           <div>
             <dt>{{ t('fields.ratingRaces') }}</dt>
@@ -115,7 +120,7 @@ onMounted(async () => {
           <span>RER</span>
           <div>
             <span v-for="row in ratingRows" :key="row.game" class="pill">
-              {{ row.game }} {{ formatRating(row.rating) }} · {{ row.license.name }} · {{ row.races }}
+              {{ row.game }} {{ rerValue(row.game) }} · {{ pilot.exclude_from_rer ? t('common.rerExcluded') : row.license.name }} · {{ pilot.exclude_from_rer ? '-' : row.races }}
             </span>
           </div>
         </div>

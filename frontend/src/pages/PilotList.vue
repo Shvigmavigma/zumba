@@ -417,7 +417,7 @@ async function deleteTrackImage() {
           <span v-else class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span>
         </span>
         <span class="pilot-roster-country" role="cell" :data-label="t('fields.country')">{{ pilotCountry(pilot) }}</span>
-        <span class="pilot-roster-metric pilot-roster-rer" role="cell" data-label="RER"><strong>{{ formatRating(ratingForGame(pilot, ratingGame)) }}</strong><small>RER {{ ratingGame }}</small></span>
+        <span class="pilot-roster-metric pilot-roster-rer" role="cell" data-label="RER"><strong>{{ pilot.exclude_from_rer ? t('common.rerExcluded') : formatRating(ratingForGame(pilot, ratingGame)) }}</strong><small>RER {{ ratingGame }}</small></span>
         <span class="pilot-roster-metric pilot-roster-sr" role="cell" data-label="SR"><strong>{{ pilot.sr }}</strong><small>SR</small></span>
         <span class="pilot-roster-metric pilot-roster-races" role="cell" :data-label="t('fields.ratingRaces')"><strong>{{ ratingRaceCountForGame(pilot, ratingGame) }}</strong><small>{{ t('fields.ratingRaces') }}</small></span>
       </article>

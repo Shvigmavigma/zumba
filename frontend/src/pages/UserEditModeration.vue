@@ -232,7 +232,7 @@ watch([users, history, viewMode], () => {
           </div>
         </div>
         <div class="user-moderation-meta">
-          <p class="muted">#{{ formatPilotNumber(user.pilot_number) }} - RER {{ formatRating(user.rating) }} - {{ teamShortName(user.team_name, user.team_abbreviation) }}<template v-if="isAdmin"> - {{ t('fields.steam') }} {{ user.steam_id }}</template></p>
+          <p class="muted">#{{ formatPilotNumber(user.pilot_number) }} - RER {{ user.exclude_from_rer ? t('common.rerExcluded') : formatRating(user.rating) }} - {{ teamShortName(user.team_name, user.team_abbreviation) }}<template v-if="isAdmin"> - {{ t('fields.steam') }} {{ user.steam_id }}</template></p>
           <span
             v-if="user.steam_blacklisted"
             class="status-badge status-banned moderation-blacklist-badge"
