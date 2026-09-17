@@ -13,7 +13,7 @@ import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, isExternalRace, statusLabel } from '../i18nLabels'
 import { filterPilots, formatPilotNumber, formatRating, ratingForGame, sortPilots, teamHref, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
-import { formatDateTime } from '../timezone'
+import { formatDateTime, formatTimeRangeInTimeZone } from '../timezone'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -316,7 +316,7 @@ function raceFactPanelId(key) {
 }
 
 function formatSessionTime(start, end) {
-  return start && end ? `${String(start).slice(0, 5)} - ${String(end).slice(0, 5)}` : '—'
+  return formatTimeRangeInTimeZone(start, end, race.value?.datetime_start)
 }
 
 function toggleRaceFact(key) {
