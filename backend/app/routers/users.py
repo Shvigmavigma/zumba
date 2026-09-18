@@ -17,7 +17,8 @@ from app.config import get_settings
 from app.database_backup import create_database_backup
 from app.db import get_session
 from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, get_current_user, is_system_admin, require_admin, require_moder_plus, require_pilot_plus, require_system_admin
-from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, PilotRoleBadge, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamLiveryArchive, TeamLiveryImage, TeamRaceRegistration, User, UserStatus, default_game_ratings, utc_now
+from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, PilotRoleBadge, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamLiveryArchive, TeamLiveryImage, TeamRaceRegistration, User, UserConsent, UserStatus, default_game_ratings, utc_now
+from app.privacy import record_consent
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
 from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, ModerationRejectRequest, PilotRoleAssignmentUpdate, PilotRoleCreate, PilotRoleRead, PilotRoleUpdate, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminRead, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
@@ -310,7 +311,11 @@ async def list_pilots(
     session: AsyncSession = Depends(get_session),
 ):
     limit = min(limit, 100)
-    stmt = select(User, Team.name, Team.abbreviation).outerjoin(Team, Team.id == User.team_id).where(User.status == UserStatus.active)
+    stmt = (
+        select(User, Team.name, Team.abbreviation)
+        .outerjoin(Team, Team.id == User.team_id)
+        .where(User.status == UserStatus.active)
+    )
     if country:
         stmt = stmt.where(User.country == country)
     if search:
@@ -805,6 +810,8 @@ async def delete_all_pilots(
     await session.execute(update(Banner).where(Banner.updated_by.in_(pilot_ids)).values(updated_by=None))
     await session.execute(update(Team).where(Team.owner_id.in_(pilot_ids)).values(owner_id=None))
     await reassign_restricted_user_references(session, pilot_ids, admin.id)
+    await session.execute(delete(ModerationHistory).where(ModerationHistory.user_id.in_(pilot_ids)))
+    await session.execute(delete(UserConsent).where(UserConsent.user_id.in_(pilot_ids)))
 
     result = await session.execute(delete(User).where(User.id.in_(pilot_ids)))
     await session.commit()
@@ -862,7 +869,14 @@ async def download_team_livery_archives(
 @router.get("/{user_id}", response_model=UserPublic)
 @limiter.limit("600/minute")
 async def get_user(user_id: int, request: Request, session: AsyncSession = Depends(get_session)):
-    row = await session.execute(select(User, Team.name, Team.abbreviation).outerjoin(Team, Team.id == User.team_id).where(User.id == user_id))
+    row = await session.execute(
+        select(User, Team.name, Team.abbreviation)
+        .outerjoin(Team, Team.id == User.team_id)
+        .where(
+            User.id == user_id,
+            User.status == UserStatus.active,
+        )
+    )
     result = row.first()
     if result is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -873,7 +887,12 @@ async def get_user(user_id: int, request: Request, session: AsyncSession = Depen
 @router.get("/{user_id}/analytics", response_model=ProfileAnalyticsRead)
 @limiter.limit("300/minute")
 async def get_user_analytics(user_id: int, request: Request, session: AsyncSession = Depends(get_session)):
-    user = await session.get(User, user_id)
+    user = await session.scalar(
+        select(User).where(
+            User.id == user_id,
+            User.status == UserStatus.active,
+        )
+    )
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -1404,6 +1423,10 @@ async def delete_user_account(
     await session.execute(update(TeamCreationRequest).where(TeamCreationRequest.resolved_by == user.id).values(resolved_by=None))
     await session.execute(update(Banner).where(Banner.updated_by == user.id).values(updated_by=None))
     await reassign_restricted_user_references(session, [user.id], admin.id)
+    # A deleted account must not leave a moderation dossier containing the
+    # former holder's name, Steam ID or device/IP fingerprints.
+    await session.execute(delete(ModerationHistory).where(ModerationHistory.user_id == user.id))
+    await session.execute(delete(UserConsent).where(UserConsent.user_id == user.id))
 
     await session.delete(user)
     try:

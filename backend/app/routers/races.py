@@ -1238,13 +1238,17 @@ async def build_team_driver_payloads(session: AsyncSession, team: Team, driver_i
     rows = (
         await session.scalars(
             select(User)
-            .where(User.id.in_(driver_ids), User.team_id == team.id, User.status == UserStatus.active)
+            .where(
+                User.id.in_(driver_ids),
+                User.team_id == team.id,
+                User.status == UserStatus.active,
+            )
         )
     ).all()
     users_by_id = {user.id: user for user in rows}
     missing = [user_id for user_id in driver_ids if user_id not in users_by_id]
     if missing:
-        raise HTTPException(status_code=400, detail=f"Drivers must be active members of your team: {', '.join(map(str, missing))}")
+        raise HTTPException(status_code=400, detail=f"Drivers must be active team members: {', '.join(map(str, missing))}")
     return [
         {
             "user_id": user.id,
@@ -1915,7 +1919,10 @@ async def force_register_pilot_for_race(
     if race.status in {RaceStatus.ongoing, RaceStatus.finished}:
         raise HTTPException(status_code=400, detail="Registration can be changed only before the race starts")
     target = await session.scalar(
-        select(User).where(User.id == user_id, User.status == UserStatus.active)
+        select(User).where(
+            User.id == user_id,
+            User.status == UserStatus.active,
+        )
     )
     if target is None:
         raise HTTPException(status_code=404, detail="Active pilot not found")

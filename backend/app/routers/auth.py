@@ -11,7 +11,14 @@ from app.config import get_settings
 from app.db import get_session
 from app.deps import clear_expired_timeout, get_current_user, get_optional_user, is_system_admin
 from app.device import client_ip_for_request, describe_user_agent, device_token_for_request, fingerprint_client_ip, fingerprint_device_token, set_device_cookie
-from app.models import DEFAULT_SR, Role, Team, User, UserStatus
+from app.models import DEFAULT_SR, Role, Team, User, UserStatus, utc_now
+from app.privacy import (
+    CONSENT_KIND_DATA_PROCESSING,
+    CONSENT_KIND_TERMS,
+    PRIVACY_POLICY_VERSION,
+    TERMS_VERSION,
+    record_consent,
+)
 from app.rate_limit import limiter
 from app.schemas import LoginRequest, TokenResponse, UserPrivate, UserRegister
 from app.security import (
@@ -77,6 +84,7 @@ async def register(payload: UserRegister, request: Request, response: Response, 
     if is_new_device_token:
         set_device_cookie(response, device_token, request)
     ip_fingerprint = fingerprint_client_ip(client_ip_for_request(request))
+    consented_at = utc_now()
     user = User(
         login=payload.login,
         email=str(payload.email),
@@ -96,8 +104,27 @@ async def register(payload: UserRegister, request: Request, response: Response, 
         device_fingerprint=fingerprint_device_token(device_token),
         device_label=describe_user_agent(request.headers.get("user-agent")),
         ip_fingerprint=ip_fingerprint,
+        data_processing_consent_version=PRIVACY_POLICY_VERSION,
+        data_processing_consent_at=consented_at,
+        terms_version=TERMS_VERSION,
+        terms_accepted_at=consented_at,
     )
     session.add(user)
+    await session.flush()
+    record_consent(
+        session,
+        user_id=user.id,
+        kind=CONSENT_KIND_DATA_PROCESSING,
+        document_version=PRIVACY_POLICY_VERSION,
+        consented_at=consented_at,
+    )
+    record_consent(
+        session,
+        user_id=user.id,
+        kind=CONSENT_KIND_TERMS,
+        document_version=TERMS_VERSION,
+        consented_at=consented_at,
+    )
     await session.commit()
     await session.refresh(user)
     return await private_user_response(session, user)

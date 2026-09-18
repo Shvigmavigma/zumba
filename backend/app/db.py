@@ -74,6 +74,11 @@ async def init_db() -> None:
         # Normalize those rows so they cannot be mistaken for active requests.
         await conn.execute(text("UPDATE users SET pending_profile_changes = NULL WHERE pending_profile_changes = 'null'::jsonb"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_rejection JSONB"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS data_processing_consent_version VARCHAR(32)"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS data_processing_consent_at TIMESTAMP WITH TIME ZONE"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version VARCHAR(32)"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP WITH TIME ZONE"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_consents_user_kind_active ON user_consents (user_id, kind) WHERE withdrawn_at IS NULL"))
         await conn.execute(text("ALTER TABLE news_items ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE"))
         await conn.execute(text("UPDATE news_items SET is_pinned = FALSE WHERE is_pinned IS NULL"))
         await conn.execute(text("ALTER TABLE news_items ALTER COLUMN is_pinned SET DEFAULT FALSE"))
@@ -94,6 +99,10 @@ async def init_db() -> None:
         await conn.execute(text("ALTER TABLE moderation_history ADD COLUMN IF NOT EXISTS request_snapshot JSONB"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_moderation_history_device_fingerprint ON moderation_history (device_fingerprint)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_moderation_history_ip_fingerprint ON moderation_history (ip_fingerprint)"))
+        # Moderation data is operationally useful only for a limited appeal
+        # window. This also prevents old device and request snapshots from
+        # accumulating indefinitely on long-running installations.
+        await conn.execute(text("DELETE FROM moderation_history WHERE resolved_at < CURRENT_TIMESTAMP - INTERVAL '180 days'"))
         await conn.execute(text("UPDATE users SET avatar_upload_count = 0 WHERE avatar_upload_count IS NULL"))
         await conn.execute(text("ALTER TABLE users ALTER COLUMN avatar_upload_count SET DEFAULT 0"))
         await conn.execute(text("ALTER TABLE users ALTER COLUMN avatar_upload_count SET NOT NULL"))

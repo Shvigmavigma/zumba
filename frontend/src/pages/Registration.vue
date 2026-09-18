@@ -6,6 +6,7 @@ import { api, API_BASE } from '../api'
 import CountryCombobox from '../components/CountryCombobox.vue'
 import GameCheckboxGroup from '../components/GameCheckboxGroup.vue'
 import { countryOptionsWithCurrent } from '../countries'
+import { registrationDraft } from '../registrationDraft'
 import { state } from '../store'
 
 const { t } = useI18n()
@@ -25,13 +26,16 @@ const form = ref({
   country: '',
   discord: '',
   avatar_color: '#2563eb',
-  games: ['ACC']
+  games: ['ACC'],
+  data_processing_consent: false,
+  terms_accepted: false
 })
 const steamConnected = computed(() => Boolean(form.value.steam_auth_token))
 const countries = computed(() => countryOptionsWithCurrent(state.locale, form.value.country))
 
 function connectSteam() {
-  sessionStorage.setItem('registrationDraft', JSON.stringify(form.value))
+  form.value.steam_auth_token = ''
+  sessionStorage.setItem('registrationDraft', JSON.stringify(registrationDraft(form.value)))
   window.location.href = `${API_BASE}/auth/steam/start?flow=register`
 }
 
@@ -64,7 +68,7 @@ onMounted(() => {
   const draft = sessionStorage.getItem('registrationDraft')
   if (draft) {
     try {
-      form.value = { ...form.value, ...JSON.parse(draft) }
+      form.value = { ...form.value, ...registrationDraft(JSON.parse(draft)) }
     } catch {
       sessionStorage.removeItem('registrationDraft')
     }
@@ -76,7 +80,6 @@ onMounted(() => {
   const token = Array.isArray(route.query.steam_auth_token) ? route.query.steam_auth_token[0] : route.query.steam_auth_token
   if (token) {
     form.value.steam_auth_token = token
-    sessionStorage.setItem('registrationDraft', JSON.stringify(form.value))
     router.replace('/register')
   }
 })
@@ -121,6 +124,16 @@ onMounted(() => {
         <GameCheckboxGroup v-model="form.games" />
       </div>
       <label class="field"><span>{{ t('fields.discord') }}</span><input v-model="form.discord" maxlength="100" /></label>
+      <div class="legal-consents">
+        <label class="legal-consent">
+          <input v-model="form.terms_accepted" type="checkbox" required />
+          <span>Принимаю <RouterLink :to="{ path: '/terms', query: { from: 'registration' } }">Пользовательское соглашение</RouterLink>.</span>
+        </label>
+        <label class="legal-consent">
+          <input v-model="form.data_processing_consent" type="checkbox" required />
+          <span>Даю согласие на обработку персональных данных по <RouterLink :to="{ path: '/privacy-policy', query: { from: 'registration' } }">Политике обработки персональных данных</RouterLink>.</span>
+        </label>
+      </div>
       <p v-if="error" class="error">{{ error }}</p>
       <button class="button primary" type="submit" :disabled="!steamConnected">{{ t('auth.createAccount') }}</button>
     </form>

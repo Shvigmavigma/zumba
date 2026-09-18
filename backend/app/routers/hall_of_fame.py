@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.models import RACE_GAMES, Race, RaceStatus, Team, User
+from app.models import RACE_GAMES, Race, RaceStatus, Team, User, UserStatus
 from app.rate_limit import limiter
 from app.schemas import HallOfFamePilotRead, HallOfFameRead, HallOfFameTeamRead
 from app.services import result_rows
@@ -142,24 +142,24 @@ async def hall_of_fame(request: Request, session: AsyncSession = Depends(get_ses
             add_podium_stats(pilot_stats[user_id], position)
             add_podium_stats(pilot_stats_by_game[user_id][game], position)
 
-    if not pilot_stats:
-        payload = HallOfFameRead(pilots=[], teams=[])
-        _hall_of_fame_cache = (now + HALL_OF_FAME_CACHE_TTL_SECONDS, payload)
-        return payload
-
     user_rows = (
         await session.execute(
             select(User, Team.name, Team.abbreviation)
             .outerjoin(Team, Team.id == User.team_id)
-            .where(User.id.in_(pilot_stats.keys()))
+            .where(User.status == UserStatus.active)
         )
     ).all()
     users_by_id = {user.id: (user, team_name, team_abbreviation) for user, team_name, team_abbreviation in user_rows}
 
     pilots = [
-        pilot_payload(user, team_name, team_abbreviation, pilot_stats[user.id], pilot_stats_by_game[user.id])
+        pilot_payload(
+            user,
+            team_name,
+            team_abbreviation,
+            pilot_stats.get(user.id, empty_stats()),
+            pilot_stats_by_game.get(user.id, {}),
+        )
         for user, team_name, team_abbreviation in users_by_id.values()
-        if pilot_stats[user.id]["points"] > 0
     ]
     pilots.sort(key=podium_sort_key)
 
@@ -185,83 +185,82 @@ async def hall_of_fame(request: Request, session: AsyncSession = Depends(get_ses
         team_pilots[pilot.team_id].append(pilot)
 
     teams: list[HallOfFameTeamRead] = []
-    if team_stats:
-        team_ids = list(team_stats.keys())
-        loaded_teams = (await session.scalars(select(Team).where(Team.id.in_(team_ids)))).all()
-        member_count_rows = await session.execute(
-            select(User.team_id, func.count())
-            .where(User.team_id.in_(team_ids))
-            .group_by(User.team_id)
-        )
-        team_rating_rows = await session.execute(
-            select(User.team_id, User.rating, User.game_ratings)
-            .where(User.team_id.in_(team_ids), User.exclude_from_rer.is_(False))
-        )
-        member_counts = {int(team_id): int(count) for team_id, count in member_count_rows if team_id is not None}
-        team_rating_values: dict[int, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
-        team_overall_rating_values: dict[int, list[float]] = defaultdict(list)
-        for team_id, rating, game_ratings in team_rating_rows:
-            if team_id is None:
-                continue
-            normalized_team_id = int(team_id)
-            base_rating = float(rating or 0)
-            team_overall_rating_values[normalized_team_id].append(base_rating)
-            ratings = game_ratings if isinstance(game_ratings, dict) else {}
-            for game in RACE_GAMES:
-                item = ratings.get(game)
-                game_rating = item.get("rating", base_rating) if isinstance(item, dict) else base_rating
-                try:
-                    team_rating_values[normalized_team_id][game].append(float(game_rating))
-                except (TypeError, ValueError):
-                    team_rating_values[normalized_team_id][game].append(base_rating)
-        average_ratings = {
-            team_id: int(round(sum(values) / len(values)))
-            for team_id, values in team_overall_rating_values.items()
+    loaded_teams = (await session.scalars(select(Team).order_by(Team.id.asc()))).all()
+    team_ids = [team.id for team in loaded_teams]
+    member_count_rows = await session.execute(
+        select(User.team_id, func.count())
+        .where(User.team_id.in_(team_ids))
+        .group_by(User.team_id)
+    )
+    team_rating_rows = await session.execute(
+        select(User.team_id, User.rating, User.game_ratings)
+        .where(User.team_id.in_(team_ids), User.exclude_from_rer.is_(False))
+    )
+    member_counts = {int(team_id): int(count) for team_id, count in member_count_rows if team_id is not None}
+    team_rating_values: dict[int, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    team_overall_rating_values: dict[int, list[float]] = defaultdict(list)
+    for team_id, rating, game_ratings in team_rating_rows:
+        if team_id is None:
+            continue
+        normalized_team_id = int(team_id)
+        base_rating = float(rating or 0)
+        team_overall_rating_values[normalized_team_id].append(base_rating)
+        ratings = game_ratings if isinstance(game_ratings, dict) else {}
+        for game in RACE_GAMES:
+            item = ratings.get(game)
+            game_rating = item.get("rating", base_rating) if isinstance(item, dict) else base_rating
+            try:
+                team_rating_values[normalized_team_id][game].append(float(game_rating))
+            except (TypeError, ValueError):
+                team_rating_values[normalized_team_id][game].append(base_rating)
+    average_ratings = {
+        team_id: int(round(sum(values) / len(values)))
+        for team_id, values in team_overall_rating_values.items()
+        if values
+    }
+    ratings_by_game = {
+        team_id: {
+            game: int(round(sum(values) / len(values)))
+            for game, values in game_values.items()
             if values
         }
-        ratings_by_game = {
-            team_id: {
-                game: int(round(sum(values) / len(values)))
-                for game, values in game_values.items()
-                if values
-            }
-            for team_id, game_values in team_rating_values.items()
-        }
+        for team_id, game_values in team_rating_values.items()
+    }
 
-        for team in loaded_teams:
-            stats = team_stats[team.id]
-            pilots_for_team = team_pilots.get(team.id, [])
-            best_pilot = sorted(pilots_for_team, key=podium_sort_key)[0] if pilots_for_team else None
-            best_pilots_by_game = {
-                game: sorted(
-                    [pilot for pilot in pilots_for_team if stats_value(pilot.stats_by_game, game, "points") > 0],
-                    key=lambda pilot, current_game=game: game_podium_sort_key(pilot, current_game),
-                )[0]
-                for game in RACE_GAMES
-                if any(stats_value(pilot.stats_by_game, game, "points") > 0 for pilot in pilots_for_team)
-            }
-            teams.append(
-                HallOfFameTeamRead(
-                    id=team.id,
-                    name=team.name,
-                    abbreviation=team.abbreviation,
-                    description=team.description or "",
-                    avatar_color=team.avatar_color,
-                    avatar_url=team.avatar_url,
-                    owner_id=team.owner_id,
-                    member_count=member_counts.get(team.id, 0),
-                    average_rating=average_ratings.get(team.id, 0),
-                    ratings_by_game=ratings_by_game.get(team.id, {}),
-                    points=stats["points"],
-                    gold=stats["gold"],
-                    silver=stats["silver"],
-                    bronze=stats["bronze"],
-                    podiums=stats["podiums"],
-                    best_pilot=best_pilot,
-                    stats_by_game=complete_game_stats(team_stats_by_game[team.id]),
-                    best_pilots_by_game=best_pilots_by_game,
-                )
+    for team in loaded_teams:
+        stats = team_stats.get(team.id, empty_stats())
+        pilots_for_team = team_pilots.get(team.id, [])
+        best_pilot = sorted(pilots_for_team, key=podium_sort_key)[0] if pilots_for_team else None
+        best_pilots_by_game = {
+            game: sorted(
+                [pilot for pilot in pilots_for_team if stats_value(pilot.stats_by_game, game, "points") > 0],
+                key=lambda pilot, current_game=game: game_podium_sort_key(pilot, current_game),
+            )[0]
+            for game in RACE_GAMES
+            if any(stats_value(pilot.stats_by_game, game, "points") > 0 for pilot in pilots_for_team)
+        }
+        teams.append(
+            HallOfFameTeamRead(
+                id=team.id,
+                name=team.name,
+                abbreviation=team.abbreviation,
+                description=team.description or "",
+                avatar_color=team.avatar_color,
+                avatar_url=team.avatar_url,
+                owner_id=team.owner_id,
+                member_count=member_counts.get(team.id, 0),
+                average_rating=average_ratings.get(team.id, 0),
+                ratings_by_game=ratings_by_game.get(team.id, {}),
+                points=stats["points"],
+                gold=stats["gold"],
+                silver=stats["silver"],
+                bronze=stats["bronze"],
+                podiums=stats["podiums"],
+                best_pilot=best_pilot,
+                stats_by_game=complete_game_stats(team_stats_by_game[team.id]),
+                best_pilots_by_game=best_pilots_by_game,
             )
+        )
     teams.sort(key=podium_sort_key)
 
     payload = HallOfFameRead(pilots=pilots, teams=teams)

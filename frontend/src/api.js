@@ -37,7 +37,7 @@ function apiErrorMessage(message) {
     'No team livery archives are available': {
       ru: 'Актуальных архивов ливрей пока нет.',
       en: 'No team livery archives are available.'
-    }
+    },
   }
   return friendly[text]?.[locale] || text
 }

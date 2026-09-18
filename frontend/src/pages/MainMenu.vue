@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, Eye, Flag, HeartHandshake, Mail, Maximize2, MessageCircle, Minimize2, Music2, PlayCircle, Plus, Radio, Send, ShieldCheck, Users, X } from 'lucide-vue-next'
+import { ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, Eye, FileText, Flag, HeartHandshake, Mail, Maximize2, MessageCircle, Minimize2, Music2, PlayCircle, Plus, Radio, Send, ShieldCheck, Users, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
@@ -81,7 +81,6 @@ const topDonations = computed(() => (donationSettings.value.top_donations || [])
   .filter((donation) => donation?.name || donation?.amount)
   .slice(0, 3))
 const contactEmailLinks = [
-  { text: 'dronzoll320@gmail.com', href: 'mailto:dronzoll320@gmail.com' },
   { text: '37foneziazaz0909@gmail.com', href: 'mailto:37foneziazaz0909@gmail.com' }
 ]
 const directContactItems = computed(() => [
@@ -809,6 +808,11 @@ onBeforeUnmount(() => {
                 </span>
               </a>
             </div>
+            <RouterLink class="main-footer-legal-button" to="/legal?from=main">
+              <FileText :size="16" />
+              <span>Правовая информация</span>
+              <ChevronRight :size="16" />
+            </RouterLink>
           </div>
         </div>
 
