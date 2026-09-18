@@ -30,6 +30,8 @@ const timeoutDialogUser = ref(null)
 const timeoutUntil = ref('')
 const timeoutSaving = ref(false)
 const detailDialogUser = ref(null)
+const coinAdjustment = ref({ coins: '', reason: '' })
+const coinAdjustmentSaving = ref(false)
 const editDialogUser = ref(null)
 const editForm = ref({})
 const teams = ref([])
@@ -926,6 +928,32 @@ function updateUserInList(updatedUser) {
   }
 }
 
+async function adjustCoins(action) {
+  const user = detailDialogUser.value
+  const coins = Number(coinAdjustment.value.coins)
+  const reason = String(coinAdjustment.value.reason || '').trim()
+  if (!user || !Number.isSafeInteger(coins) || coins < 1 || !reason) {
+    error.value = t('adminUsers.coinsValidation')
+    return
+  }
+  coinAdjustmentSaving.value = true
+  error.value = ''
+  try {
+    const transaction = await api(`/wallet/admin/users/${user.id}/${action}`, {
+      method: 'POST',
+      body: { coins, reason }
+    })
+    const updatedUser = { ...user, coins: transaction.balance_after }
+    updateUserInList(updatedUser)
+    detailDialogUser.value = updatedUser
+    coinAdjustment.value = { coins: '', reason: '' }
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    coinAdjustmentSaving.value = false
+  }
+}
+
 async function saveUserProfile() {
   if (!editDialogUser.value) return
   editSaving.value = true
@@ -1070,6 +1098,7 @@ function isAdminZoneCollapsed(key) {
 
 function openUserDetails(user) {
   detailDialogUser.value = user
+  coinAdjustment.value = { coins: '', reason: '' }
 }
 
 function closeUserDetails() {
@@ -1147,6 +1176,7 @@ function detailRows(user) {
     { label: t('fields.games'), value: user.games },
     { label: t('adminUsers.teamId'), value: user.team_id },
     { label: t('fields.team'), value: teamShortName(user.team_name, user.team_abbreviation) },
+    { label: t('adminUsers.coins'), value: user.coins },
     { label: t('fields.sr'), value: user.sr },
     { label: t('fields.rating'), value: formatRating(user.rating) },
     { label: t('adminUsers.simulatorRatings'), value: ratings },
@@ -2174,6 +2204,25 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
             <strong>{{ detailValue(item.value) }}</strong>
           </div>
         </div>
+
+        <form class="admin-wallet-adjustment" @submit.prevent="adjustCoins('credit')">
+          <div class="admin-wallet-adjustment-balance">
+            <span>{{ t('adminUsers.coins') }}</span>
+            <strong>{{ detailDialogUser.coins }}</strong>
+          </div>
+          <label class="field">
+            <span>{{ t('adminUsers.coinAmount') }}</span>
+            <input v-model="coinAdjustment.coins" type="number" min="1" step="1" inputmode="numeric" :disabled="coinAdjustmentSaving" required />
+          </label>
+          <label class="field admin-wallet-reason">
+            <span>{{ t('adminUsers.coinReason') }}</span>
+            <input v-model="coinAdjustment.reason" maxlength="500" :disabled="coinAdjustmentSaving" required />
+          </label>
+          <div class="admin-wallet-actions">
+            <button class="button primary" type="submit" :disabled="coinAdjustmentSaving">{{ t('adminUsers.creditCoins') }}</button>
+            <button class="button danger" type="button" :disabled="coinAdjustmentSaving" @click="adjustCoins('debit')">{{ t('adminUsers.debitCoins') }}</button>
+          </div>
+        </form>
 
         <p class="admin-user-details-security">
           <Shield :size="15" />

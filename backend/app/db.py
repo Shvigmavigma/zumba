@@ -61,6 +61,19 @@ async def init_db() -> None:
         await conn.execute(text("UPDATE users SET rating_adjustments = '{}'::jsonb WHERE rating_adjustments IS NULL"))
         await conn.execute(text("ALTER TABLE users ALTER COLUMN rating_adjustments SET DEFAULT '{}'::jsonb"))
         await conn.execute(text("ALTER TABLE users ALTER COLUMN rating_adjustments SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS coins INTEGER DEFAULT 0"))
+        await conn.execute(text("UPDATE users SET coins = 0 WHERE coins IS NULL OR coins < 0"))
+        await conn.execute(text("ALTER TABLE users ALTER COLUMN coins SET DEFAULT 0"))
+        await conn.execute(text("ALTER TABLE users ALTER COLUMN coins SET NOT NULL"))
+        await conn.execute(text("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_coins_nonnegative"))
+        await conn.execute(text("ALTER TABLE users ADD CONSTRAINT ck_users_coins_nonnegative CHECK (coins >= 0)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_coin_transactions_user_created ON coin_transactions (user_id, created_at)"))
+        await conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_coin_transactions_source_reference "
+                "ON coin_transactions (source, external_reference) WHERE external_reference IS NOT NULL"
+            )
+        )
         await conn.execute(text("ALTER TABLE pilot_role_badges ADD COLUMN IF NOT EXISTS display_mode VARCHAR(20) DEFAULT 'text'"))
         await conn.execute(text("ALTER TABLE pilot_role_badges ADD COLUMN IF NOT EXISTS border_color VARCHAR(7) DEFAULT '#2563eb'"))
         await conn.execute(text("UPDATE pilot_role_badges SET display_mode = CASE WHEN image_url IS NOT NULL THEN 'text_image' ELSE 'text' END WHERE display_mode IS NULL OR display_mode NOT IN ('text', 'text_image', 'image')"))

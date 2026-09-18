@@ -189,6 +189,7 @@ class ModerationRejectRequest(BaseModel):
 
 class UserPrivate(UserPublic):
     email: EmailStr
+    coins: int = Field(ge=0)
     updated_at: datetime
     ban_end: datetime | None
     timeout_start: datetime | None
@@ -330,6 +331,35 @@ class UserAdminUpdate(UserUpdate):
         if any(count < 0 for count in value.values()):
             raise ValueError("Race counts cannot be negative")
         return value
+
+
+class CoinAdjustment(BaseModel):
+    coins: int = Field(gt=0, le=1_000_000)
+    reason: str = Field(min_length=1, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def reason_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Reason is required")
+        return value
+
+
+class WalletBalanceRead(BaseModel):
+    coins: int = Field(ge=0)
+
+
+class CoinTransactionRead(BaseModel):
+    id: int
+    user_id: int
+    amount: int
+    balance_after: int = Field(ge=0)
+    source: str
+    reason: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class ProfileBestLapRead(BaseModel):

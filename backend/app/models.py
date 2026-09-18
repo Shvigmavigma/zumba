@@ -136,6 +136,7 @@ class User(Base):
         CheckConstraint(f"sr >= {MIN_SR} AND sr <= {MAX_SR}", name="ck_users_sr_range"),
         CheckConstraint(f"rating >= {MIN_RATING} AND rating <= {MAX_RATING}", name="ck_users_rating_range"),
         CheckConstraint("rating_race_count >= 0", name="ck_users_rating_race_count"),
+        CheckConstraint("coins >= 0", name="ck_users_coins_nonnegative"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -150,6 +151,7 @@ class User(Base):
     sr: Mapped[float] = mapped_column(Numeric(3, 1), default=DEFAULT_SR, server_default=str(DEFAULT_SR))
     rating: Mapped[float] = mapped_column(Numeric(8, 2), default=DEFAULT_RATING, server_default=str(DEFAULT_RATING), index=True)
     rating_race_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    coins: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     game_ratings: Mapped[dict] = mapped_column(JSONB, default=default_game_ratings, server_default=text(DEFAULT_GAME_RATINGS_SQL))
     rating_adjustments: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
     discord: Mapped[str | None] = mapped_column(String(100))
@@ -294,6 +296,29 @@ class Team(Base):
         cascade="all, delete-orphan",
         single_parent=True,
     )
+
+
+class CoinTransaction(Base):
+    """Immutable balance change; payment webhooks will use ``external_reference``."""
+
+    __tablename__ = "coin_transactions"
+    __table_args__ = (
+        CheckConstraint("amount <> 0", name="ck_coin_transactions_amount_nonzero"),
+        CheckConstraint("balance_after >= 0", name="ck_coin_transactions_balance_nonnegative"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    amount: Mapped[int] = mapped_column(Integer)
+    balance_after: Mapped[int] = mapped_column(Integer)
+    source: Mapped[str] = mapped_column(String(40), index=True)
+    reason: Mapped[str] = mapped_column(String(500))
+    external_reference: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+    actor: Mapped[User | None] = relationship(foreign_keys=[actor_id])
 
 
 class TeamLiveryImage(Base):
@@ -687,6 +712,14 @@ class AuditLog(Base):
 Index("ix_users_role_status", User.role, User.status)
 Index("ix_users_games_gin", User.games, postgresql_using="gin")
 Index("ix_users_team_status", User.team_id, User.status)
+Index("ix_coin_transactions_user_created", CoinTransaction.user_id, CoinTransaction.created_at)
+Index(
+    "uq_coin_transactions_source_reference",
+    CoinTransaction.source,
+    CoinTransaction.external_reference,
+    unique=True,
+    postgresql_where=text("external_reference IS NOT NULL"),
+)
 Index("ix_teams_owner_created", Team.owner_id, Team.created_at)
 Index("ix_team_creation_requests_status_created", TeamCreationRequest.status, TeamCreationRequest.created_at)
 Index("ix_team_creation_requests_requester_status", TeamCreationRequest.requester_id, TeamCreationRequest.status)

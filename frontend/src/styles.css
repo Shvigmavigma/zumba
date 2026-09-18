@@ -3433,6 +3433,39 @@ textarea {
   margin-top: 12px;
 }
 
+.admin-wallet-adjustment {
+  display: grid;
+  grid-template-columns: auto minmax(130px, 0.5fr) minmax(220px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--primary) 5%, var(--panel));
+}
+
+.admin-wallet-adjustment-balance {
+  display: grid;
+  gap: 3px;
+  min-width: 74px;
+}
+
+.admin-wallet-adjustment-balance span {
+  color: var(--muted);
+  font-size: var(--small-text-size);
+}
+
+.admin-wallet-adjustment-balance strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.25rem;
+}
+
+.admin-wallet-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .admin-user-detail-item {
   display: grid;
   gap: 4px;
@@ -17522,6 +17555,18 @@ body,
     width: 100%;
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .admin-wallet-adjustment {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-wallet-actions {
+    width: 100%;
+  }
+
+  .admin-wallet-actions .button {
+    flex: 1 1 140px;
   }
 
   .admin-race-assets-actions .button,

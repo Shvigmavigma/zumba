@@ -17,7 +17,7 @@ from app.privacy import MODERATION_HISTORY_RETENTION_DAYS
 from app.rate_limit import check_dynamic_rate_limit, limiter
 from sqlalchemy import delete
 from app.audit import actor_from_request, request_audit_details, write_audit_log_with_details
-from app.routers import app_settings, appeals, audit, auth, banners, championships, competitions, dashboard, hall_of_fame, news, penalties, race_assets, races, setups, teams, twitch, users
+from app.routers import app_settings, appeals, audit, auth, banners, championships, competitions, dashboard, hall_of_fame, news, penalties, race_assets, races, setups, teams, twitch, users, wallet
 from app.seed import seed_defaults
 
 
@@ -107,6 +107,7 @@ async def health():
 app.mount("/api/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(wallet.router, prefix="/api/wallet", tags=["wallet"])
 app.include_router(races.router, prefix="/api/races", tags=["races"])
 app.include_router(championships.router, prefix="/api/championships", tags=["championships"])
 app.include_router(race_assets.router, prefix="/api/race-assets", tags=["race-assets"])
