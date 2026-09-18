@@ -5,6 +5,7 @@ import hmac
 import ipaddress
 import re
 import secrets
+from urllib.parse import urlparse
 
 from fastapi import Request, Response
 
@@ -24,12 +25,18 @@ def device_token_for_request(request: Request) -> tuple[str, bool]:
 
 def set_device_cookie(response: Response, token: str, request: Request) -> None:
     forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip().lower()
+    request_host = (request.url.hostname or "").lower()
+    public_scheme = (urlparse(get_settings().public_base_url).scheme or "").lower()
+    is_local_request = request_host in {"localhost", "127.0.0.1", "::1"}
     response.set_cookie(
         DEVICE_COOKIE_NAME,
         token,
         max_age=DEVICE_COOKIE_MAX_AGE,
         httponly=True,
-        secure=request.url.scheme == "https" or forwarded_proto == "https",
+        # TLS may terminate at Cloudflare before the request reaches Nginx.
+        # The public URL keeps the production cookie secure if that header is
+        # not preserved by an intermediate proxy.
+        secure=not is_local_request and (request.url.scheme == "https" or forwarded_proto == "https" or public_scheme == "https"),
         samesite="lax",
         path="/",
     )

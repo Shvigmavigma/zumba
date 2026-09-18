@@ -4,6 +4,8 @@ import PilotList from './pages/PilotList.vue'
 import PilotDetails from './pages/PilotDetails.vue'
 import Login from './pages/Login.vue'
 import Registration from './pages/Registration.vue'
+import LegalIndex from './pages/LegalIndex.vue'
+import LegalDocuments from './pages/LegalDocuments.vue'
 import Profile from './pages/Profile.vue'
 import ProfileEdit from './pages/ProfileEdit.vue'
 import RaceDetails from './pages/RaceDetails.vue'
@@ -35,6 +37,10 @@ const router = createRouter({
     { path: '/fuel-calculator', component: FuelCalculator },
     { path: '/login', component: Login },
     { path: '/register', component: Registration },
+    { path: '/legal', component: LegalIndex },
+    { path: '/privacy-policy', component: LegalDocuments, meta: { legalDocument: 'privacy' } },
+    { path: '/terms', component: LegalDocuments, meta: { legalDocument: 'terms' } },
+    { path: '/cookies', component: LegalDocuments, meta: { legalDocument: 'cookies' } },
     { path: '/profile', component: Profile, meta: { auth: true } },
     { path: '/profile/edit', component: ProfileEdit, meta: { auth: true } },
     { path: '/races/new', component: RaceEdit, meta: { roles: ['admin', 'moder'] } },

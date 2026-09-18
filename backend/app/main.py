@@ -1,4 +1,6 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
+from datetime import timedelta
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -10,7 +12,10 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import get_settings
 from app.db import SessionLocal, db_initialization_lock, init_db
+from app.models import ModerationHistory, utc_now
+from app.privacy import MODERATION_HISTORY_RETENTION_DAYS
 from app.rate_limit import check_dynamic_rate_limit, limiter
+from sqlalchemy import delete
 from app.audit import actor_from_request, request_audit_details, write_audit_log_with_details
 from app.routers import app_settings, appeals, audit, auth, banners, championships, competitions, dashboard, hall_of_fame, news, penalties, race_assets, races, setups, teams, twitch, users
 from app.seed import seed_defaults
@@ -18,6 +23,19 @@ from app.seed import seed_defaults
 
 settings = get_settings()
 Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
+
+
+async def purge_expired_moderation_history() -> None:
+    cutoff = utc_now() - timedelta(days=MODERATION_HISTORY_RETENTION_DAYS)
+    async with SessionLocal() as session:
+        await session.execute(delete(ModerationHistory).where(ModerationHistory.resolved_at < cutoff))
+        await session.commit()
+
+
+async def moderation_history_retention_loop() -> None:
+    while True:
+        await asyncio.sleep(24 * 60 * 60)
+        await purge_expired_moderation_history()
 
 
 @asynccontextmanager
@@ -28,7 +46,14 @@ async def lifespan(_: FastAPI):
             async with SessionLocal() as session:
                 await seed_defaults(session)
                 await app_settings.load_runtime_settings(session)
-    yield
+    await purge_expired_moderation_history()
+    retention_task = asyncio.create_task(moderation_history_retention_loop())
+    try:
+        yield
+    finally:
+        retention_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await retention_task
 
 
 app = FastAPI(

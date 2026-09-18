@@ -126,6 +126,8 @@ class UserRegister(BaseModel):
     discord: str | None = Field(default=None, max_length=100)
     avatar_color: str = Field(default="#2563eb", pattern=r"^#[0-9A-Fa-f]{6}$")
     games: list[GameCode] = Field(default_factory=lambda: ["ACC"], min_length=1, max_length=4)
+    data_processing_consent: Literal[True]
+    terms_accepted: Literal[True]
 
     @field_validator("password_confirm")
     @classmethod
@@ -194,6 +196,10 @@ class UserPrivate(UserPublic):
     pending_profile_changes: dict | None = None
     last_rejection: UserRejectionRead | None = None
     show_pilot_roles: bool = True
+    data_processing_consent_version: str | None = None
+    data_processing_consent_at: datetime | None = None
+    terms_version: str | None = None
+    terms_accepted_at: datetime | None = None
 
 
 class UserAdminRead(UserPrivate):

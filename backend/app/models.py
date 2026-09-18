@@ -181,6 +181,10 @@ class User(Base):
     # which still matches ``IS NOT NULL`` filters.
     pending_profile_changes: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
     last_rejection: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
+    data_processing_consent_version: Mapped[str | None] = mapped_column(String(32))
+    data_processing_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    terms_version: Mapped[str | None] = mapped_column(String(32))
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     created_races: Mapped[list["Race"]] = relationship(back_populates="creator", foreign_keys="Race.creator_id")
     team: Mapped["Team | None"] = relationship(back_populates="members", foreign_keys=[team_id])
@@ -244,6 +248,19 @@ class ModerationHistory(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+
+
+class UserConsent(Base):
+    """An immutable consent trail, with withdrawal recorded on the row."""
+
+    __tablename__ = "user_consents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(40), index=True)
+    document_version: Mapped[str] = mapped_column(String(32))
+    consented_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Team(Base):

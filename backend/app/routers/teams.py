@@ -211,7 +211,12 @@ def team_payload(
         "member_count": member_count,
         "member_limit": member_limit,
         "average_rating": int(round(float(average_rating or 0))),
-        "can_join": current_user is not None and current_user.team_id is None and member_count < member_limit and not has_pending_application,
+        "can_join": (
+            current_user is not None
+            and current_user.team_id is None
+            and member_count < member_limit
+            and not has_pending_application
+        ),
         "is_member": is_member,
         "is_owner": is_owner,
         "can_manage": can_manage,
@@ -295,7 +300,8 @@ async def build_team_detail(
     ).all()
     my_applications = await load_current_user_applications(session, [team.id], current_user)
     pending_applications = await load_pending_applications(session, team) if can_manage_team(current_user, team) else []
-    rated_members = [member for member in members if not member.exclude_from_rer]
+    visible_members = members
+    rated_members = [member for member in visible_members if not member.exclude_from_rer]
     average_rating = sum(float(member.rating or 0) for member in rated_members) / len(rated_members) if rated_members else 0
     payload = team_payload(
         team,
@@ -308,7 +314,7 @@ async def build_team_detail(
         len(pending_applications),
     )
     payload["members"] = []
-    for member in members:
+    for member in visible_members:
         member_payload = TeamMemberRead.model_validate(member).model_dump()
         if member.show_pilot_roles is False:
             member_payload["pilot_roles"] = []

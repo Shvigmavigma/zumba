@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Archive, Bell, Check, Crown, Download, Images, LogOut, Plus, Save, Search, Send, Trash2, Upload, UserCheck, UserMinus, Users, X, XCircle } from 'lucide-vue-next'
+import { Bell, Check, Crown, Download, Images, LogOut, Plus, Save, Search, Send, Trash2, Upload, UserCheck, UserMinus, Users, X, XCircle } from 'lucide-vue-next'
 import { API_BASE, api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
 import LicenseBadge from '../components/LicenseBadge.vue'
@@ -37,7 +37,6 @@ const teamAvatarSaving = ref(false)
 const teamAvatarViewerOpen = ref(false)
 const teamLiveryViewerOpen = ref(false)
 const teamLiverySaving = ref(false)
-const teamLiveryArchiveSaving = ref(false)
 const teamLiveryLoading = ref(false)
 const teamLiveryLoaded = ref(false)
 const busyApplications = ref({})
@@ -69,7 +68,6 @@ const selectedIsOwner = computed(() => Boolean(selectedTeam.value?.is_owner))
 const selectedCanManage = computed(() => Boolean(selectedTeam.value?.can_manage))
 const selectedLiveries = computed(() => selectedTeam.value?.livery_images || [])
 const selectedLiveryCount = computed(() => Number(selectedTeam.value?.livery_image_count ?? selectedLiveries.value.length))
-const selectedLiveryArchive = computed(() => selectedTeam.value?.livery_archive || null)
 const TEAM_LIVERY_CACHE_NAME = 'bmrl-team-liveries-v1'
 const transferOwnerId = ref('')
 const transferCandidates = computed(() => selectedTeam.value?.members?.filter((member) => member.id !== selectedTeam.value.owner_id) || [])
@@ -473,30 +471,6 @@ async function deleteTeamLivery(image) {
   }
 }
 
-async function uploadTeamLiveryArchive(event) {
-  const files = Array.from(event.target.files || [])
-  if (!selectedTeam.value || !files.length) return
-  teamLiveryArchiveSaving.value = true
-  error.value = ''
-  saved.value = false
-  try {
-    const payload = new FormData()
-    for (const file of files) {
-      payload.append('files', file, file.webkitRelativePath || file.name)
-    }
-    selectedTeam.value = await api(`/teams/${selectedTeam.value.id}/livery-archive`, {
-      method: 'POST',
-      body: payload
-    })
-    saved.value = true
-  } catch (err) {
-    error.value = err.message
-  } finally {
-    teamLiveryArchiveSaving.value = false
-    event.target.value = ''
-  }
-}
-
 async function requestJoin(team) {
   setBusy(team.id, true)
   error.value = ''
@@ -846,20 +820,6 @@ watch(visibleTeamMembers, () => {
             </label>
             <span v-else-if="selectedCanManage" class="team-livery-limit">{{ t('teams.liveryMaximum') }}</span>
             <input :id="`team-livery-upload-${selectedTeam.id}`" class="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple :disabled="teamLiverySaving" @change="uploadTeamLiveries" />
-          </div>
-          <div v-if="selectedCanManage" class="team-livery-archive-row">
-            <div class="team-livery-archive-info">
-              <span class="team-livery-panel-icon is-archive"><Archive :size="16" /></span>
-              <span>
-                <strong>{{ t('teams.liveryArchiveTitle') }}</strong>
-                <small>{{ selectedLiveryArchive ? t('teams.liveryArchiveUploaded', { filename: selectedLiveryArchive.archive_filename }) : t('teams.liveryArchiveEmpty') }}</small>
-              </span>
-            </div>
-            <label class="button small" :class="{ 'is-disabled': teamLiveryArchiveSaving }" :for="`team-livery-archive-${selectedTeam.id}`">
-              <Archive :size="15" />
-              {{ selectedLiveryArchive ? t('teams.replaceLiveryArchive') : t('teams.uploadLiveryArchive') }}
-            </label>
-            <input :id="`team-livery-archive-${selectedTeam.id}`" class="visually-hidden" type="file" webkitdirectory directory multiple :disabled="teamLiveryArchiveSaving" @change="uploadTeamLiveryArchive" />
           </div>
         </section>
 

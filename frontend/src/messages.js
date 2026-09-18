@@ -564,11 +564,6 @@ export const messages = {
       nextLivery: 'Следующее изображение',
       deleteLivery: 'Удалить изображение ливреи',
       deleteLiveryConfirm: 'Удалить это изображение ливреи?',
-      liveryArchiveTitle: 'Папка всей ливреи',
-      liveryArchiveEmpty: 'Архив папки ещё не загружен',
-      liveryArchiveUploaded: 'Архив: {filename}',
-      uploadLiveryArchive: 'Загрузить папку',
-      replaceLiveryArchive: 'Заменить архив',
       applicationStatuses: {
         pending: 'Заявка отправлена',
         approved: 'Заявка одобрена',
@@ -941,7 +936,7 @@ export const messages = {
       standingsEmpty: 'Таблица появится после принятия участников и завершения этапов.'
     },
     hallOfFame: {
-      subtitle: 'Общий рейтинг пилотов и команд по подиумам завершенных гонок.',
+      subtitle: 'Общий рейтинг пилотов и команд по RER и подиумам завершенных гонок.',
       mode: 'Режим рейтинга',
       byRating: 'По рейтингу',
       byMedals: 'По медалям',
@@ -1538,11 +1533,6 @@ export const messages = {
       nextLivery: 'Next image',
       deleteLivery: 'Delete livery image',
       deleteLiveryConfirm: 'Delete this livery image?',
-      liveryArchiveTitle: 'Full livery folder',
-      liveryArchiveEmpty: 'The folder archive has not been uploaded yet',
-      liveryArchiveUploaded: 'Archive: {filename}',
-      uploadLiveryArchive: 'Upload folder',
-      replaceLiveryArchive: 'Replace archive',
       applicationStatuses: {
         pending: 'Request sent',
         approved: 'Request approved',
@@ -1915,7 +1905,7 @@ export const messages = {
       standingsEmpty: 'The table will appear after participants are approved and stages are finished.'
     },
     hallOfFame: {
-      subtitle: 'Overall rating for pilots and teams by finished-race podiums.',
+      subtitle: 'Overall rating for pilots and teams by RER and finished-race podiums.',
       mode: 'Rating mode',
       byRating: 'By rating',
       byMedals: 'By medals',
