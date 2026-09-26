@@ -59,26 +59,42 @@ class AccEntrylistTest(unittest.TestCase):
         ]
         self.assertEqual(rating_positions(rows), {1: 1.0, 2: 2.0, 3: 3.0})
 
-    def test_rer_awards_fixed_positive_bonuses_to_top_eight(self):
+    def test_rer_uses_balanced_place_and_expectation_scores(self):
+        rows = [{"user_id": index, "position": index, "finish_ms": index * 1000} for index in range(1, 32)]
+        users = {
+            index: SimpleNamespace(
+                id=index,
+                exclude_from_rer=False,
+                rating=1000,
+                game_ratings={"ACC": {"rating": 1000, "race_count": 20}},
+                rating_race_count=20,
+            )
+            for index in range(1, 32)
+        }
+
+        changes, _ = build_rating_changes(rows, users, "ACC")
+        deltas = {change["position"]: change["delta"] for change in changes}
+
+        self.assertEqual([deltas[float(position)] for position in range(1, 9)], [750, 700, 650, 600, 550, 500, 450, 400])
+        self.assertEqual(deltas[31.0], -750)
+        self.assertEqual(sum(deltas.values()), 0)
+
+    def test_rer_caps_an_extreme_upset_at_one_thousand(self):
         rows = [{"user_id": index, "position": index, "finish_ms": index * 1000} for index in range(1, 10)]
         users = {
             index: SimpleNamespace(
                 id=index,
                 exclude_from_rer=False,
-                rating=9000 if index == 1 else 1000,
-                game_ratings={"ACC": {"rating": 9000 if index == 1 else 1000, "race_count": 20}},
+                rating=10 if index == 1 else 10000,
+                game_ratings={"ACC": {"rating": 10 if index == 1 else 10000, "race_count": 20}},
                 rating_race_count=20,
             )
             for index in range(1, 10)
         }
 
         changes, _ = build_rating_changes(rows, users, "ACC")
-        deltas = {change["position"]: change["delta"] for change in changes}
 
-        self.assertEqual([deltas[float(position)] for position in range(1, 9)], [100, 90, 80, 70, 60, 50, 40, 30])
-        self.assertGreaterEqual(deltas[8.0], 0)
-        self.assertGreaterEqual(deltas[9.0], -100)
-        self.assertLessEqual(deltas[9.0], 100)
+        self.assertEqual(next(change["delta"] for change in changes if change["user_id"] == 1), 1000)
 
     def test_average_lap_ignores_missing_zero_fields(self):
         results = {

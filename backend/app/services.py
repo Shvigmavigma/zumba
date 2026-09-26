@@ -5,13 +5,11 @@ from app.models import AppSetting, DEFAULT_RATING, DEFAULT_SR, MAX_RATING, MAX_S
 
 
 APPLIED_PENALTY_STATUSES = {PenaltyStatus.active, PenaltyStatus.appealed}
-RATING_K_NEWCOMER = 64
-RATING_K_DEFAULT = 32
-RATING_K_VETERAN = 16
 RATING_DELTA_SCALE = 1.5
-RATING_TOP_PLACE_BONUSES = (100, 90, 80, 70, 60, 50, 40, 30)
-RATING_POSITION_STEP = 10
-RATING_DELTA_LIMIT = 100
+RATING_POSITION_WEIGHT = 1000
+RATING_EXPECTATION_WEIGHT = 500
+RATING_FULL_FIELD_SIZE = 8
+RATING_DELTA_LIMIT = 1000
 SYSTEM_SETTINGS_KEY = "system_settings"
 RATING_ROW_KEYS = ("rating_old", "rating_new", "rating_delta", "rating_expected", "rating_score", "rating_k")
 SR_FINISH_BONUS = 0.3
@@ -99,14 +97,6 @@ def reset_ratings_for_recalculation(user: User) -> None:
 
 def clamp_sr(value: float) -> float:
     return round(min(MAX_SR, max(MIN_SR, value)), 1)
-
-
-def rating_k_factor(race_count: int) -> int:
-    if race_count < 10:
-        return RATING_K_NEWCOMER
-    if race_count > 50:
-        return RATING_K_VETERAN
-    return RATING_K_DEFAULT
 
 
 def result_sort_key(row: dict, fallback_index: int) -> tuple:
@@ -308,17 +298,20 @@ def build_rating_changes(
             opponent_rating = user_game_rating_state(users[opponent_id], game)[0]
             expected += 1 / (1 + 10 ** ((opponent_rating - old_rating) / 400))
         position = positions[user_id]
-        score = participant_count - position
-        k_factor = rating_k_factor(race_count_before)
-        if position <= len(RATING_TOP_PLACE_BONUSES):
-            delta = RATING_TOP_PLACE_BONUSES[max(0, int(position - 1))]
-        else:
-            expected_position = participant_count - expected
-            delta = round(
-                (expected_position - position) * RATING_POSITION_STEP * RATING_DELTA_SCALE
-                / max(0.01, float(rating_change_coefficient))
+        opponents = participant_count - 1
+        score = (participant_count - position) / opponents
+        expected_score = expected / opponents
+        field_factor = min(1.0, opponents / (RATING_FULL_FIELD_SIZE - 1))
+        delta = round(
+            (
+                RATING_POSITION_WEIGHT * (score - 0.5)
+                + RATING_EXPECTATION_WEIGHT * (score - expected_score)
             )
-            delta = max(-RATING_DELTA_LIMIT, min(RATING_DELTA_LIMIT, delta))
+            * field_factor
+            * RATING_DELTA_SCALE
+            / max(0.01, float(rating_change_coefficient))
+        )
+        delta = max(-RATING_DELTA_LIMIT, min(RATING_DELTA_LIMIT, delta))
         new_rating = clamp_rating(old_rating + delta)
         changes.append(
             {
@@ -328,8 +321,8 @@ def build_rating_changes(
                 "delta": new_rating - old_rating,
                 "position": positions[user_id],
                 "score": round(score, 4),
-                "expected": round(expected, 4),
-                "k": k_factor,
+                "expected": round(expected_score, 4),
+                "k": round(RATING_POSITION_WEIGHT * field_factor, 4),
                 "time_ms": rating_time_ms(row),
                 "race_count_before": race_count_before,
                 "race_count_after": race_count_before + 1,
