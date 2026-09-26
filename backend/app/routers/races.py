@@ -668,6 +668,13 @@ def acc_line_car_model(line: dict) -> int | str | None:
     return value
 
 
+def acc_line_has_activity(line: dict) -> bool:
+    try:
+        return int((line.get("timing") or {}).get("lapCount") or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
 def normalize_lmu_driver_name(value: str | None) -> str:
     return " ".join(str(value or "").strip().lower().split())
 
@@ -703,7 +710,8 @@ def acc_best_lap_map(qualification_results: dict | None) -> dict[str, dict]:
     rows: dict[str, dict] = {}
     if not qualification_results:
         return rows
-    for position, line in enumerate(qualification_results["sessionResult"]["leaderBoardLines"], start=1):
+    lines = filter(acc_line_has_activity, qualification_results["sessionResult"]["leaderBoardLines"])
+    for position, line in enumerate(lines, start=1):
         player_id = acc_line_player_id(line)
         if not player_id:
             continue
@@ -734,32 +742,6 @@ def acc_line_user(line: dict, users_by_steam: dict[str, User], users_by_number: 
     return users_by_number.get(race_number) if race_number is not None else None
 
 
-def acc_line_label(line: dict, position: int) -> str:
-    player_id = acc_player_id(acc_line_player_id(line))
-    race_number = acc_line_race_number(line)
-    parts = [f"#{position}"]
-    name = acc_line_name(line)
-    if name:
-        parts.append(name)
-    if race_number is not None:
-        parts.append(f"car {race_number}")
-    if player_id:
-        parts.append(player_id)
-    return " / ".join(parts)
-
-
-def ensure_acc_lines_are_registered(session_name: str, payload: dict, users_by_steam: dict[str, User], users_by_number: dict[int, User]) -> None:
-    missing: list[str] = []
-    for position, line in enumerate(payload["sessionResult"]["leaderBoardLines"], start=1):
-        user = acc_line_user(line, users_by_steam, users_by_number)
-        if user is None:
-            missing.append(acc_line_label(line, position))
-    if missing:
-        preview = "; ".join(missing[:8])
-        suffix = f"; +{len(missing) - 8} more" if len(missing) > 8 else ""
-        raise HTTPException(status_code=400, detail=f"ACC {session_name} JSON contains pilots who are not registered for this race: {preview}{suffix}")
-
-
 def team_driver_lookup_maps(rows: list[tuple[TeamRaceRegistration, Team]]) -> tuple[dict[str, dict], dict[int, TeamRaceRegistration]]:
     by_steam: dict[str, dict] = {}
     by_number: dict[int, TeamRaceRegistration] = {}
@@ -777,19 +759,6 @@ def acc_line_team_driver(line: dict, drivers_by_steam: dict[str, dict]) -> dict 
     return drivers_by_steam.get(player_id) if player_id else None
 
 
-def ensure_acc_team_lines_are_registered(session_name: str, payload: dict, drivers_by_steam: dict[str, dict], teams_by_number: dict[int, TeamRaceRegistration]) -> None:
-    missing: list[str] = []
-    for position, line in enumerate(payload["sessionResult"]["leaderBoardLines"], start=1):
-        driver = acc_line_team_driver(line, drivers_by_steam)
-        race_number = acc_line_race_number(line)
-        if driver is None and (race_number is None or race_number not in teams_by_number):
-            missing.append(acc_line_label(line, position))
-    if missing:
-        preview = "; ".join(missing[:8])
-        suffix = f"; +{len(missing) - 8} more" if len(missing) > 8 else ""
-        raise HTTPException(status_code=400, detail=f"ACC {session_name} JSON contains teams or drivers who are not registered for this race: {preview}{suffix}")
-
-
 async def build_lmu_results_payload(session: AsyncSession, race: Race, qualification_results: dict | None, race_results: dict) -> dict:
     if qualification_results is not None:
         validate_acc_session(qualification_results, "Q")
@@ -799,6 +768,8 @@ async def build_lmu_results_payload(session: AsyncSession, race: Race, qualifica
 
     rows: list[dict] = []
     for raw_position, line in enumerate(race_results["sessionResult"]["leaderBoardLines"], start=1):
+        if not acc_line_has_activity(line):
+            continue
         driver_name = acc_line_name(line)
         user_match = users_by_name.get(normalize_lmu_driver_name(driver_name))
         user = user_match[0] if user_match else None
@@ -872,14 +843,12 @@ def build_acc_results_payload(race: Race, qualification_results: dict | None, ra
     validate_acc_session(race_results, "R")
     users_by_steam, users_by_number = user_lookup_maps(rows)
     registrations_by_user_id = {user.id: registration for registration, user in rows}
-    if qualification_results is not None:
-        ensure_acc_lines_are_registered("qualification", qualification_results, users_by_steam, users_by_number)
-    ensure_acc_lines_are_registered("race", race_results, users_by_steam, users_by_number)
     qualification_by_player = acc_best_lap_map(qualification_results)
 
     result_rows: list[dict] = []
-    matched_user_ids: set[int] = set()
     for raw_position, line in enumerate(race_results["sessionResult"]["leaderBoardLines"], start=1):
+        if not acc_line_has_activity(line):
+            continue
         player_id = acc_line_player_id(line)
         race_number = acc_line_race_number(line)
         user = acc_line_user(line, users_by_steam, users_by_number)
@@ -908,33 +877,7 @@ def build_acc_results_payload(race: Race, qualification_results: dict | None, ra
             "raw_position": raw_position,
             "source": "acc",
         }
-        if user is not None:
-            matched_user_ids.add(user.id)
         result_rows.append(row)
-
-    for registration, user in rows:
-        if user.id not in matched_user_ids:
-            result_rows.append(
-                {
-                    "user_id": user.id,
-                    "login": user.login,
-                    "nickname": user.nickname,
-                    "pilot_roles": pilot_roles_payload(user),
-                    "exclude_from_rer": user.exclude_from_rer,
-                    "driver_name": f"{user.first_name} {user.last_name}".strip() or user.nickname,
-                    "player_id": acc_player_id(user.steam_id),
-                    "race_number": registration.pilot_number,
-                    "team_id": user.team_id,
-                    "finish_ms": None,
-                    "lap_count": 0,
-                    "best_lap_ms": None,
-                    "qualification_position": None,
-                    "qualification_best_lap_ms": None,
-                    "raw_position": None,
-                    "source": "acc",
-                    "status": "missing",
-                }
-            )
 
     return {
         "format": "acc",
@@ -963,14 +906,12 @@ def build_acc_team_results_payload(race: Race, qualification_results: dict | Non
         validate_acc_session(qualification_results, "Q")
     validate_acc_session(race_results, "R")
     drivers_by_steam, teams_by_number = team_driver_lookup_maps(rows)
-    if qualification_results is not None:
-        ensure_acc_team_lines_are_registered("qualification", qualification_results, drivers_by_steam, teams_by_number)
-    ensure_acc_team_lines_are_registered("race", race_results, drivers_by_steam, teams_by_number)
     qualification_by_player = acc_best_lap_map(qualification_results)
 
     result_rows: list[dict] = []
-    matched_team_ids: set[int] = set()
     for raw_position, line in enumerate(race_results["sessionResult"]["leaderBoardLines"], start=1):
+        if not acc_line_has_activity(line):
+            continue
         player_id = acc_line_player_id(line)
         race_number = acc_line_race_number(line)
         team_registration = teams_by_number.get(race_number) if race_number is not None else None
@@ -982,8 +923,6 @@ def build_acc_team_results_payload(race: Race, qualification_results: dict | Non
         finish_ms = timing.get("totalTime")
         driver_total_times = line.get("driverTotalTimes") if isinstance(line.get("driverTotalTimes"), list) else []
         qualification = qualification_by_player.get(player_id, {})
-        if team_registration is not None:
-            matched_team_ids.add(team_registration.team_id)
         result_rows.append(
             {
                 "user_id": driver.get("user_id") if driver else None,
@@ -1011,34 +950,6 @@ def build_acc_team_results_payload(race: Race, qualification_results: dict | Non
                 "source": "acc_team",
             }
         )
-
-    for registration, team in rows:
-        if team.id not in matched_team_ids:
-            lead_driver = next(iter(registration.drivers or []), {})
-            result_rows.append(
-                {
-                    "user_id": lead_driver.get("user_id"),
-                    "login": lead_driver.get("login"),
-                    "nickname": lead_driver.get("nickname"),
-                    "pilot_roles": lead_driver.get("pilot_roles") or [],
-                    "exclude_from_rer": lead_driver.get("exclude_from_rer", False),
-                    "driver_name": lead_driver.get("nickname") or lead_driver.get("login") or team.name,
-                    "player_id": acc_player_id(lead_driver.get("steam_id")),
-                    "race_number": registration.race_number,
-                    "team_id": team.id,
-                    "team_name": team.name,
-                    "team_abbreviation": team.abbreviation,
-                    "car_model": registration.car_model,
-                    "finish_ms": None,
-                    "lap_count": 0,
-                    "best_lap_ms": None,
-                    "qualification_position": None,
-                    "qualification_best_lap_ms": None,
-                    "raw_position": None,
-                    "source": "acc_team",
-                    "status": "missing",
-                }
-            )
 
     return {
         "format": "acc_team",
@@ -1154,39 +1065,6 @@ def build_manual_results_payload(race: Race, payload: ManualResultsUpload, regis
         )
     if race.game == "LMU":
         return {"format": "lmu_manual", "track": race.track, "qualification_enabled": False, "rows": rows}
-    for user_id, pilot in registered_by_id.items():
-        if user_id not in seen:
-            rows.append(
-                {
-                    "user_id": user_id,
-                    "login": pilot.get("login"),
-                    "nickname": pilot.get("nickname"),
-                    "pilot_roles": pilot.get("pilot_roles") or [],
-                    "exclude_from_rer": pilot.get("exclude_from_rer", False),
-                    "first_name": pilot.get("first_name") or "",
-                    "last_name": pilot.get("last_name") or "",
-                    "pilot_number": pilot.get("pilot_number"),
-                    "race_number": pilot.get("pilot_number"),
-                    "car_model": acc_line_car_model({"carModel": pilot.get("car_model")}) if race.game == "ACC" else pilot.get("car_model"),
-                    "avatar_color": pilot.get("avatar_color") or "#2563eb",
-                    "avatar_url": pilot.get("avatar_url"),
-                    "team_id": pilot.get("team_id"),
-                    "team_name": pilot.get("team_name"),
-                    "team_abbreviation": pilot.get("team_abbreviation"),
-                    "rating": pilot.get("rating"),
-                    "game_ratings": pilot.get("game_ratings") or {},
-                    "sr": pilot.get("sr"),
-                    "country": pilot.get("country"),
-                    "driver_name": " ".join(filter(None, [pilot.get("first_name"), pilot.get("last_name")])) or pilot.get("nickname"),
-                    "finish_ms": None,
-                    "lap_count": 0,
-                    "best_lap_ms": None,
-                    "qualification_position": None,
-                    "qualification_best_lap_ms": None,
-                    "source": "acc_manual" if race.game == "ACC" else "manual",
-                    "status": "missing",
-                }
-            )
     if race.game == "ACC":
         return {
             "format": "acc_manual",

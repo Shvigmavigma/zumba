@@ -1,13 +1,40 @@
 import unittest
+from types import SimpleNamespace
 
 from pydantic import ValidationError
 
 from app.race_assets import DEFAULT_ACC_CAR_MODEL_IDS, DEFAULT_RACE_ASSETS, normalize_race_assets, preserve_track_metadata
-from app.routers.races import acc_driver_category_for_user, acc_forced_car_model, acc_line_car_model, race_average_lap_ms
+from app.routers.races import acc_best_lap_map, acc_driver_category_for_user, acc_forced_car_model, acc_line_car_model, build_acc_results_payload, race_average_lap_ms
 from app.schemas import RaceRegisterRequest, TeamRaceRegisterRequest
 
 
 class AccEntrylistTest(unittest.TestCase):
+    def test_results_skip_zero_lap_rows_and_keep_unregistered_participants(self):
+        def line(player_id, name, laps, *, race_number=7, best_lap=95000, total_time=1900000):
+            return {
+                "car": {"raceNumber": race_number, "carModel": 30},
+                "currentDriver": {"playerId": player_id, "firstName": name, "lastName": "Driver"},
+                "timing": {"lapCount": laps, "bestLap": best_lap, "totalTime": total_time},
+            }
+
+        registered_user = SimpleNamespace(
+            id=1,
+            steam_id="76561198000000001",
+            login="registered",
+            nickname="Registered",
+            exclude_from_rer=False,
+            team_id=None,
+        )
+        race = SimpleNamespace(has_qualification=True, track="Silverstone")
+        qualification = {"sessionType": "Q", "sessionResult": {"leaderBoardLines": [line("S76561198000000001", "Registered", 3), line("S76561198000000002", "DNS", 0)]}}
+        results = {"sessionType": "R", "trackName": "silverstone", "sessionResult": {"leaderBoardLines": [line("S76561198000000001", "Registered", 20), line("S76561198000000002", "Guest", 18), line("S76561198000000003", "DNS", 0)]}}
+
+        payload = build_acc_results_payload(race, qualification, results, [(SimpleNamespace(pilot_number=7), registered_user)])
+
+        self.assertEqual([row["driver_name"] for row in payload["rows"]], ["Registered Driver", "Guest Driver"])
+        self.assertEqual(payload["rows"][0]["qualification_position"], 1)
+        self.assertEqual(acc_best_lap_map(qualification), {"76561198000000001": {"qualification_position": 1, "qualification_best_lap_ms": 95000}})
+
     def test_average_lap_ignores_missing_zero_fields(self):
         results = {
             "rows": [
