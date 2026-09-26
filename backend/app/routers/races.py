@@ -675,6 +675,25 @@ def acc_line_has_activity(line: dict) -> bool:
         return False
 
 
+def acc_active_player_ids(*payloads: dict | None) -> set[str]:
+    player_ids: set[str] = set()
+    for payload in payloads:
+        result = payload.get("sessionResult") if isinstance(payload, dict) else None
+        lines = result.get("leaderBoardLines") if isinstance(result, dict) else None
+        for line in lines if isinstance(lines, list) else []:
+            if isinstance(line, dict) and acc_line_has_activity(line) and (player_id := acc_line_player_id(line)):
+                player_ids.add(player_id)
+    return player_ids
+
+
+async def acc_result_user_lookup(session: AsyncSession, *payloads: dict | None) -> dict[str, User]:
+    player_ids = acc_active_player_ids(*payloads)
+    if not player_ids:
+        return {}
+    users = list((await session.scalars(select(User).where(User.steam_id.in_(player_ids)))).all())
+    return {normalize_acc_player_id(user.steam_id): user for user in users if normalize_acc_player_id(user.steam_id)}
+
+
 def normalize_lmu_driver_name(value: str | None) -> str:
     return " ".join(str(value or "").strip().lower().split())
 
@@ -835,13 +854,20 @@ async def build_lmu_results_payload(session: AsyncSession, race: Race, qualifica
     }
 
 
-def build_acc_results_payload(race: Race, qualification_results: dict | None, race_results: dict, rows: list[tuple[RaceRegistration, User]]) -> dict:
+def build_acc_results_payload(
+    race: Race,
+    qualification_results: dict | None,
+    race_results: dict,
+    rows: list[tuple[RaceRegistration, User]],
+    known_users_by_steam: dict[str, User] | None = None,
+) -> dict:
     if race.has_qualification and qualification_results is None:
         raise HTTPException(status_code=400, detail="Qualification results JSON is required for this race")
     if qualification_results is not None:
         validate_acc_session(qualification_results, "Q")
     validate_acc_session(race_results, "R")
-    users_by_steam, users_by_number = user_lookup_maps(rows)
+    registered_users_by_steam, users_by_number = user_lookup_maps(rows)
+    users_by_steam = {**(known_users_by_steam or {}), **registered_users_by_steam}
     registrations_by_user_id = {user.id: registration for registration, user in rows}
     qualification_by_player = acc_best_lap_map(qualification_results)
 
@@ -2088,12 +2114,13 @@ async def upload_acc_results(
         raise HTTPException(status_code=400, detail="Simulator result JSON can only be uploaded for ACC races")
     registration_rows = await get_registration_rows(session, race.id)
     team_registration_rows = await get_team_registration_rows(session, race.id) if race.is_team_event else []
+    known_users_by_steam = {} if race.is_team_event else await acc_result_user_lookup(session, payload.qualification_results, payload.race_results)
     if race.status == RaceStatus.finished:
         await restore_race_sr_bonus(session, race)
     race.results = (
         build_acc_team_results_payload(race, payload.qualification_results, payload.race_results, team_registration_rows)
         if race.is_team_event
-        else build_acc_results_payload(race, payload.qualification_results, payload.race_results, registration_rows)
+        else build_acc_results_payload(race, payload.qualification_results, payload.race_results, registration_rows, known_users_by_steam)
     )
     race.status = RaceStatus.finished
     race.is_passed = True
