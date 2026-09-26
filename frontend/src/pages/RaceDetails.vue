@@ -187,7 +187,7 @@ const qualificationRows = computed(() => {
       .map((row, index) => ({ ...row, position: row.qualification_position || index + 1, best_lap_ms: row.qualification_best_lap_ms, source: 'qualification' }))
     return manualRows
   }
-  const mapped = lines.map((line, index) => {
+  const mapped = lines.filter(accLineHasActivity).map((line, index) => {
     const driver = accLineDriver(line)
     const playerId = accPlayerId(driver.playerId || driver.playerID)
     const normalized = normalizeAccPlayerId(playerId)
@@ -300,6 +300,10 @@ function accPlayerId(value) {
 function accLineDriver(line) {
   if (line.currentDriver && Object.keys(line.currentDriver).length) return line.currentDriver
   return Array.isArray(line.car?.drivers) ? line.car.drivers[0] || {} : {}
+}
+
+function accLineHasActivity(line) {
+  return Number(line?.timing?.lapCount || 0) > 0
 }
 
 function accDriverName(driver) {
