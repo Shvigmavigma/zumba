@@ -242,7 +242,19 @@ def rating_positions(rows: list[dict]) -> dict[int, float]:
             break
         explicit_positions[int(user_id)] = float(position)
     if len(explicit_positions) == len(rows):
-        return explicit_positions
+        sorted_rows = sorted(rows, key=lambda row: (float(row["position"]), int(row["user_id"])))
+        positions: dict[int, float] = {}
+        start = 0
+        while start < len(sorted_rows):
+            position = float(sorted_rows[start]["position"])
+            end = start + 1
+            while end < len(sorted_rows) and float(sorted_rows[end]["position"]) == position:
+                end += 1
+            average_position = (start + 1 + end) / 2
+            for row in sorted_rows[start:end]:
+                positions[int(row["user_id"])] = average_position
+            start = end
+        return positions
 
     sorted_rows = sorted(rows, key=lambda row: (rating_time_ms(row) or float("inf"), int(row.get("user_id") or 0)))
     positions: dict[int, float] = {}
