@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from app.race_assets import DEFAULT_ACC_CAR_MODEL_IDS, DEFAULT_RACE_ASSETS, normalize_race_assets, preserve_track_metadata
 from app.routers.races import acc_best_lap_map, acc_driver_category_for_user, acc_forced_car_model, acc_line_car_model, build_acc_results_payload, race_average_lap_ms
 from app.schemas import RaceRegisterRequest, TeamRaceRegisterRequest
-from app.services import rating_positions
+from app.services import build_rating_changes, rating_positions
 
 
 class AccEntrylistTest(unittest.TestCase):
@@ -58,6 +58,27 @@ class AccEntrylistTest(unittest.TestCase):
             {"user_id": 3, "position": 5, "finish_ms": 1400},
         ]
         self.assertEqual(rating_positions(rows), {1: 1.0, 2: 2.0, 3: 3.0})
+
+    def test_rer_awards_fixed_positive_bonuses_to_top_eight(self):
+        rows = [{"user_id": index, "position": index, "finish_ms": index * 1000} for index in range(1, 10)]
+        users = {
+            index: SimpleNamespace(
+                id=index,
+                exclude_from_rer=False,
+                rating=9000 if index == 1 else 1000,
+                game_ratings={"ACC": {"rating": 9000 if index == 1 else 1000, "race_count": 20}},
+                rating_race_count=20,
+            )
+            for index in range(1, 10)
+        }
+
+        changes, _ = build_rating_changes(rows, users, "ACC")
+        deltas = {change["position"]: change["delta"] for change in changes}
+
+        self.assertEqual([deltas[float(position)] for position in range(1, 9)], [100, 90, 80, 70, 60, 50, 40, 30])
+        self.assertGreaterEqual(deltas[8.0], 0)
+        self.assertGreaterEqual(deltas[9.0], -100)
+        self.assertLessEqual(deltas[9.0], 100)
 
     def test_average_lap_ignores_missing_zero_fields(self):
         results = {

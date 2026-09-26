@@ -9,6 +9,9 @@ RATING_K_NEWCOMER = 64
 RATING_K_DEFAULT = 32
 RATING_K_VETERAN = 16
 RATING_DELTA_SCALE = 1.5
+RATING_TOP_PLACE_BONUSES = (100, 90, 80, 70, 60, 50, 40, 30)
+RATING_POSITION_STEP = 10
+RATING_DELTA_LIMIT = 100
 SYSTEM_SETTINGS_KEY = "system_settings"
 RATING_ROW_KEYS = ("rating_old", "rating_new", "rating_delta", "rating_expected", "rating_score", "rating_k")
 SR_FINISH_BONUS = 0.3
@@ -304,9 +307,18 @@ def build_rating_changes(
                 continue
             opponent_rating = user_game_rating_state(users[opponent_id], game)[0]
             expected += 1 / (1 + 10 ** ((opponent_rating - old_rating) / 400))
-        score = participant_count - positions[user_id]
+        position = positions[user_id]
+        score = participant_count - position
         k_factor = rating_k_factor(race_count_before)
-        delta = k_factor * (score - expected) / max(0.01, float(rating_change_coefficient))
+        if position <= len(RATING_TOP_PLACE_BONUSES):
+            delta = RATING_TOP_PLACE_BONUSES[max(0, int(position - 1))]
+        else:
+            expected_position = participant_count - expected
+            delta = round(
+                (expected_position - position) * RATING_POSITION_STEP * RATING_DELTA_SCALE
+                / max(0.01, float(rating_change_coefficient))
+            )
+            delta = max(-RATING_DELTA_LIMIT, min(RATING_DELTA_LIMIT, delta))
         new_rating = clamp_rating(old_rating + delta)
         changes.append(
             {
