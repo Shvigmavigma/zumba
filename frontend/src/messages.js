@@ -256,7 +256,8 @@ export const messages = {
       registrationFrom: 'Регистрация от:',
       championshipOpen: 'Открыта регистрация на чемпионат',
       championshipCta: 'Перейти',
-      championshipStages: '{count} этапов'
+      championshipStages: '{count} этапов',
+      dataLoadError: 'Часть данных пока не удалось загрузить. Попробуйте обновить страницу.'
     },
     profile: {
       editTitle: 'Редактирование профиля',
@@ -1225,7 +1226,8 @@ export const messages = {
       registrationFrom: 'Registration from:',
       championshipOpen: 'Championship registration is open',
       championshipCta: 'Open',
-      championshipStages: '{count} stages'
+      championshipStages: '{count} stages',
+      dataLoadError: 'Some data could not be loaded. Please try refreshing the page.'
     },
     profile: {
       editTitle: 'Edit profile',

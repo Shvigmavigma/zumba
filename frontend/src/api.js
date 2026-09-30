@@ -1,6 +1,7 @@
 import { clearSession, state } from './store'
 
 export const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+const TRANSIENT_RETRY_DELAY_MS = 350
 
 function apiErrorMessage(message) {
   const text = Array.isArray(message) ? message.map((item) => item.msg).join(', ') : String(message || '')
@@ -59,6 +60,39 @@ async function request(path, options = {}) {
   })
 }
 
+function canRetry(options) {
+  return !options.method || options.method.toUpperCase() === 'GET'
+}
+
+function isTransientResponse(response) {
+  return response.status === 408 || response.status === 429 || response.status >= 500
+}
+
+function waitForRetry() {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, TRANSIENT_RETRY_DELAY_MS))
+}
+
+async function requestWithRetry(path, options = {}) {
+  const retryOnce = canRetry(options)
+
+  for (let attempt = 0; attempt <= Number(retryOnce); attempt += 1) {
+    try {
+      const response = await request(path, options)
+      if (attempt === 0 && retryOnce && isTransientResponse(response)) {
+        await waitForRetry()
+        continue
+      }
+      return response
+    } catch (error) {
+      if (attempt === 0 && retryOnce) {
+        await waitForRetry()
+        continue
+      }
+      throw error
+    }
+  }
+}
+
 async function ensureOk(response) {
   if (response.status === 401) {
     clearSession()
@@ -76,14 +110,14 @@ async function ensureOk(response) {
 }
 
 export async function api(path, options = {}) {
-  const response = await request(path, options)
+  const response = await requestWithRetry(path, options)
   await ensureOk(response)
   if (response.status === 204) return null
   return response.json()
 }
 
 export async function apiDownload(path, options = {}) {
-  const response = await request(path, options)
+  const response = await requestWithRetry(path, options)
   await ensureOk(response)
   return response.blob()
 }

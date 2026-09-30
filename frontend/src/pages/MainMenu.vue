@@ -15,7 +15,7 @@ import { validTwitchParent } from '../twitchEmbed'
 
 const { t } = useI18n()
 const router = useRouter()
-const stats = ref({ pilots: 0, completed_races: 0, open_races: 0, staff: 0 })
+const stats = ref(null)
 const races = ref([])
 const setups = ref([])
 const showSetupsSection = ref(true)
@@ -36,7 +36,9 @@ const newsTrack = ref(null)
 const activeNewsIndex = ref(0)
 const isNewsViewerOpen = ref(false)
 const isNewsTextHidden = ref(false)
-const error = ref('')
+const mainDataError = ref(false)
+const racesError = ref(false)
+const mainLoading = ref(false)
 const raceGameFilter = ref('all')
 const raceStatusFilter = ref('not_finished')
 const myGamesOnly = ref(false)
@@ -113,6 +115,10 @@ const twitchWidgetStyle = computed(() => ({
 const twitchParent = computed(() => validTwitchParent(typeof window === 'undefined' ? 'localhost' : window.location.hostname))
 const twitchEmbedSrc = computed(() => createTwitchEmbedSrc({ autoplay: twitchStatus.value.is_live }))
 const twitchPreviewSrc = computed(() => createTwitchEmbedSrc({ preview: true }))
+const error = computed(() => {
+  if (!mainDataError.value && !racesError.value) return ''
+  return t('main.dataLoadError')
+})
 
 function formatTwitchTime(totalSeconds) {
   const hours = Math.floor(totalSeconds / 3600)
@@ -378,6 +384,60 @@ async function loadRaces() {
   }
   appendRaceTypeFilters(params, raceTypeFilters.value)
   races.value = await api(`/races?${params.toString()}`)
+  racesError.value = false
+}
+
+async function loadMainData() {
+  if (mainLoading.value) return
+  mainLoading.value = true
+  const failedRequests = []
+  let mainDataFailed = false
+  const loadOrKeepCurrent = async (request, currentValue) => {
+    try {
+      return await request
+    } catch {
+      failedRequests.push(true)
+      return currentValue
+    }
+  }
+
+  try {
+    const [statsData, setupsData, bannerData, newsData, championshipData, donationData, loadedNewsSettings, loadedWeatherSettings, loadedSystemSettings] = await Promise.all([
+      loadOrKeepCurrent(api('/dashboard/stats'), stats.value),
+      loadOrKeepCurrent(api('/setups?limit=6'), setups.value),
+      loadOrKeepCurrent(api('/banners'), banners.value),
+      loadOrKeepCurrent(api('/news'), news.value),
+      loadOrKeepCurrent(api('/championships?status_filter=registration_open&limit=3'), registrationChampionships.value),
+      loadOrKeepCurrent(api('/app-settings/donations'), donationSettings.value),
+      loadOrKeepCurrent(api('/app-settings/news'), newsSettings.value),
+      loadOrKeepCurrent(api('/app-settings/weather'), weatherSettings.value),
+      loadOrKeepCurrent(api('/app-settings/system'), { show_setups_section: showSetupsSection.value })
+    ])
+
+    stats.value = statsData
+    setups.value = setupsData
+    showSetupsSection.value = loadedSystemSettings?.show_setups_section !== false
+    banners.value = bannerData
+    news.value = newsData
+    registrationChampionships.value = championshipData
+    donationSettings.value = donationData
+    newsSettings.value = loadedNewsSettings
+    weatherSettings.value = loadedWeatherSettings
+    const pinnedIndex = newsData.findIndex((item) => item.is_pinned)
+    activeNewsIndex.value = pinnedIndex >= 0 ? pinnedIndex : 0
+    startNewsAutoplay()
+
+    try {
+      await loadRaces()
+    } catch {
+      racesError.value = true
+    }
+  } catch {
+    mainDataFailed = true
+  } finally {
+    mainDataError.value = mainDataFailed || failedRequests.length > 0
+    mainLoading.value = false
+  }
 }
 
 async function resetRacePageAndLoad() {
@@ -483,54 +543,27 @@ function toggleTwitchCollapsed(event) {
   requestAnimationFrame(() => clampTwitchWidgetPosition())
 }
 
-onMounted(async () => {
+onMounted(() => {
   window.addEventListener('keydown', handleNewsKeydown)
   window.addEventListener('resize', handleTwitchResize)
   placeTwitchWidget()
   loadTwitchStatus()
-  try {
-    const [statsData, setupsData, bannerData, newsData, championshipData, donationData, loadedNewsSettings, loadedWeatherSettings, loadedSystemSettings] = await Promise.all([
-      api('/dashboard/stats'),
-      api('/setups?limit=6'),
-      api('/banners'),
-      api('/news'),
-      api('/championships?status_filter=registration_open&limit=3'),
-      api('/app-settings/donations'),
-      api('/app-settings/news').catch(() => ({ auto_rotate_seconds: 30, manual_pause_seconds: 300 })),
-      api('/app-settings/weather').catch(() => weatherSettings.value),
-      api('/app-settings/system').catch(() => ({ show_setups_section: true }))
-    ])
-    stats.value = statsData
-    setups.value = setupsData
-    showSetupsSection.value = loadedSystemSettings.show_setups_section !== false
-    banners.value = bannerData
-    news.value = newsData
-    registrationChampionships.value = championshipData
-    donationSettings.value = donationData
-    newsSettings.value = loadedNewsSettings
-    weatherSettings.value = loadedWeatherSettings
-    const pinnedIndex = newsData.findIndex((item) => item.is_pinned)
-    activeNewsIndex.value = pinnedIndex >= 0 ? pinnedIndex : 0
-    startNewsAutoplay()
-    await loadRaces()
-  } catch (err) {
-    error.value = err.message
-  }
+  loadMainData()
 })
 
 watch(racePage, async () => {
   try {
     await loadRaces()
-  } catch (err) {
-    error.value = err.message
+  } catch {
+    racesError.value = true
   }
 })
 
 watch([raceGameFilter, raceStatusFilter, myGamesOnly, raceTypeFilters], async () => {
   try {
     await resetRacePageAndLoad()
-  } catch (err) {
-    error.value = err.message
+  } catch {
+    racesError.value = true
   }
 })
 
@@ -610,27 +643,32 @@ onBeforeUnmount(() => {
             <div class="card stat main-stat-card main-stat-card--pilots">
               <span class="main-stat-icon"><Users :size="22" /></span>
               <span class="muted">{{ t('main.pilots') }}</span>
-              <strong>{{ stats.pilots }}</strong>
+              <strong>{{ stats?.pilots ?? '—' }}</strong>
             </div>
             <div class="card stat main-stat-card main-stat-card--completed">
               <span class="main-stat-icon"><Flag :size="22" /></span>
               <span class="muted">{{ t('main.completed') }}</span>
-              <strong>{{ stats.completed_races }}</strong>
+              <strong>{{ stats?.completed_races ?? '—' }}</strong>
             </div>
             <div class="card stat main-stat-card main-stat-card--open">
               <span class="main-stat-icon"><ClipboardCheck :size="22" /></span>
               <span class="muted">{{ t('main.open') }}</span>
-              <strong>{{ stats.open_races }}</strong>
+              <strong>{{ stats?.open_races ?? '—' }}</strong>
             </div>
             <div class="card stat main-stat-card main-stat-card--staff">
               <span class="main-stat-icon"><ShieldCheck :size="22" /></span>
               <span class="muted">{{ t('main.staff') }}</span>
-              <strong>{{ stats.staff }}</strong>
+              <strong>{{ stats?.staff ?? '—' }}</strong>
             </div>
           </div>
         </section>
 
-        <p v-if="error" class="error">{{ error }}</p>
+        <div v-if="error" class="error main-load-error" role="alert">
+          <span>{{ error }}</span>
+          <button class="button small" type="button" :disabled="mainLoading" @click="loadMainData">
+            {{ mainLoading ? t('common.loading') : t('common.reload') }}
+          </button>
+        </div>
 
         <RouterLink v-if="featuredChampionship" class="card main-championship-callout" to="/championships">
           <span class="main-championship-icon"><Flag :size="20" /></span>
