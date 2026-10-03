@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, ChevronUp, Cloud, CloudDrizzle, CloudLightning, CloudRain, CloudSun, Crop, Film, Heart, ImageUp, Info, MapPin, Scale, Sun, Thermometer, Trash2, Upload, UserMinus, X } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, Cloud, CloudDrizzle, CloudLightning, CloudRain, CloudSun, Crop, Film, Heart, ImageUp, Info, MapPin, RefreshCw, Scale, Sun, Thermometer, Trash2, Upload, UserMinus, X } from 'lucide-vue-next'
 import { api } from '../api'
 import ImageCropper from '../components/ImageCropper.vue'
 import LicenseBadge from '../components/LicenseBadge.vue'
@@ -106,6 +106,7 @@ const canManageTeamRegistration = computed(() => Boolean(race.value?.is_team_eve
 const canManageRace = computed(() => ['admin', 'moder'].includes(state.user?.role))
 const canForcePilotRegistration = computed(() => canManageRace.value && state.user?.role === 'admin' && Boolean(race.value) && !race.value.is_team_event && !['ongoing', 'finished'].includes(race.value.status))
 const canRemovePilotRegistration = computed(() => canManageRace.value && Boolean(race.value) && !race.value.is_team_event && !['ongoing', 'finished'].includes(race.value.status))
+const canAssignProfileNumbers = computed(() => canManageRace.value && Boolean(race.value) && !race.value.is_team_event && !race.value.championship_id && participants.value.length > 0 && !['ongoing', 'finished'].includes(race.value.status))
 const canIssuePenalty = computed(() => ['admin', 'moder', 'marshall'].includes(state.user?.role) && ['ongoing', 'finished'].includes(race.value?.status))
 const isChampionshipStage = computed(() => Boolean(race.value?.championship_id))
 const isLmuRace = computed(() => race.value?.game === 'LMU')
@@ -856,6 +857,19 @@ async function forceRegisterPilot() {
     race.value = await api(`/races/${raceId}`)
     forcePilotId.value = ''
     forcePilotNumber.value = ''
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    actionPending.value = false
+  }
+}
+
+async function assignProfileNumbers() {
+  if (!race.value || !canAssignProfileNumbers.value || !window.confirm(t('raceDetails.assignProfileNumbersConfirm', { name: race.value.name }))) return
+  error.value = ''
+  actionPending.value = true
+  try {
+    race.value = await api(`/races/${race.value.id}/registrations/assign-profile-numbers`, { method: 'POST' })
   } catch (err) {
     error.value = err.message
   } finally {
@@ -1736,6 +1750,10 @@ watch(visibleParticipants, () => {
             </p>
           </div>
           <div class="toolbar">
+            <button v-if="canAssignProfileNumbers" class="button small" type="button" :disabled="actionPending" @click="assignProfileNumbers">
+              <RefreshCw :size="16" />
+              {{ t('raceDetails.assignProfileNumbers') }}
+            </button>
             <span class="pill">{{ race.is_team_event ? teamRegistrations.length : `${visibleParticipants.length} / ${participants.length}` }}</span>
             <button class="icon-button" type="button" :title="participantsExpanded ? t('raceDetails.collapseParticipants') : t('raceDetails.expandParticipants')" :aria-label="participantsExpanded ? t('raceDetails.collapseParticipants') : t('raceDetails.expandParticipants')" @click="participantsExpanded = !participantsExpanded">
               <ChevronUp v-if="participantsExpanded" :size="18" />
