@@ -963,6 +963,8 @@ class ChampionshipCreate(BaseModel):
     def validate_dates_and_classes(self):
         if self.registration_end <= self.registration_start:
             raise ValueError("Registration end must be after registration start")
+        if self.registration_end >= self.championship_start:
+            raise ValueError("Registration must end before the championship starts")
         if self.championship_end <= self.championship_start:
             raise ValueError("Championship end must be after championship start")
         if self.registration_end > self.championship_end:
@@ -1078,6 +1080,9 @@ class ChampionshipStandingRead(BaseModel):
     points: int
     pole_points: int = 0
     starts: int = 0
+    wins: int = 0
+    second_places: int = 0
+    third_places: int = 0
     best_finish: int | None = None
 
 

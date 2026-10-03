@@ -239,6 +239,9 @@ def build_standings(championship: Championship, stages: list[Race], registration
             "points": 0,
             "pole_points": 0,
             "starts": 0,
+            "wins": 0,
+            "second_places": 0,
+            "third_places": 0,
             "best_finish": None,
         }
 
@@ -256,12 +259,29 @@ def build_standings(championship: Championship, stages: list[Race], registration
             position = result_position(row, fallback)
             item["points"] += score_for_position(stage.scoring_system, position, participant_count)
             item["starts"] += 1
+            if position == 1:
+                item["wins"] += 1
+            elif position == 2:
+                item["second_places"] += 1
+            elif position == 3:
+                item["third_places"] += 1
             item["best_finish"] = position if item["best_finish"] is None else min(item["best_finish"], position)
             if stage.pole_bonus_enabled and row.get("qualification_position") == 1:
                 item["points"] += 1
                 item["pole_points"] += 1
 
-    return sorted(standings.values(), key=lambda item: (-item["points"], item["best_finish"] or 9999, item["pilot_number"], item["user_id"]))
+    return sorted(
+        standings.values(),
+        key=lambda item: (
+            -item["points"],
+            -item["wins"],
+            -item["second_places"],
+            -item["third_places"],
+            -item["pole_points"],
+            item["best_finish"] or 9999,
+            item["user_id"],
+        ),
+    )
 
 
 async def ensure_championship_pilot_number_available(
@@ -442,6 +462,8 @@ async def sync_championship_settings_to_stages(session: AsyncSession, championsh
 def validate_championship_dates(championship: Championship) -> None:
     if championship.registration_end <= championship.registration_start:
         raise HTTPException(status_code=400, detail="Registration end must be after registration start")
+    if championship.registration_end >= championship.championship_start:
+        raise HTTPException(status_code=400, detail="Registration must end before the championship starts")
     if championship.championship_end <= championship.championship_start:
         raise HTTPException(status_code=400, detail="Championship end must be after championship start")
     if championship.registration_end > championship.championship_end:

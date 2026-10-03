@@ -1,13 +1,18 @@
 import unittest
 
-from app.routers.app_settings import DEFAULT_AVATAR_URL, DEFAULT_LOGOS, DEFAULT_RATING_CHANGE_COEFFICIENT, DEFAULT_REQUESTS_PER_IP_PER_MINUTE, DEFAULT_REQUESTS_PER_USER_PER_MINUTE, DEFAULT_SR_PER_RACE, branding_settings_from_value, system_settings_from_value
+from app.routers.app_settings import DEFAULT_AVATAR_URL, DEFAULT_BROWSER_ICON_URL, DEFAULT_BROWSER_TITLE, DEFAULT_LOGOS, DEFAULT_RATING_CHANGE_COEFFICIENT, DEFAULT_REQUESTS_PER_IP_PER_MINUTE, DEFAULT_REQUESTS_PER_USER_PER_MINUTE, DEFAULT_SR_PER_RACE, branding_settings_from_value, system_settings_from_value
 
 
 class BrandingSettingsTest(unittest.TestCase):
     def test_defaults_and_independent_theme_values(self):
         self.assertEqual(
             branding_settings_from_value(None).model_dump(),
-            {**DEFAULT_LOGOS, "default_avatar_url": DEFAULT_AVATAR_URL},
+            {
+                **DEFAULT_LOGOS,
+                "default_avatar_url": DEFAULT_AVATAR_URL,
+                "browser_title": DEFAULT_BROWSER_TITLE,
+                "browser_icon_url": DEFAULT_BROWSER_ICON_URL,
+            },
         )
         self.assertEqual(
             branding_settings_from_value({"light_logo_url": "/custom-light.png"}).model_dump(),
@@ -15,6 +20,8 @@ class BrandingSettingsTest(unittest.TestCase):
                 "light_logo_url": "/custom-light.png",
                 "dark_logo_url": DEFAULT_LOGOS["dark_logo_url"],
                 "default_avatar_url": DEFAULT_AVATAR_URL,
+                "browser_title": DEFAULT_BROWSER_TITLE,
+                "browser_icon_url": DEFAULT_BROWSER_ICON_URL,
             },
         )
 
@@ -26,6 +33,7 @@ class BrandingSettingsTest(unittest.TestCase):
                 "requests_per_ip_per_minute": DEFAULT_REQUESTS_PER_IP_PER_MINUTE,
                 "rating_change_coefficient": DEFAULT_RATING_CHANGE_COEFFICIENT,
                 "sr_per_race": DEFAULT_SR_PER_RACE,
+                "show_setups_section": True,
             },
         )
         normalized = system_settings_from_value({"rate_limit_per_minute": 0, "rating_change_coefficient": 99})

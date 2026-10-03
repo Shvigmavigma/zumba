@@ -6,10 +6,10 @@ from app.models import AppSetting, DEFAULT_RATING, DEFAULT_SR, MAX_RATING, MAX_S
 
 APPLIED_PENALTY_STATUSES = {PenaltyStatus.active, PenaltyStatus.appealed}
 RATING_DELTA_SCALE = 1.5
-RATING_POSITION_WEIGHT = 1000
-RATING_EXPECTATION_WEIGHT = 500
+RATING_POSITION_WEIGHT = 100
+RATING_EXPECTATION_WEIGHT = 50
 RATING_FULL_FIELD_SIZE = 8
-RATING_DELTA_LIMIT = 1000
+RATING_DELTA_LIMIT = 250
 SYSTEM_SETTINGS_KEY = "system_settings"
 RATING_ROW_KEYS = ("rating_old", "rating_new", "rating_delta", "rating_expected", "rating_score", "rating_k")
 SR_FINISH_BONUS = 0.3
@@ -264,6 +264,39 @@ def rating_positions(rows: list[dict]) -> dict[int, float]:
     return positions
 
 
+def _bound_rating_delta(old_rating: int, delta: int) -> int:
+    limited = max(-RATING_DELTA_LIMIT, min(RATING_DELTA_LIMIT, int(delta)))
+    minimum_delta = int(MIN_RATING - old_rating)
+    maximum_delta = int(MAX_RATING - old_rating)
+    return max(minimum_delta, min(maximum_delta, limited))
+
+
+def _balance_rating_changes(changes: list[dict]) -> None:
+    remainder = sum(int(change["delta"]) for change in changes)
+    if remainder > 0:
+        for change in sorted(changes, key=lambda item: item["delta"], reverse=True):
+            minimum_delta = max(int(MIN_RATING - change["old_rating"]), -RATING_DELTA_LIMIT)
+            reducible = max(0, int(change["delta"]) - minimum_delta)
+            reduction = min(remainder, reducible)
+            change["delta"] -= reduction
+            remainder -= reduction
+            if remainder == 0:
+                break
+    elif remainder < 0:
+        remainder = -remainder
+        for change in sorted(changes, key=lambda item: item["delta"]):
+            maximum_delta = min(int(MAX_RATING - change["old_rating"]), RATING_DELTA_LIMIT)
+            available = max(0, maximum_delta - int(change["delta"]))
+            increase = min(remainder, available)
+            change["delta"] += increase
+            remainder -= increase
+            if remainder == 0:
+                break
+    for change in changes:
+        change["new_rating"] = clamp_rating(change["old_rating"] + change["delta"])
+        change["delta"] = change["new_rating"] - change["old_rating"]
+
+
 def build_rating_changes(
     race_rows: list[dict],
     users: dict[int, User],
@@ -311,23 +344,29 @@ def build_rating_changes(
             * RATING_DELTA_SCALE
             / max(0.01, float(rating_change_coefficient))
         )
-        delta = max(-RATING_DELTA_LIMIT, min(RATING_DELTA_LIMIT, delta))
-        new_rating = clamp_rating(old_rating + delta)
+        delta = _bound_rating_delta(old_rating, delta)
         changes.append(
             {
                 "user_id": user_id,
                 "old_rating": old_rating,
-                "new_rating": new_rating,
-                "delta": new_rating - old_rating,
+                "new_rating": old_rating + delta,
+                "delta": delta,
                 "position": positions[user_id],
                 "score": round(score, 4),
                 "expected": round(expected_score, 4),
-                "k": round(RATING_POSITION_WEIGHT * field_factor, 4),
+                "k": round(
+                    RATING_POSITION_WEIGHT
+                    * field_factor
+                    * RATING_DELTA_SCALE
+                    / max(0.01, float(rating_change_coefficient)),
+                    4,
+                ),
                 "time_ms": rating_time_ms(row),
                 "race_count_before": race_count_before,
                 "race_count_after": race_count_before + 1,
             }
         )
+    _balance_rating_changes(changes)
     return changes, sof
 
 
