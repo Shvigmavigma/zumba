@@ -116,6 +116,8 @@
 - `frontend/src/components/AuditLogPanel.vue` — compact, refreshable staff audit history panel with explicit empty and error states.
 - `frontend/src/pages/NewsManage.vue` — news editor with single-item pin controls and pinned-first management ordering.
 - `frontend/src/pages/RaceDetails.vue` — moderator-only pilot removal action in the individual registration list, with confirmation and refreshed pagination.
+- `frontend/src/pages/RaceDetails.vue` — staff-only profile-number repair action beside the registered-pilot list, hidden for team and championship-stage races.
+- `frontend/src/pages/ChampionshipList.vue` — staff-only profile-number repair action for championship participants and all individual stages.
 - `frontend/src/pages/RaceDetails.vue` — admin-only force registration form for adding active pilots before a race starts.
 - `frontend/src/pages/RaceDetails.vue` — race-result podium cards show the best lap beside the result time and use a stacked mobile layout.
 - `frontend/src/pages/PilotList.vue` — pilot and track result tables expose mobile field labels for card layouts.
@@ -150,6 +152,7 @@
 - 2026-09-13 — manual race result editing: staff can reopen the existing manual-entry form for a saved race, with current values prefilled and replaced on save; race output also shows each driver's qualifying best lap alongside the race best lap when qualification data exists.
 - 2026-09-13 — pilot role editing: administrators can edit a role's name, display mode, border colour, and cropped image without deleting the role record; assignments keep the same role ID, so every pilot who already has the role keeps it after edits.
 - 2026-09-15 — timezone picker search: preserve the compact shared toolbar trigger while using the existing searchable combobox for a themed, keyboard-navigable timezone list with an explicit no-results state.
+- 2026-10-03 — pilot number repair: staff actions reuse the existing toolbar/button tokens and confirmation flow; profile numbers are applied to individual registrations, conflicts resolve to the nearest available number, and championship assignments stay synchronized across stages.
 
 ## Non-Goals
 - No Figma sync

@@ -24,6 +24,7 @@ from app.models import (
     User,
     UserStatus,
 )
+from app.pilot_numbers import allocate_profile_numbers, apply_pilot_number_assignments
 from app.rate_limit import limiter
 from app.race_assets import RACE_ASSET_GAMES, asset_track_id, assets_for_game, get_race_assets
 from app.race_videos import remove_race_video_file
@@ -306,11 +307,19 @@ def validate_championship_car(car_model: str | None, allowed_cars: list[str]) ->
     return car
 
 
-async def auto_register_to_stage(session: AsyncSession, stage: Race, user_id: int, car_model: str, pilot_number: int) -> None:
+async def auto_register_to_stage(
+    session: AsyncSession,
+    stage: Race,
+    user_id: int,
+    car_model: str,
+    pilot_number: int,
+    update_number: bool = True,
+) -> None:
     existing = await session.scalar(select(RaceRegistration).where(RaceRegistration.race_id == stage.id, RaceRegistration.user_id == user_id))
     if existing is not None:
         existing.car_model = car_model
-        existing.pilot_number = pilot_number
+        if update_number:
+            existing.pilot_number = pilot_number
         return
     count = await session.scalar(select(func.count()).select_from(RaceRegistration).where(RaceRegistration.race_id == stage.id))
     if (count or 0) >= stage.max_pilots:
@@ -427,7 +436,7 @@ async def sync_championship_settings_to_stages(session: AsyncSession, championsh
     for registration in registrations:
         car_model = (registration.car_model or "TBD").strip() or "TBD"
         for stage in stages:
-            await auto_register_to_stage(session, stage, registration.user_id, car_model, registration.pilot_number)
+            await auto_register_to_stage(session, stage, registration.user_id, car_model, registration.pilot_number, update_number=False)
 
 
 def validate_championship_dates(championship: Championship) -> None:
@@ -617,6 +626,59 @@ async def update_championship(
     validate_championship_dates(championship)
     await sync_championship_settings_to_stages(session, championship)
     await session.commit()
+    await session.refresh(championship)
+    return await serialize_championship(session, championship, user)
+
+
+@router.post("/{championship_id}/registrations/assign-profile-numbers", response_model=ChampionshipRead)
+@limiter.limit("20/minute")
+async def assign_championship_profile_numbers(
+    championship_id: int,
+    request: Request,
+    user: User = Depends(require_moder_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    championship = await ensure_championship(session, championship_id)
+    if championship.is_team_event:
+        raise HTTPException(status_code=400, detail="Team championships use team numbers")
+    registrations = list(
+        (
+            await session.scalars(
+                select(ChampionshipRegistration)
+                .where(
+                    ChampionshipRegistration.championship_id == championship.id,
+                    ChampionshipRegistration.status == TeamApplicationStatus.approved,
+                )
+                .order_by(ChampionshipRegistration.created_at, ChampionshipRegistration.id)
+            )
+        ).all()
+    )
+    stages = list((await session.scalars(select(Race).where(Race.championship_id == championship.id))).all())
+    stage_ids = [stage.id for stage in stages]
+    stage_registrations = []
+    if stage_ids:
+        stage_registrations = list(
+            (
+                await session.scalars(
+                    select(RaceRegistration)
+                    .where(RaceRegistration.race_id.in_(stage_ids))
+                    .order_by(RaceRegistration.registered_at, RaceRegistration.id)
+                )
+            ).all()
+        )
+    user_ids = [registration.user_id for registration in registrations]
+    user_ids.extend(registration.user_id for registration in stage_registrations)
+    users = list((await session.scalars(select(User).where(User.id.in_(set(user_ids))))).all()) if user_ids else []
+    users_by_id = {pilot.id: pilot for pilot in users}
+    ordered_user_ids = [user_id for user_id in user_ids if user_id in users_by_id]
+    try:
+        assignments = allocate_profile_numbers(ordered_user_ids, users_by_id)
+        await apply_pilot_number_assignments(session, registrations, assignments)
+        await apply_pilot_number_assignments(session, stage_registrations, assignments)
+        await session.commit()
+    except ValueError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     await session.refresh(championship)
     return await serialize_championship(session, championship, user)
 

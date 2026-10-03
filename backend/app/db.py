@@ -564,6 +564,19 @@ async def init_db() -> None:
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_team_race_registrations_team_registered_at ON team_race_registrations (team_id, registered_at)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_championships_published_registration ON championships (is_published, registration_start, registration_end)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_championships_published_dates ON championships (is_published, championship_start, championship_end)"))
+        race_pilot_number_column_exists = await conn.scalar(
+            text(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = current_schema()
+                      AND table_name = 'race_registrations'
+                      AND column_name = 'pilot_number'
+                )
+                """
+            )
+        )
         await conn.execute(text("ALTER TABLE race_registrations ADD COLUMN IF NOT EXISTS pilot_number INTEGER"))
         await conn.execute(
             text(
@@ -577,24 +590,38 @@ async def init_db() -> None:
             )
         )
         await conn.execute(text("ALTER TABLE race_registrations DROP CONSTRAINT IF EXISTS ck_race_registrations_pilot_number_range"))
-        await conn.execute(text("UPDATE race_registrations SET pilot_number = 10000 + id WHERE pilot_number IS NOT NULL"))
-        await conn.execute(
-            text(
-                """
-                WITH ranked AS (
-                    SELECT id, row_number() OVER (PARTITION BY race_id ORDER BY id) - 1 AS normalized_number
-                    FROM race_registrations
+        if not race_pilot_number_column_exists:
+            await conn.execute(text("UPDATE race_registrations SET pilot_number = 10000 + id WHERE pilot_number IS NOT NULL"))
+            await conn.execute(
+                text(
+                    """
+                    WITH ranked AS (
+                        SELECT id, row_number() OVER (PARTITION BY race_id ORDER BY id) - 1 AS normalized_number
+                        FROM race_registrations
+                    )
+                    UPDATE race_registrations
+                    SET pilot_number = ranked.normalized_number
+                    FROM ranked
+                    WHERE race_registrations.id = ranked.id
+                    """
                 )
-                UPDATE race_registrations
-                SET pilot_number = ranked.normalized_number
-                FROM ranked
-                WHERE race_registrations.id = ranked.id
-                """
             )
-        )
         await conn.execute(text("ALTER TABLE race_registrations ADD CONSTRAINT ck_race_registrations_pilot_number_range CHECK (pilot_number >= 0 AND pilot_number <= 999)"))
         await conn.execute(text("ALTER TABLE race_registrations ALTER COLUMN pilot_number SET NOT NULL"))
         await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_race_registration_race_pilot_number ON race_registrations (race_id, pilot_number)"))
+        championship_pilot_number_column_exists = await conn.scalar(
+            text(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = current_schema()
+                      AND table_name = 'championship_registrations'
+                      AND column_name = 'pilot_number'
+                )
+                """
+            )
+        )
         await conn.execute(text("ALTER TABLE championship_registrations ADD COLUMN IF NOT EXISTS pilot_number INTEGER"))
         await conn.execute(
             text(
@@ -608,21 +635,22 @@ async def init_db() -> None:
             )
         )
         await conn.execute(text("ALTER TABLE championship_registrations DROP CONSTRAINT IF EXISTS ck_championship_registrations_pilot_number_range"))
-        await conn.execute(text("UPDATE championship_registrations SET pilot_number = 10000 + id WHERE pilot_number IS NOT NULL"))
-        await conn.execute(
-            text(
-                """
-                WITH ranked AS (
-                    SELECT id, row_number() OVER (PARTITION BY championship_id ORDER BY id) - 1 AS normalized_number
-                    FROM championship_registrations
+        if not championship_pilot_number_column_exists:
+            await conn.execute(text("UPDATE championship_registrations SET pilot_number = 10000 + id WHERE pilot_number IS NOT NULL"))
+            await conn.execute(
+                text(
+                    """
+                    WITH ranked AS (
+                        SELECT id, row_number() OVER (PARTITION BY championship_id ORDER BY id) - 1 AS normalized_number
+                        FROM championship_registrations
+                    )
+                    UPDATE championship_registrations
+                    SET pilot_number = ranked.normalized_number
+                    FROM ranked
+                    WHERE championship_registrations.id = ranked.id
+                    """
                 )
-                UPDATE championship_registrations
-                SET pilot_number = ranked.normalized_number
-                FROM ranked
-                WHERE championship_registrations.id = ranked.id
-                """
             )
-        )
         await conn.execute(text("ALTER TABLE championship_registrations ADD CONSTRAINT ck_championship_registrations_pilot_number_range CHECK (pilot_number >= 0 AND pilot_number <= 999)"))
         await conn.execute(text("ALTER TABLE championship_registrations ALTER COLUMN pilot_number SET NOT NULL"))
         await conn.execute(

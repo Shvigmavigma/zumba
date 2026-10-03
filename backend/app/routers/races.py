@@ -14,6 +14,7 @@ from app.deps import get_optional_user, require_moder_plus, require_pilot_plus
 from app.routers.app_settings import get_license_settings_value
 from app.models import AppSetting, RaceFanVote
 from app.models import Championship, ChampionshipRegistration, RACE_GAMES, Penalty, Race, RaceRegistration, RaceStatus, Role, Setup, Team, TeamApplicationStatus, TeamRaceRegistration, User, UserStatus
+from app.pilot_numbers import allocate_profile_numbers, apply_pilot_number_assignments
 from app.race_assets import DEFAULT_ACC_CAR_MODEL_IDS, get_race_assets, normalize_race_create_assets, normalize_race_update_assets
 from app.race_videos import remove_race_video_file, save_race_video_file
 from app.pilot_roles import pilot_roles_payload
@@ -1560,6 +1561,45 @@ async def update_race(
     await recalculate_race_results(session, race)
     await recalculate_all_ratings(session)
     await session.commit()
+    await session.refresh(race)
+    await attach_registered_pilots(session, [race])
+    return race
+
+
+@router.post("/{race_id}/registrations/assign-profile-numbers", response_model=RaceRead)
+@limiter.limit("20/minute")
+async def assign_race_profile_numbers(
+    race_id: int,
+    request: Request,
+    _: User = Depends(require_moder_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    race = await ensure_race(session, race_id)
+    if race.is_team_event:
+        raise HTTPException(status_code=400, detail="Team races use team numbers")
+    if race.championship_id is not None:
+        raise HTTPException(status_code=400, detail="Assign numbers from the championship")
+    if race.status in {RaceStatus.ongoing, RaceStatus.finished}:
+        raise HTTPException(status_code=400, detail="Pilot numbers can be changed only before the race starts")
+    rows = list(
+        (
+            await session.execute(
+                select(RaceRegistration, User)
+                .join(User, User.id == RaceRegistration.user_id)
+                .where(RaceRegistration.race_id == race.id)
+                .order_by(RaceRegistration.registered_at, RaceRegistration.id)
+            )
+        ).all()
+    )
+    registrations = [registration for registration, _ in rows]
+    users_by_id = {user.id: user for _, user in rows}
+    try:
+        assignments = allocate_profile_numbers((registration.user_id for registration in registrations), users_by_id)
+        await apply_pilot_number_assignments(session, registrations, assignments)
+        await session.commit()
+    except ValueError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     await session.refresh(race)
     await attach_registered_pilots(session, [race])
     return race

@@ -328,6 +328,20 @@ async function reloadSelected() {
   selectedId.value = updated.id
 }
 
+async function assignProfileNumbers() {
+  if (!selected.value || !canManage.value || selected.value.is_team_event || !window.confirm(t('championships.assignProfileNumbersConfirm', { name: selected.value.name }))) return
+  saving.value = true
+  error.value = ''
+  try {
+    const updated = await api(`/championships/${selected.value.id}/registrations/assign-profile-numbers`, { method: 'POST' })
+    replaceChampionship(updated)
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    saving.value = false
+  }
+}
+
 async function createChampionship() {
   saving.value = true
   error.value = ''
@@ -849,6 +863,10 @@ watch(standings, () => {
             <button v-if="canManage" class="button" type="button" @click="editOpen ? editOpen = false : startEditChampionship()">
               <Pencil :size="16" />
               {{ editOpen ? t('championships.closeEdit') : t('common.edit') }}
+            </button>
+            <button v-if="canManage && !selected.is_team_event && selected.participant_count" class="button" type="button" :disabled="saving" @click="assignProfileNumbers">
+              <RefreshCw :size="16" />
+              {{ t('championships.assignProfileNumbers') }}
             </button>
             <button v-if="canManage" class="button danger" type="button" :disabled="saving" @click="deleteChampionship">
               <Trash2 :size="16" />
