@@ -273,25 +273,26 @@ def _bound_rating_delta(old_rating: int, delta: int) -> int:
 
 def _balance_rating_changes(changes: list[dict]) -> None:
     remainder = sum(int(change["delta"]) for change in changes)
-    if remainder > 0:
-        for change in sorted(changes, key=lambda item: item["delta"], reverse=True):
-            minimum_delta = max(int(MIN_RATING - change["old_rating"]), -RATING_DELTA_LIMIT)
-            reducible = max(0, int(change["delta"]) - minimum_delta)
-            reduction = min(remainder, reducible)
-            change["delta"] -= reduction
-            remainder -= reduction
-            if remainder == 0:
-                break
-    elif remainder < 0:
-        remainder = -remainder
-        for change in sorted(changes, key=lambda item: item["delta"]):
-            maximum_delta = min(int(MAX_RATING - change["old_rating"]), RATING_DELTA_LIMIT)
-            available = max(0, maximum_delta - int(change["delta"]))
-            increase = min(remainder, available)
-            change["delta"] += increase
-            remainder -= increase
-            if remainder == 0:
-                break
+    # ponytail: only correct rounding-sized drift; do not force winners down
+    # when other drivers already sit at the minimum rating.
+    if abs(remainder) <= len(changes):
+        if remainder > 0:
+            for change in sorted(changes, key=lambda item: item["delta"], reverse=True):
+                reducible = max(0, int(change["delta"]))
+                reduction = min(remainder, reducible)
+                change["delta"] -= reduction
+                remainder -= reduction
+                if remainder == 0:
+                    break
+        elif remainder < 0:
+            remainder = -remainder
+            for change in sorted(changes, key=lambda item: item["delta"]):
+                available = max(0, -int(change["delta"]))
+                increase = min(remainder, available)
+                change["delta"] += increase
+                remainder -= increase
+                if remainder == 0:
+                    break
     for change in changes:
         change["new_rating"] = clamp_rating(change["old_rating"] + change["delta"])
         change["delta"] = change["new_rating"] - change["old_rating"]

@@ -99,6 +99,30 @@ class ChampionshipAndRatingTests(TestCase):
 
         self.assertEqual(maxed_changes[0]["new_rating"], 10000)
 
+    def test_repeated_wins_keep_progressing_toward_rating_maximum(self):
+        users = {
+            user_id: SimpleNamespace(
+                rating=1000,
+                rating_race_count=0,
+                game_ratings={"ACC": {"rating": 1000, "race_count": 0}},
+                exclude_from_rer=False,
+            )
+            for user_id in range(1, 9)
+        }
+        winner_ratings = []
+        for _ in range(130):
+            rows = [{"user_id": user_id, "position": user_id, "finish_ms": user_id * 1000} for user_id in users]
+            changes, _ = build_rating_changes(rows, users, "ACC", 1.0)
+            for change in changes:
+                user = users[change["user_id"]]
+                user.rating = change["new_rating"]
+                user.rating_race_count = change["race_count_after"]
+                user.game_ratings["ACC"] = {"rating": change["new_rating"], "race_count": change["race_count_after"]}
+            winner_ratings.append(users[1].rating)
+
+        self.assertGreater(winner_ratings[29], winner_ratings[19])
+        self.assertEqual(next(index + 1 for index, rating in enumerate(winner_ratings) if rating >= 10000), 119)
+
 
 if __name__ == "__main__":
     import unittest
