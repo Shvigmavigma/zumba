@@ -121,7 +121,7 @@ class ChampionshipAndRatingTests(TestCase):
             winner_ratings.append(users[1].rating)
 
         self.assertGreater(winner_ratings[29], winner_ratings[19])
-        self.assertEqual(next(index + 1 for index, rating in enumerate(winner_ratings) if rating >= 10000), 119)
+        self.assertEqual(next(index + 1 for index, rating in enumerate(winner_ratings) if rating >= 10000), 71)
 
 
 if __name__ == "__main__":

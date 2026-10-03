@@ -5,7 +5,8 @@ from app.models import AppSetting, DEFAULT_RATING, DEFAULT_SR, MAX_RATING, MAX_S
 
 
 APPLIED_PENALTY_STATUSES = {PenaltyStatus.active, PenaltyStatus.appealed}
-RATING_DELTA_SCALE = 1.5
+# Faster progression: a full-field winner starting at 1000 reaches 10000 in ~71 races.
+RATING_DELTA_SCALE = 2.5
 RATING_POSITION_WEIGHT = 100
 RATING_EXPECTATION_WEIGHT = 50
 RATING_FULL_FIELD_SIZE = 8
