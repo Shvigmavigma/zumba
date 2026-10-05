@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
@@ -10,14 +10,19 @@ import PilotRoles from '../components/PilotRoles.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
 import { DEFAULT_LICENSE_TIERS, RATING_GAMES, formatPilotNumber, formatRating, normalizeLicenseTiers, ratingForGame, ratingLicenseTier, ratingRaceCountForGame, teamShortName } from '../pilotDisplay'
+import { state } from '../store'
 import { formatShortDate } from '../timezone'
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const pilot = ref(null)
 const error = ref('')
+const adminOpenError = ref('')
+const adminOpening = ref(false)
 const avatarViewerOpen = ref(false)
 const licenseTiers = ref(DEFAULT_LICENSE_TIERS)
+const canManagePilot = computed(() => state.user?.role === 'admin' && state.user?.status === 'active')
 
 function formatDate(value) {
   return formatShortDate(value, { month: 'long' })
@@ -33,6 +38,21 @@ function pilotLicense() {
 
 function rerValue(game) {
   return formatRating(ratingForGame(pilot.value, game))
+}
+
+async function openPilotAdmin() {
+  if (!pilot.value || !canManagePilot.value || adminOpening.value) return
+  adminOpening.value = true
+  adminOpenError.value = ''
+  try {
+    // The existing admin endpoint checks the session on the server; a zero limit returns no user data.
+    await api('/users/admin?limit=0')
+    await router.push({ path: '/admin/users', query: { focusUser: String(pilot.value.id) } })
+  } catch {
+    adminOpenError.value = t('profile.adminOpenError')
+  } finally {
+    adminOpening.value = false
+  }
 }
 
 const ratingRows = computed(() => RATING_GAMES.map((game) => ({
@@ -75,6 +95,13 @@ onMounted(async () => {
             <LicenseBadge :user="pilot" game="ACC" />
             <span class="pill">SR {{ pilot.sr }}</span>
           </div>
+        </div>
+
+        <div v-if="canManagePilot" class="toolbar pilot-profile-admin-action">
+          <button class="button small" type="button" :disabled="adminOpening" @click="openPilotAdmin">
+            {{ adminOpening ? t('profile.adminChecking') : t('profile.adminManagePilot') }}
+          </button>
+          <p v-if="adminOpenError" class="error" role="alert">{{ adminOpenError }}</p>
         </div>
 
         <div class="pilot-profile-badges">
