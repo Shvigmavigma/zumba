@@ -20,6 +20,7 @@ import { gameOptions, roleLabel, statusLabel } from '../i18nLabels'
 import { isGifFile } from '../media'
 import { setLicenseTiers } from '../licenseSettings'
 import { DEFAULT_LICENSE_TIERS, formatPilotNumber, formatRating, licenseBadgeStyle, normalizeLicenseTiers, ratingForGame, teamShortName } from '../pilotDisplay'
+import { fetchAllAdminUserMatches } from '../adminUserSearch'
 import { setSession, state } from '../store'
 
 const { t } = useI18n()
@@ -33,6 +34,10 @@ const timeoutDialogUser = ref(null)
 const timeoutUntil = ref('')
 const timeoutSaving = ref(false)
 const detailDialogUser = ref(null)
+const relatedAccountsDialog = ref(null)
+const relatedAccountsLoading = ref(false)
+const relatedAccountsError = ref('')
+let relatedAccountsRequestId = 0
 const editDialogUser = ref(null)
 const editForm = ref({})
 const teams = ref([])
@@ -846,7 +851,8 @@ async function chooseRole(user, role) {
   busyUsers.value = { ...busyUsers.value, [user.id]: true }
   try {
     user.role = role
-    await api(`/users/${user.id}/role`, { method: 'PATCH', body: { role } })
+    const updatedUser = await api(`/users/${user.id}/role`, { method: 'PATCH', body: { role } })
+    mergeAdminUserSnapshot(user, updatedUser)
   } catch (err) {
     user.role = previousRole
     error.value = err.message
@@ -859,7 +865,8 @@ async function ban(user) {
   if (user.is_system_admin || user.role === 'admin') return
   busyUsers.value = { ...busyUsers.value, [user.id]: true }
   try {
-    await api(`/users/${user.id}/ban`, { method: 'POST' })
+    const updatedUser = await api(`/users/${user.id}/ban`, { method: 'POST' })
+    mergeAdminUserSnapshot(user, updatedUser)
     await load()
   } catch (err) {
     error.value = err.message
@@ -872,7 +879,8 @@ async function unban(user) {
   if (user.is_system_admin) return
   busyUsers.value = { ...busyUsers.value, [user.id]: true }
   try {
-    await api(`/users/${user.id}/unban`, { method: 'POST' })
+    const updatedUser = await api(`/users/${user.id}/unban`, { method: 'POST' })
+    mergeAdminUserSnapshot(user, updatedUser)
     await load()
   } catch (err) {
     error.value = err.message
@@ -949,6 +957,14 @@ function updateUserInList(updatedUser) {
   if (updatedUser.id === state.user?.id) {
     setSession(state.token, updatedUser)
   }
+}
+
+function mergeAdminUserSnapshot(user, changes) {
+  if (!user || !changes) return
+  const updatedUser = { ...user, ...changes }
+  updateUserInList(updatedUser)
+  if (detailDialogUser.value?.id === user.id) detailDialogUser.value = updatedUser
+  if (timeoutDialogUser.value?.id === user.id) timeoutDialogUser.value = updatedUser
 }
 
 async function saveUserProfile() {
@@ -1039,7 +1055,8 @@ async function issueTimeout() {
   timeoutSaving.value = true
   busyUsers.value = { ...busyUsers.value, [user.id]: true }
   try {
-    await api(`/users/${user.id}/timeout`, { method: 'POST', body: { timeout_end: timeoutEnd.toISOString() } })
+    const updatedUser = await api(`/users/${user.id}/timeout`, { method: 'POST', body: { timeout_end: timeoutEnd.toISOString() } })
+    mergeAdminUserSnapshot(user, updatedUser)
     await load()
     timeoutDialogUser.value = null
     timeoutUntil.value = ''
@@ -1055,7 +1072,8 @@ async function endTimeout(user) {
   if (user.is_system_admin || user.status !== 'timeout') return
   busyUsers.value = { ...busyUsers.value, [user.id]: true }
   try {
-    await api(`/users/${user.id}/timeout`, { method: 'DELETE' })
+    const updatedUser = await api(`/users/${user.id}/timeout`, { method: 'DELETE' })
+    mergeAdminUserSnapshot(user, updatedUser)
     await load()
   } catch (err) {
     error.value = err.message
@@ -1071,6 +1089,7 @@ async function deleteAccount(user) {
   try {
     await api(`/users/${user.id}`, { method: 'DELETE' })
     users.value = users.value.filter((item) => item.id !== user.id)
+    if (detailDialogUser.value?.id === user.id) detailDialogUser.value = null
   } catch (err) {
     error.value = err.message
   } finally {
@@ -1103,14 +1122,14 @@ function closeUserDetails() {
 
 function editUserFromDetails() {
   const user = detailDialogUser.value
-  if (!user || !canEditFullAccount.value) return
+  if (!user || (user.is_system_admin && !canEditFullAccount.value)) return
   closeUserDetails()
   openEditDialog(user)
 }
 
 function editRolesFromDetails() {
   const user = detailDialogUser.value
-  if (!user || !canEditFullAccount.value || user.is_system_admin) return
+  if (!user || user.is_system_admin) return
   closeUserDetails()
   openPilotRoleDialog(user)
 }
@@ -1136,17 +1155,73 @@ function sharedAccountTooltip(user) {
   return parts.join(' · ')
 }
 
-function showSameDeviceAccounts(user) {
+async function openRelatedAccounts(user) {
   const deviceId = String(user?.device_id || '').trim()
-  if (!deviceId) return
-  const alreadyFiltered = userSearchBy.value === 'device_id' && userSearch.value.trim() === deviceId
-  userSearchBy.value = 'device_id'
-  userSearch.value = deviceId
-  if (page.value !== 1) {
-    page.value = 1
-  } else if (alreadyFiltered) {
-    load()
+  const ipId = String(user?.ip_id || '').trim()
+  if (!deviceId && !ipId) return
+
+  const requestId = ++relatedAccountsRequestId
+  relatedAccountsDialog.value = {
+    sourceUser: user,
+    hasDeviceId: Boolean(deviceId),
+    hasIpId: Boolean(ipId),
+    deviceMatches: [],
+    ipMatches: []
   }
+  relatedAccountsLoading.value = true
+  relatedAccountsError.value = ''
+
+  const uniqueOtherAccounts = (matches) => [...new Map(matches
+    .filter((account) => account.id !== user.id)
+    .map((account) => [account.id, account])).values()]
+  const findMatches = async (searchBy, search) => {
+    if (!search) return { matches: [], failed: false }
+    try {
+      return { matches: uniqueOtherAccounts(await fetchAllAdminUserMatches(api, searchBy, search)), failed: false }
+    } catch {
+      return { matches: [], failed: true }
+    }
+  }
+
+  try {
+    const [device, ip] = await Promise.all([
+      findMatches('device_id', deviceId),
+      findMatches('ip_id', ipId)
+    ])
+    if (requestId !== relatedAccountsRequestId) return
+    relatedAccountsDialog.value = {
+      ...relatedAccountsDialog.value,
+      deviceMatches: device.matches,
+      ipMatches: ip.matches
+    }
+    if (device.failed || ip.failed) relatedAccountsError.value = t('adminUsers.relatedLookupFailed')
+  } finally {
+    if (requestId === relatedAccountsRequestId) relatedAccountsLoading.value = false
+  }
+}
+
+function closeRelatedAccounts() {
+  relatedAccountsRequestId += 1
+  relatedAccountsDialog.value = null
+  relatedAccountsLoading.value = false
+  relatedAccountsError.value = ''
+}
+
+function openRelatedUserCard(user) {
+  closeRelatedAccounts()
+  detailDialogUser.value = user
+}
+
+function searchFromDetail(item) {
+  const searchBy = item?.searchBy
+  const search = String(item?.searchValue ?? '').trim()
+  if (!searchBy || !search) return
+  const alreadyFiltered = userSearchBy.value === searchBy && userSearch.value.trim() === search
+  detailDialogUser.value = null
+  userSearchBy.value = searchBy
+  userSearch.value = search
+  if (alreadyFiltered && page.value === 1) load()
+  else if (alreadyFiltered) page.value = 1
 }
 
 function detailRows(user) {
@@ -1157,21 +1232,21 @@ function detailRows(user) {
   const linkedLogins = user.same_device_logins || []
   const linkedIpLogins = user.same_ip_logins || []
   return [
-    { label: t('adminUsers.accountId'), value: user.id },
-    { label: t('fields.login'), value: user.login },
-    { label: t('fields.email'), value: user.email },
-    { label: t('fields.firstName'), value: user.first_name },
-    { label: t('fields.lastName'), value: user.last_name },
-    { label: t('fields.nickname'), value: user.nickname },
-    { label: t('fields.pilotNumber'), value: `#${formatPilotNumber(user.pilot_number)}` },
-    { label: t('fields.country'), value: user.country },
+    { label: t('adminUsers.accountId'), value: user.id, searchBy: 'id', searchValue: user.id },
+    { label: t('fields.login'), value: user.login, searchBy: 'login', searchValue: user.login },
+    { label: t('fields.email'), value: user.email, searchBy: 'email', searchValue: user.email },
+    { label: t('fields.firstName'), value: user.first_name, searchBy: 'name', searchValue: user.first_name },
+    { label: t('fields.lastName'), value: user.last_name, searchBy: 'name', searchValue: user.last_name },
+    { label: t('fields.nickname'), value: user.nickname, searchBy: 'nickname', searchValue: user.nickname },
+    { label: t('fields.pilotNumber'), value: `#${formatPilotNumber(user.pilot_number)}`, searchBy: 'pilot_number', searchValue: user.pilot_number },
+    { label: t('fields.country'), value: user.country, searchBy: 'country', searchValue: user.country },
     { label: t('fields.discord'), value: user.discord },
-    { label: t('common.role'), value: roleLabel(t, user.role) },
-    { label: t('common.status'), value: statusLabel(t, user.status) },
+    { label: t('common.role'), value: roleLabel(t, user.role), searchBy: 'role', searchValue: user.role },
+    { label: t('common.status'), value: statusLabel(t, user.status), searchBy: 'status', searchValue: user.status },
     { label: t('adminUsers.systemAdmin'), value: user.is_system_admin ? t('common.yes') : t('common.no') },
     { label: t('fields.games'), value: user.games },
     { label: t('adminUsers.teamId'), value: user.team_id },
-    { label: t('fields.team'), value: teamShortName(user.team_name, user.team_abbreviation) },
+    { label: t('fields.team'), value: teamShortName(user.team_name, user.team_abbreviation), searchBy: 'team', searchValue: user.team_name || user.team_abbreviation },
     { label: t('fields.sr'), value: user.sr },
     { label: t('fields.rating'), value: formatRating(user.rating) },
     { label: t('adminUsers.simulatorRatings'), value: ratings },
@@ -1182,11 +1257,11 @@ function detailRows(user) {
     { label: t('adminUsers.excludeFromRer'), value: user.exclude_from_rer ? t('common.yes') : t('common.no') },
     { label: t('fields.joinedAt'), value: formatDateTime(user.created_at) },
     { label: t('profile.updatedAt'), value: formatDateTime(user.updated_at) },
-    { label: t('adminUsers.steamBlacklistSteamId'), value: user.steam_id },
-    { label: t('adminUsers.device'), value: user.device_label },
-    { label: t('adminUsers.deviceId'), value: user.device_id },
+    { label: t('adminUsers.steamBlacklistSteamId'), value: user.steam_id, searchBy: 'steam_id', searchValue: user.steam_id },
+    { label: t('adminUsers.device'), value: user.device_label, searchBy: 'device', searchValue: user.device_label },
+    { label: t('adminUsers.deviceId'), value: user.device_id, searchBy: 'device_id', searchValue: user.device_id },
     { label: t('adminUsers.linkedAccounts'), value: linkedLogins.length ? `${user.same_device_account_count || linkedLogins.length + 1}: ${linkedLogins.join(', ')}` : t('common.none') },
-    { label: t('adminUsers.ipId'), value: user.ip_id },
+    { label: t('adminUsers.ipId'), value: user.ip_id, searchBy: 'ip_id', searchValue: user.ip_id },
     { label: t('adminUsers.sharedIpAccounts'), value: linkedIpLogins.length ? `${user.same_ip_account_count || linkedIpLogins.length + 1}: ${linkedIpLogins.join(', ')}` : t('common.none') },
     { label: t('profile.banEnd'), value: formatDateTime(user.ban_end) },
     { label: t('profile.timeoutStart'), value: formatDateTime(user.timeout_start) },
@@ -2076,12 +2151,12 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
                   <Eye :size="16" />
                 </button>
                 <button
-                  v-if="user.device_id"
+                  v-if="user.device_id || user.ip_id"
                   class="icon-button"
                   type="button"
-                  :title="t('adminUsers.showSameDeviceAccounts')"
-                  :aria-label="t('adminUsers.showSameDeviceAccounts')"
-                  @click="showSameDeviceAccounts(user)"
+                  :title="t('adminUsers.showRelatedAccounts')"
+                  :aria-label="t('adminUsers.showRelatedAccounts')"
+                  @click="openRelatedAccounts(user)"
                 >
                   <Monitor :size="16" />
                 </button>
@@ -2171,11 +2246,11 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
               <ArrowLeft :size="15" />
               {{ t('adminUsers.backToPilotProfile') }}
             </button>
-            <button v-if="detailDialogUser.device_id" class="button small" type="button" @click="showSameDeviceAccounts(detailDialogUser); closeUserDetails()">
+            <button v-if="detailDialogUser.device_id || detailDialogUser.ip_id" class="button small" type="button" @click="openRelatedAccounts(detailDialogUser)">
               <Monitor :size="15" />
-              {{ t('adminUsers.showSameDeviceAccounts') }}
+              {{ t('adminUsers.showRelatedAccounts') }}
             </button>
-            <button v-if="canEditFullAccount" class="button small" type="button" @click="editUserFromDetails">
+            <button v-if="!detailDialogUser.is_system_admin || canEditFullAccount" class="button small" type="button" @click="editUserFromDetails">
               <Edit3 :size="15" />
               {{ t('common.edit') }}
             </button>
@@ -2191,8 +2266,78 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
             <h3>{{ detailDialogUser.first_name }} {{ detailDialogUser.last_name }}</h3>
             <p class="muted">@{{ detailDialogUser.login }} · {{ detailDialogUser.nickname }}</p>
             <PilotRoles :roles="detailDialogUser.pilot_roles" />
-            <button v-if="canEditFullAccount && !detailDialogUser.is_system_admin" class="button small admin-user-details-roles-button" type="button" @click="editRolesFromDetails">
+            <button v-if="!detailDialogUser.is_system_admin" class="button small admin-user-details-roles-button" type="button" @click="editRolesFromDetails">
               {{ t('adminUsers.editPilotRoles') }}
+            </button>
+          </div>
+        </div>
+
+        <div class="admin-user-controls">
+          <strong>{{ t('adminUsers.accountActions') }}</strong>
+          <div class="admin-user-role-controls">
+            <span>{{ t('adminUsers.changeAccountRole') }}</span>
+            <div class="role-segment admin-user-role-segment" role="group" :aria-label="t('adminUsers.changeAccountRole')">
+              <button
+                v-for="role in roles"
+                :key="role"
+                class="role-segment-option"
+                :class="{ 'is-selected': detailDialogUser.role === role }"
+                type="button"
+                :aria-pressed="detailDialogUser.role === role"
+                :disabled="detailDialogUser.is_system_admin || Boolean(busyUsers[detailDialogUser.id])"
+                @click="chooseRole(detailDialogUser, role)"
+              >{{ roleLabel(t, role) }}</button>
+            </div>
+          </div>
+          <div class="admin-user-admin-actions">
+            <button
+              v-if="detailDialogUser.status !== 'banned'"
+              class="button small"
+              type="button"
+              :disabled="detailDialogUser.is_system_admin || detailDialogUser.role === 'admin' || Boolean(busyUsers[detailDialogUser.id])"
+              @click="ban(detailDialogUser)"
+            >
+              <Ban :size="15" />
+              {{ t('common.ban') }}
+            </button>
+            <button
+              v-if="detailDialogUser.status === 'banned'"
+              class="button small"
+              type="button"
+              :disabled="detailDialogUser.is_system_admin || Boolean(busyUsers[detailDialogUser.id])"
+              @click="unban(detailDialogUser)"
+            >
+              <Undo2 :size="15" />
+              {{ t('common.unban') }}
+            </button>
+            <button
+              v-if="detailDialogUser.status !== 'timeout'"
+              class="button small"
+              type="button"
+              :disabled="detailDialogUser.is_system_admin || detailDialogUser.role === 'admin' || Boolean(busyUsers[detailDialogUser.id])"
+              @click="openTimeoutDialog(detailDialogUser)"
+            >
+              <Timer :size="15" />
+              {{ t('adminUsers.issueTimeout') }}
+            </button>
+            <button
+              v-if="detailDialogUser.status === 'timeout'"
+              class="button small"
+              type="button"
+              :disabled="detailDialogUser.is_system_admin || Boolean(busyUsers[detailDialogUser.id])"
+              @click="endTimeout(detailDialogUser)"
+            >
+              <TimerOff :size="15" />
+              {{ t('adminUsers.endTimeout') }}
+            </button>
+            <button
+              class="button small danger"
+              type="button"
+              :disabled="detailDialogUser.is_system_admin || detailDialogUser.id === state.user?.id || Boolean(busyUsers[detailDialogUser.id])"
+              @click="deleteAccount(detailDialogUser)"
+            >
+              <Trash2 :size="15" />
+              {{ t('common.delete') }}
             </button>
           </div>
         </div>
@@ -2200,7 +2345,14 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
         <div class="admin-user-details-grid">
           <div v-for="item in detailRows(detailDialogUser)" :key="item.label" class="admin-user-detail-item">
             <span>{{ item.label }}</span>
-            <strong>{{ detailValue(item.value) }}</strong>
+            <button
+              v-if="item.searchBy && item.searchValue !== null && item.searchValue !== undefined && String(item.searchValue).trim()"
+              class="admin-user-detail-search"
+              type="button"
+              :title="t('adminUsers.searchForValue')"
+              @click="searchFromDetail(item)"
+            >{{ detailValue(item.value) }}</button>
+            <strong v-else>{{ detailValue(item.value) }}</strong>
           </div>
         </div>
 
@@ -2214,6 +2366,63 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
             <X :size="16" />
             {{ t('common.close') }}
           </button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="relatedAccountsDialog" class="penalty-modal-backdrop" @click.self="closeRelatedAccounts">
+      <section class="penalty-modal admin-related-accounts-modal card" role="dialog" aria-modal="true" :aria-label="t('adminUsers.relatedAccountsTitle')">
+        <div class="penalty-modal-head section-header">
+          <div>
+            <h2>{{ t('adminUsers.relatedAccountsTitle') }}</h2>
+            <p>{{ relatedAccountsDialog.sourceUser.login }} · #{{ formatPilotNumber(relatedAccountsDialog.sourceUser.pilot_number) }}</p>
+          </div>
+          <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="closeRelatedAccounts">
+            <X :size="18" />
+          </button>
+        </div>
+
+        <p v-if="relatedAccountsLoading" class="empty-row">{{ t('adminUsers.relatedLookupLoading') }}</p>
+        <p v-if="relatedAccountsError" class="admin-related-accounts-error" role="status">{{ relatedAccountsError }}</p>
+
+        <div class="admin-related-accounts-groups">
+          <section v-if="relatedAccountsDialog.hasDeviceId" class="admin-related-accounts-group">
+            <h3><Monitor :size="16" /> {{ t('adminUsers.deviceMatches', { count: relatedAccountsDialog.deviceMatches.length }) }}</h3>
+            <p v-if="!relatedAccountsLoading && !relatedAccountsDialog.deviceMatches.length" class="muted">{{ t('adminUsers.relatedLookupEmpty') }}</p>
+            <article v-for="account in relatedAccountsDialog.deviceMatches" :key="account.id" class="admin-related-account">
+              <UserAvatar :src="account.avatar_url" :color="account.avatar_color" :label="account.nickname || account.login" class="is-mini" />
+              <div class="admin-related-account-info">
+                <strong>{{ account.nickname || `${account.first_name || ''} ${account.last_name || ''}`.trim() || account.login }}</strong>
+                <span>@{{ account.login }} · #{{ formatPilotNumber(account.pilot_number) }} · ID {{ account.id }} · {{ roleLabel(t, account.role) }} · {{ statusLabel(t, account.status) }}</span>
+                <small v-if="account.device_label">{{ t('adminUsers.relatedDeviceSnapshot', { value: account.device_label }) }}</small>
+                <small v-if="account.device_id">{{ t('adminUsers.relatedDeviceIdSnapshot', { value: account.device_id }) }}</small>
+                <small v-if="account.ip_id">{{ t('adminUsers.relatedIpSnapshot', { value: account.ip_id }) }}</small>
+              </div>
+              <button class="button small admin-related-account-open" type="button" @click="openRelatedUserCard(account)">
+                <Eye :size="14" />
+                {{ t('adminUsers.openMatchedAccount') }}
+              </button>
+            </article>
+          </section>
+
+          <section v-if="relatedAccountsDialog.hasIpId" class="admin-related-accounts-group">
+            <h3><Shield :size="16" /> {{ t('adminUsers.ipMatches', { count: relatedAccountsDialog.ipMatches.length }) }}</h3>
+            <p v-if="!relatedAccountsLoading && !relatedAccountsDialog.ipMatches.length" class="muted">{{ t('adminUsers.relatedLookupEmpty') }}</p>
+            <article v-for="account in relatedAccountsDialog.ipMatches" :key="account.id" class="admin-related-account">
+              <UserAvatar :src="account.avatar_url" :color="account.avatar_color" :label="account.nickname || account.login" class="is-mini" />
+              <div class="admin-related-account-info">
+                <strong>{{ account.nickname || `${account.first_name || ''} ${account.last_name || ''}`.trim() || account.login }}</strong>
+                <span>@{{ account.login }} · #{{ formatPilotNumber(account.pilot_number) }} · ID {{ account.id }} · {{ roleLabel(t, account.role) }} · {{ statusLabel(t, account.status) }}</span>
+                <small v-if="account.device_label">{{ t('adminUsers.relatedDeviceSnapshot', { value: account.device_label }) }}</small>
+                <small v-if="account.device_id">{{ t('adminUsers.relatedDeviceIdSnapshot', { value: account.device_id }) }}</small>
+                <small v-if="account.ip_id">{{ t('adminUsers.relatedIpSnapshot', { value: account.ip_id }) }}</small>
+              </div>
+              <button class="button small admin-related-account-open" type="button" @click="openRelatedUserCard(account)">
+                <Eye :size="14" />
+                {{ t('adminUsers.openMatchedAccount') }}
+              </button>
+            </article>
+          </section>
         </div>
       </section>
     </div>
