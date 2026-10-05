@@ -16,7 +16,7 @@ from app.avatar_uploads import ensure_avatar_upload_allowed, mark_avatar_uploade
 from app.config import get_settings
 from app.database_backup import create_database_backup
 from app.db import get_session
-from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, get_current_user, is_system_admin, require_admin, require_moder_plus, require_pilot_plus, require_system_admin
+from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, ensure_user_role_change_allowed, get_current_user, is_system_admin, require_admin, require_moder_plus, require_pilot_plus, require_system_admin
 from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, PilotRoleBadge, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamLiveryArchive, TeamLiveryImage, TeamRaceRegistration, User, UserConsent, UserStatus, default_game_ratings, utc_now
 from app.privacy import record_consent
 from app.race_videos import remove_race_video_file
@@ -1449,14 +1449,13 @@ async def update_role(
     user_id: int,
     request: Request,
     payload: RoleUpdate,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    if is_system_admin(user) and payload.role != Role.admin:
-        raise HTTPException(status_code=403, detail="The system administrator role cannot be changed")
+    ensure_user_role_change_allowed(admin, user, payload.role)
     user.role = payload.role
     await session.commit()
     await session.refresh(user)

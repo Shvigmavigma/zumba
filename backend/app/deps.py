@@ -81,6 +81,19 @@ def ensure_not_system_admin(user: User) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="The system administrator is protected")
 
 
+def ensure_user_role_change_allowed(actor: User, target: User, requested_role: Role) -> None:
+    if requested_role == Role.admin and not is_system_admin(actor):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the system administrator can grant the administrator role",
+        )
+    if is_system_admin(target) and requested_role != Role.admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The system administrator role cannot be changed",
+        )
+
+
 def require_roles(allowed: set[Role]) -> Callable[[User], User]:
     async def dependency(user: User = Depends(get_current_user)) -> User:
         require_active(user)

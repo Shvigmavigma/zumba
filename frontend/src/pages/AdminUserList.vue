@@ -27,7 +27,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const users = ref([])
-const roles = ['admin', 'moder', 'marshall', 'smm', 'pilot']
+const allRoles = ['admin', 'moder', 'marshall', 'smm', 'pilot']
 const error = ref('')
 const busyUsers = ref({})
 const timeoutDialogUser = ref(null)
@@ -138,6 +138,11 @@ const page = ref(1)
 const pageSize = 25
 const visibleUsers = computed(() => users.value)
 const canEditFullAccount = computed(() => state.user?.is_system_admin === true)
+function roleOptionsFor(user) {
+  return canEditFullAccount.value || user?.role === 'admin'
+    ? allRoles
+    : allRoles.filter(role => role !== 'admin')
+}
 const teamOptions = computed(() => [{ id: null, name: t('adminUsers.noTeam'), abbreviation: '' }, ...teams.value])
 const editableRoles = ['admin', 'moder', 'marshall', 'smm', 'pilot']
 const editableStatuses = ['active', 'banned', 'timeout', 'unapproved']
@@ -2117,7 +2122,7 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
             <td>
               <div class="role-segment" :aria-label="t('common.role')">
                 <button
-                  v-for="role in roles"
+                  v-for="role in roleOptionsFor(user)"
                   :key="role"
                   class="role-segment-option"
                   :class="{ 'is-selected': user.role === role }"
@@ -2278,7 +2283,7 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
             <span>{{ t('adminUsers.changeAccountRole') }}</span>
             <div class="role-segment admin-user-role-segment" role="group" :aria-label="t('adminUsers.changeAccountRole')">
               <button
-                v-for="role in roles"
+                v-for="role in roleOptionsFor(detailDialogUser)"
                 :key="role"
                 class="role-segment-option"
                 :class="{ 'is-selected': detailDialogUser.role === role }"
