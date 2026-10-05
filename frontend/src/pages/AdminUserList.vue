@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Archive, Ban, ChevronDown, Download, Edit3, Eye, Monitor, Plus, Save, Shield, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
 import { api, apiDownload } from '../api'
@@ -22,6 +23,8 @@ import { DEFAULT_LICENSE_TIERS, formatPilotNumber, formatRating, licenseBadgeSty
 import { setSession, state } from '../store'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const users = ref([])
 const roles = ['admin', 'moder', 'marshall', 'smm', 'pilot']
 const error = ref('')
@@ -113,6 +116,12 @@ const dangerResult = ref('')
 const auditLogPanel = ref(null)
 const userSearch = ref('')
 const userSearchBy = ref('all')
+const focusUserQuery = typeof route.query.focusUser === 'string' ? Number(route.query.focusUser) : 0
+const focusUserId = ref(Number.isSafeInteger(focusUserQuery) && focusUserQuery > 0 ? focusUserQuery : null)
+if (focusUserId.value) {
+  userSearch.value = String(focusUserId.value)
+  userSearchBy.value = 'id'
+}
 const userSort = ref('rating_desc')
 const userRatingGame = ref('ACC')
 const page = ref(1)
@@ -285,6 +294,17 @@ async function load() {
     weatherImages.value = loadedWeatherImages
     steamBlacklist.value = loadedSteamBlacklist
     pilotRoles.value = loadedPilotRoles
+    if (focusUserId.value) {
+      const focusedUser = loadedUsers.find((user) => user.id === focusUserId.value)
+      if (focusedUser) {
+        if (focusedUser.is_system_admin && !canEditFullAccount.value) openUserDetails(focusedUser)
+        else openEditDialog(focusedUser)
+        focusUserId.value = null
+        const query = { ...route.query }
+        delete query.focusUser
+        void router.replace({ path: route.path, query })
+      }
+    }
   } catch (err) {
     error.value = err.message
   }

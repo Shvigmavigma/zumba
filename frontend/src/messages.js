@@ -262,6 +262,9 @@ export const messages = {
     profile: {
       editTitle: 'Редактирование профиля',
       favoriteCar: 'Любимая машина',
+      adminManagePilot: 'Управлять пилотом',
+      adminChecking: 'Проверка прав…',
+      adminOpenError: 'Не удалось подтвердить права администратора. Обновите страницу и попробуйте снова.',
       statsEyebrow: 'Гоночный профиль',
       statsTitle: 'Статистика заездов',
       statsBestLaps: 'Лучшие круги',
@@ -1240,6 +1243,9 @@ export const messages = {
     profile: {
       editTitle: 'Edit profile',
       favoriteCar: 'Favorite car',
+      adminManagePilot: 'Manage pilot',
+      adminChecking: 'Checking access…',
+      adminOpenError: 'Could not verify administrator access. Refresh the page and try again.',
       statsEyebrow: 'Race profile',
       statsTitle: 'Race statistics',
       statsBestLaps: 'Best laps',
