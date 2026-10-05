@@ -230,8 +230,19 @@ const raceOverviewFacts = computed(() => {
   const count = currentRace.is_team_event ? teamRegistrations.value.length : participants.value.length
   const capacity = Number(currentRace.max_pilots)
   return [
-    { key: 'registrationStart', label: t('fields.registrationStart'), value: formatDate(currentRace.registration_start) },
-    { key: 'registrationEnd', label: t('fields.registrationEnd'), value: formatDate(currentRace.datetime_end) },
+    {
+      key: 'registration',
+      label: t('raceDetails.infoRegistration'),
+      sessions: [
+        { key: 'start', label: t('fields.registrationStart'), value: formatDate(currentRace.registration_start) },
+        { key: 'end', label: t('fields.registrationEnd'), value: formatDate(currentRace.datetime_end) }
+      ]
+    },
+    {
+      key: 'mandatoryPitStops',
+      label: t('raceDetails.mandatoryPitStops'),
+      value: currentRace.required_pit_stops ?? 0
+    },
     ...(!isLmuRace.value ? [{
       key: 'participants',
       label: currentRace.is_team_event ? t('raceDetails.teams') : t('raceDetails.participants'),
@@ -241,6 +252,7 @@ const raceOverviewFacts = computed(() => {
       key: 'sessionTimes',
       label: t('raceDetails.sessionDistribution'),
       sessions: [
+        { key: 'briefing', label: t('raceDetails.briefing'), value: formatSessionTime(currentRace.briefing_start_time, currentRace.briefing_end_time) },
         { key: 'practice', label: t('raceDetails.practice'), value: formatSessionTime(currentRace.practice_start_time, currentRace.practice_end_time) },
         { key: 'qualification', label: t('fields.qualification'), value: formatSessionTime(currentRace.qualification_start_time, currentRace.qualification_end_time) },
         { key: 'race', label: t('raceDetails.raceSession'), value: formatSessionTime(currentRace.race_session_start_time, currentRace.race_session_end_time) }
@@ -3509,6 +3521,11 @@ watch(visibleParticipants, () => {
   min-width: 0;
 }
 
+.race-details-page .race-overview-fact[data-fact-key='registration'] .race-session-fact-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+}
+
 .race-details-page .race-session-fact-list span {
   min-width: 0;
   color: #b9d1f5;
@@ -3518,6 +3535,12 @@ watch(visibleParticipants, () => {
   flex: 0 0 auto;
   color: #f4f7ff;
   font-variant-numeric: tabular-nums;
+}
+
+.race-details-page .race-overview-fact[data-fact-key='registration'] .race-session-fact-list strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .race-details-page .race-overview-toggle {

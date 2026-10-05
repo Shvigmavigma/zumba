@@ -563,6 +563,9 @@ class RaceBase(BaseModel):
     qualification_end_time: time | None = None
     race_session_start_time: time | None = None
     race_session_end_time: time | None = None
+    briefing_start_time: time | None = None
+    briefing_end_time: time | None = None
+    required_pit_stops: int = Field(default=0, ge=0, le=20)
     max_pilots: int = Field(ge=1, le=500)
     car_class: str = Field(min_length=1, max_length=50)
     track: str = Field(min_length=1, max_length=100)
@@ -724,6 +727,9 @@ class RaceUpdate(BaseModel):
     qualification_end_time: time | None = None
     race_session_start_time: time | None = None
     race_session_end_time: time | None = None
+    briefing_start_time: time | None = None
+    briefing_end_time: time | None = None
+    required_pit_stops: int = Field(default=0, ge=0, le=20)
     max_pilots: int | None = Field(default=None, ge=1, le=500)
     car_class: str | None = Field(default=None, max_length=50)
     track: str | None = Field(default=None, max_length=100)

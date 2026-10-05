@@ -14505,7 +14505,7 @@ body,
   background: color-mix(in srgb, var(--panel) 92%, var(--brand-blue) 8%);
 }
 
-.race-registration-deadline-editor {
+.race-registration-window-editor {
   display: grid;
   gap: 12px;
   padding: 16px;
@@ -14514,12 +14514,22 @@ body,
   background: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%);
 }
 
-.race-registration-deadline-editor .section-header {
+.race-registration-window-editor .section-header {
   margin: 0;
 }
 
-.race-registration-deadline-editor .section-header h3 {
+.race-registration-window-editor .section-header h3 {
   margin: 0;
+}
+
+.race-registration-window-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.race-edit-main-settings {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
 }
 
 .race-session-times-editor {
@@ -14541,7 +14551,7 @@ body,
 
 .race-session-time-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -14590,6 +14600,11 @@ body,
 }
 
 @media (max-width: 560px) {
+  .race-registration-window-fields,
+  .race-edit-main-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .race-weather-grid {
     grid-template-columns: 1fr;
   }

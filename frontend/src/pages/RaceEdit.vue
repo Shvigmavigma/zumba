@@ -36,6 +36,9 @@ const form = ref({
   qualification_end_time: '',
   race_session_start_time: '',
   race_session_end_time: '',
+  briefing_start_time: '',
+  briefing_end_time: '',
+  required_pit_stops: 0,
   max_pilots: 32,
   car_class: '',
   track: '',
@@ -75,6 +78,7 @@ const weatherConditions = computed(() => [
   { key: 'storm', label: t('weather.storm') }
 ])
 const sessionTimeFields = computed(() => [
+  { key: 'briefing', label: t('raceEdit.briefing'), start: 'briefing_start_time', end: 'briefing_end_time' },
   { key: 'practice', label: t('raceEdit.practice'), start: 'practice_start_time', end: 'practice_end_time' },
   { key: 'qualification', label: t('raceEdit.qualification'), start: 'qualification_start_time', end: 'qualification_end_time' },
   { key: 'race', label: t('raceEdit.race'), start: 'race_session_start_time', end: 'race_session_end_time' }
@@ -163,6 +167,8 @@ async function submit() {
       qualification_end_time: form.value.qualification_end_time || null,
       race_session_start_time: form.value.race_session_start_time || null,
       race_session_end_time: form.value.race_session_end_time || null,
+      briefing_start_time: form.value.briefing_start_time || null,
+      briefing_end_time: form.value.briefing_end_time || null,
       lmu_results_at: isLmuRace.value ? optionalIso(form.value.lmu_results_at || form.value.datetime_start) : null,
       max_pilots: isLmuRace.value ? 1 : form.value.max_pilots,
       track: form.value.track,
@@ -200,6 +206,9 @@ onMounted(async () => {
     qualification_end_time: timeField(race.qualification_end_time),
     race_session_start_time: timeField(race.race_session_start_time),
     race_session_end_time: timeField(race.race_session_end_time),
+    briefing_start_time: timeField(race.briefing_start_time),
+    briefing_end_time: timeField(race.briefing_end_time),
+    required_pit_stops: race.required_pit_stops ?? 0,
     lmu_results_at: race.lmu_results_at ? race.lmu_results_at.slice(0, 16) : ''
   }
   modsText.value = race.mods_pack?.join('\n') || ''
@@ -233,18 +242,14 @@ onMounted(async () => {
           <input v-else v-model="form.car_class" required />
         </label>
       </div>
-      <label class="field"><span>{{ t('fields.registrationStart') }}</span><input v-model="form.registration_start" type="datetime-local" required /></label>
-      <section class="race-registration-deadline-editor">
+      <section class="race-registration-window-editor">
         <div class="section-header compact">
-          <div>
-            <h3>{{ t('raceCard.registrationCloses') }}</h3>
-            <p class="muted">{{ t('fields.registrationEnd') }}</p>
-          </div>
+          <div><h3>{{ t('raceEdit.registrationWindow') }}</h3></div>
         </div>
-        <label class="field">
-          <span>{{ t('raceCard.registrationCloses') }}</span>
-          <input v-model="form.datetime_end" type="datetime-local" required />
-        </label>
+        <div class="race-registration-window-fields">
+          <label class="field"><span>{{ t('fields.registrationStart') }}</span><input v-model="form.registration_start" type="datetime-local" required /></label>
+          <label class="field"><span>{{ t('fields.registrationEnd') }}</span><input v-model="form.datetime_end" type="datetime-local" required /></label>
+        </div>
       </section>
       <label class="field"><span>{{ t('fields.raceTime') }}</span><input v-model="form.datetime_start" type="datetime-local" required /></label>
       <section class="race-session-times-editor">
@@ -287,8 +292,9 @@ onMounted(async () => {
         <span>{{ t('fields.lmuResultsAt') }}</span>
         <input v-model="form.lmu_results_at" type="datetime-local" required />
       </label>
-      <div class="form-row">
+      <div class="form-row race-edit-main-settings">
         <label v-if="!isLmuRace" class="field"><span>{{ t('fields.maxPilots') }}</span><input v-model.number="form.max_pilots" type="number" min="1" required /></label>
+        <label class="field"><span>{{ t('raceDetails.mandatoryPitStops') }}</span><input v-model.number="form.required_pit_stops" type="number" min="0" max="20" step="1" required /></label>
         <label class="field">
           <span>{{ t('fields.game') }}</span>
           <select v-model="form.game" @change="handleGameChange">
