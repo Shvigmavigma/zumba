@@ -47,7 +47,7 @@ async function openPilotAdmin() {
   try {
     // The existing admin endpoint checks the session on the server; a zero limit returns no user data.
     await api('/users/admin?limit=0')
-    await router.push({ path: '/admin/users', query: { focusUser: String(pilot.value.id) } })
+    await router.push({ path: '/admin/users', query: { focusUser: String(pilot.value.id), returnPilotId: String(pilot.value.id) } })
   } catch {
     adminOpenError.value = t('profile.adminOpenError')
   } finally {
