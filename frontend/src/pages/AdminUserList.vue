@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Archive, Ban, ChevronDown, Download, Edit3, Eye, Monitor, Plus, Save, Shield, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
+import { Archive, ArrowLeft, Ban, ChevronDown, Download, Edit3, Eye, Monitor, Plus, Save, Shield, Timer, TimerOff, Trash2, Undo2, Upload, X } from 'lucide-vue-next'
 import { api, apiDownload } from '../api'
 import { brandingSettings, setBrandingSettings } from '../brandingSettings'
 import AvatarViewer from '../components/AvatarViewer.vue'
@@ -118,9 +118,14 @@ const userSearch = ref('')
 const userSearchBy = ref('all')
 const focusUserQuery = typeof route.query.focusUser === 'string' ? Number(route.query.focusUser) : 0
 const focusUserId = ref(Number.isSafeInteger(focusUserQuery) && focusUserQuery > 0 ? focusUserQuery : null)
+const returnPilotQuery = typeof route.query.returnPilotId === 'string' ? Number(route.query.returnPilotId) : 0
+const returnPilotId = Number.isSafeInteger(returnPilotQuery) && returnPilotQuery > 0 ? returnPilotQuery : null
 if (focusUserId.value) {
   userSearch.value = String(focusUserId.value)
   userSearchBy.value = 'id'
+}
+function returnToPilotCard() {
+  if (returnPilotId) void router.push(`/pilots/${returnPilotId}`)
 }
 const userSort = ref('rating_desc')
 const userRatingGame = ref('ACC')
@@ -2162,6 +2167,10 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
             <p>{{ detailDialogUser.login }} · #{{ formatPilotNumber(detailDialogUser.pilot_number) }}</p>
           </div>
           <div class="admin-user-details-head-actions">
+            <button v-if="returnPilotId" class="button small" type="button" @click="returnToPilotCard">
+              <ArrowLeft :size="15" />
+              {{ t('adminUsers.backToPilotProfile') }}
+            </button>
             <button v-if="detailDialogUser.device_id" class="button small" type="button" @click="showSameDeviceAccounts(detailDialogUser); closeUserDetails()">
               <Monitor :size="15" />
               {{ t('adminUsers.showSameDeviceAccounts') }}
@@ -2300,9 +2309,15 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
             <h2>{{ t('adminUsers.editProfileTitle') }}</h2>
             <p>{{ editDialogUser.login }} · #{{ formatPilotNumber(editDialogUser.pilot_number) }}</p>
           </div>
-          <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="closeEditDialog">
-            <X :size="18" />
-          </button>
+          <div class="admin-user-details-head-actions">
+            <button v-if="returnPilotId" class="button small" type="button" @click="returnToPilotCard">
+              <ArrowLeft :size="15" />
+              {{ t('adminUsers.backToPilotProfile') }}
+            </button>
+            <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="closeEditDialog">
+              <X :size="18" />
+            </button>
+          </div>
         </div>
 
         <div class="avatar-edit-panel">
