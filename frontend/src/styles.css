@@ -19794,3 +19794,192 @@ body,
   align-items: flex-start;
   font-size: var(--small-text-size);
 }
+
+.pilot-livery-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.pilot-livery-head,
+.pilot-livery-manage,
+.pilot-livery-details,
+.pilot-livery-downloads,
+.pilot-livery-dialog-head,
+.pilot-livery-dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pilot-livery-head,
+.pilot-livery-details,
+.pilot-livery-dialog-head {
+  justify-content: space-between;
+}
+
+.pilot-livery-head h2,
+.pilot-livery-head p,
+.pilot-livery-dialog-head h2 {
+  margin: 0;
+}
+
+.pilot-livery-head h2,
+.pilot-livery-dialog-head h2 {
+  font-size: clamp(18px, 2vw, 22px);
+}
+
+.pilot-livery-head p {
+  margin-top: 5px;
+}
+
+.pilot-livery-manage,
+.pilot-livery-downloads {
+  flex-wrap: wrap;
+}
+
+.pilot-livery-details {
+  align-items: stretch;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.pilot-livery-gallery {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pilot-livery-summary {
+  display: grid;
+  flex: 1 1 440px;
+  align-content: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.pilot-livery-name {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.pilot-livery-name strong {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-weight: 850;
+}
+
+.pilot-livery-name code {
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.pilot-livery-downloads .button {
+  gap: 7px;
+}
+
+.pilot-livery-empty,
+.pilot-livery-message {
+  margin: 0;
+}
+
+.pilot-livery-message {
+  color: var(--success);
+  font-weight: 750;
+}
+
+.pilot-livery-dialog {
+  width: min(720px, calc(100vw - 28px));
+  max-width: 720px;
+  max-height: min(88vh, 900px);
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 22px 70px rgba(4, 16, 38, .36);
+}
+
+.pilot-livery-dialog::backdrop {
+  background: rgba(4, 16, 38, .68);
+  backdrop-filter: blur(4px);
+}
+
+.pilot-livery-form {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.pilot-livery-dialog-head {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pilot-livery-file-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--panel-muted) 62%, transparent);
+  font-weight: 800;
+}
+
+.pilot-livery-file-field input[type='file'] {
+  width: 100%;
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--small-text-size);
+}
+
+.pilot-livery-file-field small {
+  color: var(--muted);
+  font-size: var(--tiny-text-size);
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.pilot-livery-dialog-actions {
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+@media (max-width: 680px) {
+  .pilot-livery-panel {
+    padding: 14px;
+  }
+
+  .pilot-livery-head,
+  .pilot-livery-details {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pilot-livery-manage,
+  .pilot-livery-downloads {
+    width: 100%;
+  }
+
+  .pilot-livery-manage .button,
+  .pilot-livery-downloads .button {
+    flex: 1 1 auto;
+  }
+
+  .pilot-livery-gallery {
+    width: 100%;
+  }
+
+  .pilot-livery-dialog-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+}

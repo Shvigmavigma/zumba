@@ -478,6 +478,33 @@ class TeamLiveryArchiveRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class UserLiveryImageRead(BaseModel):
+    id: int
+    image_url: str
+    original_filename: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class UserLiveryRead(BaseModel):
+    user_id: int
+    package_id: str
+    custom_skin_name: str
+    cars_archive_url: str
+    cars_archive_size: int = Field(ge=0)
+    liveries_archive_url: str
+    liveries_archive_size: int = Field(ge=0)
+    uploaded_at: datetime
+    images: list[UserLiveryImageRead] = Field(default_factory=list)
+
+
+class UserLiveryCatalogRead(UserLiveryRead):
+    pilot_name: str
+    pilot_number: int
+    images: list[UserLiveryImageRead] = Field(default_factory=list)
+
+
 class TeamRead(BaseModel):
     id: int
     name: str

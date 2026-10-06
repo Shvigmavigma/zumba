@@ -7,27 +7,36 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from xml.etree import ElementTree as ET
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import Numeric, String, cast, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.avatar_uploads import ensure_avatar_upload_allowed, mark_avatar_uploaded, remove_avatar_file, save_avatar_file
 from app.config import get_settings
 from app.database_backup import create_database_backup
 from app.db import get_session
 from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, ensure_user_role_change_allowed, get_current_user, is_system_admin, require_admin, require_moder_plus, require_pilot_plus, require_system_admin
-from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, PilotRoleBadge, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamLiveryArchive, TeamLiveryImage, TeamRaceRegistration, User, UserConsent, UserStatus, default_game_ratings, utc_now
+from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, PilotRoleBadge, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamLiveryArchive, TeamLiveryImage, TeamRaceRegistration, User, UserConsent, UserLivery, UserLiveryImage, UserStatus, default_game_ratings, utc_now
 from app.privacy import record_consent
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
-from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, ModerationRejectRequest, PilotRoleAssignmentUpdate, PilotRoleCreate, PilotRoleRead, PilotRoleUpdate, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminRead, UserAdminUpdate, UserModerationRead, UserPrivate, UserPublic, UserUpdate
+from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, ModerationRejectRequest, PilotRoleAssignmentUpdate, PilotRoleCreate, PilotRoleRead, PilotRoleUpdate, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminRead, UserAdminUpdate, UserLiveryCatalogRead, UserLiveryRead, UserModerationRead, UserPrivate, UserPublic, UserUpdate
 from app.security import hash_password, verify_password
 from app.services import record_rating_adjustments, recalculate_all_ratings, result_rows, user_game_rating_state
 from app.team_livery_uploads import (
     create_team_livery_archives_export,
     remove_team_livery_archive_file,
     remove_team_livery_image_file,
+)
+from app.user_livery_uploads import (
+    copy_user_livery_images,
+    create_user_livery_package,
+    prune_user_livery_packages,
+    remove_user_livery_package,
+    user_livery_asset_path,
 )
 
 
@@ -866,6 +875,53 @@ async def download_team_livery_archives(
     return await create_team_livery_archives_export(session)
 
 
+def user_livery_response(livery: UserLivery) -> dict:
+    return {**user_livery_archive_metadata(livery), "images": livery.images}
+
+
+def user_livery_archive_metadata(livery: UserLivery) -> dict:
+    base_url = f"/api/users/{livery.user_id}/livery-assets/{livery.package_id}"
+    return {
+        "user_id": livery.user_id,
+        "package_id": livery.package_id,
+        "custom_skin_name": livery.custom_skin_name,
+        "cars_archive_url": f"{base_url}/cars.zip",
+        "cars_archive_size": livery.cars_archive_size,
+        "liveries_archive_url": f"{base_url}/liveries.zip",
+        "liveries_archive_size": livery.liveries_archive_size,
+        "uploaded_at": livery.uploaded_at,
+    }
+
+
+def user_livery_catalog_response(livery: UserLivery, pilot_name: str, pilot_number: int) -> dict:
+    return {
+        **user_livery_archive_metadata(livery),
+        "pilot_name": pilot_name,
+        "pilot_number": pilot_number,
+        "images": [],
+    }
+
+
+@router.get("/liveries", response_model=list[UserLiveryCatalogRead])
+@limiter.limit("60/minute")
+async def list_user_liveries(
+    request: Request,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+):
+    rows = await session.execute(
+        select(UserLivery, User.nickname, User.pilot_number)
+        .join(User, User.id == UserLivery.user_id)
+        .where(User.status == UserStatus.active)
+        .order_by(User.pilot_number.asc(), User.id.asc())
+    )
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
+    return [
+        user_livery_catalog_response(livery, nickname or f"Пилот №{pilot_number}", pilot_number)
+        for livery, nickname, pilot_number in rows
+    ]
+
+
 @router.get("/{user_id}", response_model=UserPublic)
 @limiter.limit("600/minute")
 async def get_user(user_id: int, request: Request, session: AsyncSession = Depends(get_session)):
@@ -882,6 +938,170 @@ async def get_user(user_id: int, request: Request, session: AsyncSession = Depen
         raise HTTPException(status_code=404, detail="User not found")
     user, team_name, team_abbreviation = result
     return user_response(user, team_name, team_abbreviation)
+
+
+@router.get("/{user_id}/livery", response_model=UserLiveryRead | None)
+@limiter.limit("300/minute")
+async def get_user_livery(
+    user_id: int,
+    request: Request,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+):
+    active_user_id = await session.scalar(
+        select(User.id).where(User.id == user_id, User.status == UserStatus.active)
+    )
+    if active_user_id is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    livery = await session.scalar(
+        select(UserLivery)
+        .options(selectinload(UserLivery.images))
+        .where(UserLivery.user_id == user_id)
+    )
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
+    return user_livery_response(livery) if livery else None
+
+
+@router.get("/{user_id}/livery-assets/{package_id}/{asset_path:path}")
+@limiter.limit("600/minute")
+async def get_user_livery_asset(
+    user_id: int,
+    package_id: str,
+    asset_path: str,
+    request: Request,
+):
+    path = user_livery_asset_path(user_id, package_id, asset_path)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Livery file not found")
+    headers = {
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "X-Content-Type-Options": "nosniff",
+    }
+    filename = path.name if path.suffix.lower() == ".zip" else None
+    return FileResponse(path, filename=filename, headers=headers)
+
+
+async def save_user_livery(
+    user_id: int,
+    response: Response,
+    car_file: UploadFile,
+    livery_files: list[UploadFile],
+    images: list[UploadFile],
+    session: AsyncSession,
+    required_role: Role | None = None,
+    allow_replace: bool = True,
+) -> dict:
+    user_query = select(User).where(User.id == user_id, User.status == UserStatus.active)
+    if required_role is not None:
+        user_query = user_query.where(User.role == required_role)
+    locked_user = await session.scalar(user_query.with_for_update())
+    if locked_user is None:
+        raise HTTPException(status_code=404, detail="Active pilot not found")
+    current = await session.scalar(
+        select(UserLivery)
+        .options(selectinload(UserLivery.images))
+        .where(UserLivery.user_id == user_id)
+        .with_for_update()
+    )
+    if current is not None and not allow_replace:
+        raise HTTPException(status_code=409, detail="This pilot already has a livery; confirm replacement explicitly.")
+    previous_package_id = current.package_id if current else None
+
+    package_id, skin_name, cars_size, liveries_size, image_files, package_dir = await create_user_livery_package(
+        user_id,
+        car_file,
+        livery_files,
+        images,
+        max_archive_mb=settings.max_team_livery_archive_mb,
+        max_image_mb=settings.max_team_livery_image_mb,
+    )
+    try:
+        if current is not None and not image_files:
+            image_files = copy_user_livery_images(user_id, current.package_id, package_id, current.images)
+        if current is None:
+            current = UserLivery(user_id=user_id, package_id=package_id)
+            session.add(current)
+        current.package_id = package_id
+        current.custom_skin_name = skin_name
+        current.cars_archive_size = cars_size
+        current.liveries_archive_size = liveries_size
+        current.uploaded_at = datetime.now(timezone.utc)
+        current.images.clear()
+        for image_name, original_filename in image_files:
+            current.images.append(
+                UserLiveryImage(
+                    image_url=f"/api/users/{user_id}/livery-assets/{package_id}/images/{image_name}",
+                    original_filename=original_filename,
+                )
+            )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        remove_user_livery_package(user_id, package_id)
+        raise
+    keep_package_ids = {package_id}
+    if previous_package_id:
+        keep_package_ids.add(previous_package_id)
+    prune_user_livery_packages(user_id, keep_package_ids)
+    response.headers["Cache-Control"] = "no-store"
+    return user_livery_response(current)
+
+
+@router.put("/me/livery", response_model=UserLiveryRead)
+@limiter.limit("5/hour")
+async def upload_my_livery(
+    request: Request,
+    response: Response,
+    car_file: UploadFile = File(...),
+    livery_files: list[UploadFile] = File(...),
+    images: list[UploadFile] | None = File(default=None),
+    user: User = Depends(require_pilot_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    return await save_user_livery(user.id, response, car_file, livery_files, images or [], session)
+
+
+@router.put("/{user_id}/livery", response_model=UserLiveryRead)
+@limiter.limit("5/hour")
+async def admin_upload_user_livery(
+    user_id: int,
+    request: Request,
+    response: Response,
+    car_file: UploadFile = File(...),
+    livery_files: list[UploadFile] = File(...),
+    images: list[UploadFile] | None = File(default=None),
+    replace_existing: bool = Form(default=False),
+    _admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    return await save_user_livery(
+        user_id,
+        response,
+        car_file,
+        livery_files,
+        images or [],
+        session,
+        required_role=Role.pilot,
+        allow_replace=replace_existing,
+    )
+
+
+@router.delete("/me/livery", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/hour")
+async def delete_my_livery(
+    request: Request,
+    user: User = Depends(require_pilot_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    await session.scalar(select(User.id).where(User.id == user.id).with_for_update())
+    livery = await session.scalar(select(UserLivery).where(UserLivery.user_id == user.id).with_for_update())
+    if livery is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    package_id = livery.package_id
+    await session.delete(livery)
+    await session.commit()
+    prune_user_livery_packages(user.id, set())
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{user_id}/analytics", response_model=ProfileAnalyticsRead)
@@ -1435,6 +1655,7 @@ async def delete_user_account(
         await session.rollback()
         raise HTTPException(status_code=409, detail="User cannot be deleted because linked records still exist") from exc
     remove_avatar_file(user_avatar_url)
+    prune_user_livery_packages(user.id, set())
     for avatar_url in deleted_team_avatar_urls:
         remove_avatar_file(avatar_url)
     for team_id, livery_urls, archive_filename in deleted_team_livery_files:

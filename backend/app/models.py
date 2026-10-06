@@ -321,6 +321,36 @@ class TeamLiveryArchive(Base):
     team: Mapped[Team] = relationship(back_populates="livery_archive")
 
 
+class UserLivery(Base):
+    __tablename__ = "user_liveries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
+    package_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    custom_skin_name: Mapped[str] = mapped_column(String(160))
+    cars_archive_size: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    liveries_archive_size: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    images: Mapped[list["UserLiveryImage"]] = relationship(
+        back_populates="livery",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+class UserLiveryImage(Base):
+    __tablename__ = "user_livery_images"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    livery_id: Mapped[int] = mapped_column(ForeignKey("user_liveries.id", ondelete="CASCADE"), index=True)
+    image_url: Mapped[str] = mapped_column(String(512))
+    original_filename: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    livery: Mapped[UserLivery] = relationship(back_populates="images")
+
+
 class TeamCreationRequest(Base):
     __tablename__ = "team_creation_requests"
     __table_args__ = (

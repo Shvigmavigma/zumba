@@ -14,6 +14,10 @@ const props = defineProps({
     type: String,
     default: ''
   },
+  title: {
+    type: String,
+    default: ''
+  },
   images: {
     type: Array,
     default: () => []
@@ -57,10 +61,10 @@ watch(() => props.images.length, () => {
 
 <template>
   <div v-if="open" class="team-livery-viewer-backdrop" @click.self="emit('close')">
-    <article class="team-livery-viewer card" role="dialog" aria-modal="true" :aria-label="t('teams.liveryViewerTitle', { name: teamName })" tabindex="-1" @keydown.esc="emit('close')" @keydown.left="showPrevious" @keydown.right="showNext">
+    <article class="team-livery-viewer card" role="dialog" aria-modal="true" :aria-label="title || t('teams.liveryViewerTitle', { name: teamName })" tabindex="-1" @keydown.esc="emit('close')" @keydown.left="showPrevious" @keydown.right="showNext">
       <header class="team-livery-viewer-head">
         <div>
-          <span class="team-livery-viewer-kicker"><Images :size="15" />{{ t('teams.liveryTitle') }} · {{ images.length }}/4</span>
+          <span class="team-livery-viewer-kicker"><Images :size="15" />{{ title || t('teams.liveryTitle') }} · {{ images.length }}/4</span>
           <h2>{{ teamName }}</h2>
         </div>
         <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="emit('close')">

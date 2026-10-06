@@ -31,6 +31,46 @@ function apiErrorMessage(message) {
       ru: 'Выберите папку с ливреей.',
       en: 'Choose a livery folder.'
     },
+    'Choose one .json file from the ACC Cars folder': {
+      ru: 'Выберите один .json-файл из папки Cars.',
+      en: 'Choose one .json file from the ACC Cars folder.'
+    },
+    'Car file must be a valid ACC JSON file': {
+      ru: 'Файл автомобиля должен содержать корректный JSON из ACC.',
+      en: 'The car file must be a valid ACC JSON file.'
+    },
+    'Car JSON must contain a valid customSkinName folder name': {
+      ru: 'В JSON автомобиля должно быть корректное имя папки customSkinName.',
+      en: 'The car JSON must contain a valid customSkinName folder name.'
+    },
+    'Car JSON file is empty': {
+      ru: 'Файл JSON пуст.',
+      en: 'The car JSON file is empty.'
+    },
+    'Car JSON file is larger than 5 MB': {
+      ru: 'Файл JSON больше 5 МБ.',
+      en: 'The car JSON file is larger than 5 MB.'
+    },
+    'Choose the complete livery folder': {
+      ru: 'Выберите всю папку ливреи целиком.',
+      en: 'Choose the complete livery folder.'
+    },
+    'Select the complete livery folder, not individual files': {
+      ru: 'Выберите всю папку ливреи, а не отдельные файлы.',
+      en: 'Select the complete livery folder, not individual files.'
+    },
+    'Only PNG, JPG, WEBP and GIF livery images are allowed': {
+      ru: 'Для скриншотов подходят PNG, JPG, WEBP и GIF.',
+      en: 'Only PNG, JPG, WEBP and GIF livery images are allowed.'
+    },
+    'Preview file content does not match its image type': {
+      ru: 'Формат файла скриншота не совпадает с его содержимым.',
+      en: 'The preview file content does not match its image type.'
+    },
+    'A livery can have at most 4 preview images': {
+      ru: 'Можно добавить не более 4 скриншотов ливреи.',
+      en: 'A livery can have at most 4 preview images.'
+    },
     'Livery archive is larger than 500 MB': {
       ru: 'Архив ливреи больше 500 МБ.',
       en: 'The livery archive is larger than 500 MB.'
@@ -39,6 +79,12 @@ function apiErrorMessage(message) {
       ru: 'Актуальных архивов ливрей пока нет.',
       en: 'No team livery archives are available.'
     },
+  }
+  const folderMismatch = text.match(/^Livery folder must be named exactly '(.+)', as specified by customSkinName in the car JSON$/)
+  if (folderMismatch) {
+    return locale === 'en'
+      ? `The folder must be named exactly "${folderMismatch[1]}" to match customSkinName in the car JSON.`
+      : `Папка должна называться точно «${folderMismatch[1]}», как указано в customSkinName в JSON.`
   }
   return friendly[text]?.[locale] || text
 }
