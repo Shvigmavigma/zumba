@@ -22,6 +22,7 @@ import { setLicenseTiers } from '../licenseSettings'
 import { DEFAULT_LICENSE_TIERS, formatPilotNumber, formatRating, licenseBadgeStyle, normalizeLicenseTiers, ratingForGame, teamShortName } from '../pilotDisplay'
 import { fetchAllAdminUserMatches } from '../adminUserSearch'
 import { setSession, state } from '../store'
+import { formatDateTime as formatDateTimeInZone } from '../timezone'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -230,11 +231,10 @@ function timeoutMin() {
 
 function formatDateTime(value) {
   if (!value) return t('common.none')
-  return new Intl.DateTimeFormat(state.locale === 'ru' ? 'ru-RU' : 'en-US', {
+  return formatDateTimeInZone(value, {
     dateStyle: 'short',
-    timeStyle: 'short',
-    timeZone: state.timeZone
-  }).format(new Date(value))
+    timeStyle: 'short'
+  })
 }
 
 function emptyDonationEntry() {

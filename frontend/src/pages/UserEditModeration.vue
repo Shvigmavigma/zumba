@@ -9,6 +9,7 @@ import PilotRoles from '../components/PilotRoles.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { formatPilotNumber, formatRating, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
+import { formatDateTime as formatDateTimeInZone } from '../timezone'
 
 const { t } = useI18n()
 const users = ref([])
@@ -184,11 +185,10 @@ async function deleteRequest(user) {
 
 function formatHistoryDate(value) {
   if (!value) return t('common.none')
-  return new Intl.DateTimeFormat(state.locale === 'ru' ? 'ru-RU' : 'en-US', {
+  return formatDateTimeInZone(value, {
     dateStyle: 'short',
-    timeStyle: 'short',
-    timeZone: state.timeZone
-  }).format(new Date(value))
+    timeStyle: 'short'
+  })
 }
 
 onMounted(async () => {

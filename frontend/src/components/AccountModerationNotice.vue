@@ -4,6 +4,7 @@ import { Check, ChevronDown, Eye, Shield, Trash2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import { setSession, state } from '../store'
+import { formatDateTime as formatDateTimeInZone } from '../timezone'
 
 const { t } = useI18n()
 const props = defineProps({
@@ -50,11 +51,10 @@ const requestRows = computed(() => Object.entries(rejection.value?.request_snaps
 
 function formatDate(value) {
   if (!value) return t('common.none')
-  return new Intl.DateTimeFormat(state.locale === 'ru' ? 'ru-RU' : 'en-US', {
+  return formatDateTimeInZone(value, {
     dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: state.timeZone
-  }).format(new Date(value))
+    timeStyle: 'short'
+  })
 }
 
 async function resubmitRegistration() {
