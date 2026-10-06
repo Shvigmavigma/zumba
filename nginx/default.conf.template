@@ -106,7 +106,7 @@ server {
     location = /downloads/BMRL-Livery-Loader-win-x64.zip {
         absolute_redirect off;
         expires -1;
-        return 302 /downloads/BMRL-Livery-Loader-v1.0.2-win-x64.zip;
+        return 302 /downloads/BMRL-Livery-Loader-v1.0.3-win-x64.zip;
     }
 
     location ^~ /downloads/ {

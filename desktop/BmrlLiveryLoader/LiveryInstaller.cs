@@ -237,6 +237,14 @@ public static class LiveryInstaller
 
             var carPath = Path.Combine(carsFolder, "0-car.json");
             File.WriteAllText(carPath, "keep existing file");
+            var cachedArchive = Path.Combine(testRoot, "cached.zip");
+            var duplicateDownload = Path.Combine(testRoot, "cached.zip.part");
+            File.WriteAllText(cachedArchive, "completed download");
+            File.WriteAllText(duplicateDownload, "duplicate download");
+            MoveDownloadedArchiveIntoCache(duplicateDownload, cachedArchive);
+            if (File.ReadAllText(cachedArchive) != "completed download" || File.Exists(duplicateDownload))
+                throw new InvalidOperationException("Livery loader self-test failed on a concurrent archive cache download.");
+
             var result = InstallArchives(carsZip, liveriesZip, carsFolder, liveriesFolder);
             if (result.SkinFolder != "sui" || result.InstalledFiles != 1 || result.SkippedFiles.Count != 1)
                 throw new InvalidOperationException("Livery loader self-test failed on exact folder or conflict handling.");
@@ -281,11 +289,24 @@ public static class LiveryInstaller
                 await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
             }
             if (total == 0) throw new InvalidDataException("Сервер вернул пустой архив.");
-            File.Move(temporaryPath, targetPath, overwrite: true);
+            MoveDownloadedArchiveIntoCache(temporaryPath, targetPath);
         }
         finally
         {
-            if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+            TryDeleteTemporaryFile(temporaryPath);
+        }
+    }
+
+    private static void MoveDownloadedArchiveIntoCache(string temporaryPath, string targetPath)
+    {
+        try
+        {
+            File.Move(temporaryPath, targetPath);
+        }
+        catch (IOException) when (File.Exists(targetPath) && new FileInfo(targetPath).Length > 0)
+        {
+            // Another loader instance completed the same immutable package download first.
+            TryDeleteTemporaryFile(temporaryPath);
         }
     }
 
@@ -309,20 +330,59 @@ public static class LiveryInstaller
                 continue;
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            try
+            var destinationDirectory = Path.GetDirectoryName(destination)!;
+            Directory.CreateDirectory(destinationDirectory);
+            var completed = false;
+            IOException? lastLockError = null;
+            for (var attempt = 0; attempt < 5 && !completed; attempt++)
             {
-                using var input = entry.Open();
-                using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                input.CopyTo(output);
-                installed++;
+                var temporaryPath = Path.Combine(destinationDirectory, $".bmrl-{Guid.NewGuid():N}.part");
+                try
+                {
+                    using (var input = entry.Open())
+                    using (var output = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                        input.CopyTo(output);
+
+                    try
+                    {
+                        File.Move(temporaryPath, destination);
+                        installed++;
+                    }
+                    catch (IOException) when (File.Exists(destination))
+                    {
+                        skipped.Add(relative);
+                    }
+                    completed = true;
+                }
+                catch (IOException ex) when (IsTransientFileLock(ex))
+                {
+                    lastLockError = ex;
+                    if (attempt < 4) Thread.Sleep(100 * (1 << attempt));
+                }
+                finally
+                {
+                    TryDeleteTemporaryFile(temporaryPath);
+                }
             }
-            catch (IOException) when (File.Exists(destination))
+
+            if (!completed)
             {
-                skipped.Add(relative);
+                throw new IOException(
+                    $"Не удалось записать файл «{relative}»: он занят другим процессом. Закройте ACC или второй экземпляр загрузчика и повторите установку.",
+                    lastLockError);
             }
         }
         return installed;
+    }
+
+    private static bool IsTransientFileLock(IOException exception) =>
+        OperatingSystem.IsWindows() && (exception.HResult & 0xffff) is 32 or 33;
+
+    private static void TryDeleteTemporaryFile(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     private static string ReadSkinFolder(ZipArchiveEntry carEntry)
