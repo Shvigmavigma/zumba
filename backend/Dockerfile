@@ -22,5 +22,5 @@ COPY app ./app
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "gunicorn app.main:app -k uvicorn.workers.UvicornWorker --workers ${WEB_CONCURRENCY:-4} --bind 0.0.0.0:8000 --timeout 90 --keep-alive 5 --worker-tmp-dir /dev/shm"]
+CMD ["sh", "-c", "gunicorn app.main:app -k uvicorn.workers.UvicornWorker --workers ${WEB_CONCURRENCY:-4} --bind 0.0.0.0:8000 --timeout 150 --keep-alive 5 --worker-tmp-dir /dev/shm"]
 

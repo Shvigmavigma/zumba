@@ -1,6 +1,10 @@
+import asyncio
+import hashlib
 import json
+import os
 import re
 import shutil
+import time
 import zipfile
 from pathlib import Path, PurePosixPath
 from uuid import uuid4
@@ -12,9 +16,15 @@ from app.config import get_settings
 
 settings = get_settings()
 USER_LIVERY_DIR = Path(settings.upload_dir) / "pilot-liveries"
+USER_LIVERY_UPLOAD_SESSION_DIR = Path(settings.upload_dir) / "pilot-livery-upload-sessions"
 MAX_LIVERY_IMAGES = 4
 MAX_ARCHIVE_FILES = 5000
 CHUNK_SIZE = 1024 * 1024
+UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024
+UPLOAD_BATCH_MAX_BYTES = 48 * 1024 * 1024
+UPLOAD_BATCH_MAX_PARTS = 100
+UPLOAD_SESSION_TTL_SECONDS = 60 * 60
+MAX_UPLOAD_MANIFEST_BYTES = 4 * 1024 * 1024
 MAX_CAR_JSON_BYTES = 5 * 1024 * 1024
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 WINDOWS_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
@@ -148,6 +158,310 @@ def user_livery_asset_path(
     return target if target.is_file() else None
 
 
+def user_livery_upload_session_dir(user_id: int, session_id: str, root: Path | None = None) -> Path | None:
+    if not re.fullmatch(r"[0-9a-f]{32}", session_id):
+        return None
+    base = root or USER_LIVERY_UPLOAD_SESSION_DIR
+    user_dir = base / str(user_id)
+    session_dir = user_dir / session_id
+    try:
+        session_dir.resolve().relative_to(user_dir.resolve())
+    except (OSError, ValueError):
+        return None
+    return session_dir
+
+
+def _cleanup_expired_upload_sessions(root: Path | None = None) -> None:
+    base = root or USER_LIVERY_UPLOAD_SESSION_DIR
+    try:
+        user_dirs = list(base.iterdir())
+    except FileNotFoundError:
+        return
+    cutoff = time.time() - UPLOAD_SESSION_TTL_SECONDS
+    for user_dir in user_dirs:
+        if not user_dir.is_dir():
+            continue
+        for session_dir in user_dir.iterdir():
+            if not session_dir.is_dir():
+                continue
+            try:
+                if session_dir.stat().st_mtime < cutoff:
+                    shutil.rmtree(session_dir, ignore_errors=True)
+            except OSError:
+                continue
+
+
+def _load_upload_session(user_id: int, session_id: str, root: Path | None = None) -> tuple[Path, dict]:
+    session_dir = user_livery_upload_session_dir(user_id, session_id, root)
+    if session_dir is None or not session_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Livery upload session not found")
+    try:
+        if time.time() - session_dir.stat().st_mtime > UPLOAD_SESSION_TTL_SECONDS:
+            shutil.rmtree(session_dir, ignore_errors=True)
+            raise HTTPException(status_code=404, detail="Livery upload session expired")
+        metadata = json.loads((session_dir / "manifest.json").read_text(encoding="utf-8"))
+    except HTTPException:
+        raise
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=404, detail="Livery upload session not found") from exc
+    if not isinstance(metadata, dict) or not isinstance(metadata.get("files"), list):
+        raise HTTPException(status_code=404, detail="Livery upload session not found")
+    return session_dir, metadata
+
+
+def get_user_livery_upload_session(user_id: int, session_id: str, root: Path | None = None) -> tuple[Path, dict]:
+    return _load_upload_session(user_id, session_id, root)
+
+
+async def create_user_livery_upload_session(
+    user_id: int,
+    car_file: UploadFile,
+    manifest_file: UploadFile,
+    images: list[UploadFile],
+    *,
+    max_archive_mb: int,
+    max_image_mb: int,
+    requested_session_id: str | None = None,
+    root: Path | None = None,
+) -> str:
+    if not (car_file.filename or "").lower().endswith(".json"):
+        raise HTTPException(status_code=400, detail="Choose one .json file from the ACC Cars folder")
+    car_bytes = await car_file.read(MAX_CAR_JSON_BYTES + 1)
+    if not car_bytes:
+        raise HTTPException(status_code=400, detail="Car JSON file is empty")
+    if len(car_bytes) > MAX_CAR_JSON_BYTES:
+        raise HTTPException(status_code=413, detail="Car JSON file is larger than 5 MB")
+    skin_folder = skin_folder_from_car_json(car_bytes)
+    car_filename = _car_json_filename(car_file.filename)
+
+    manifest_bytes = await manifest_file.read(MAX_UPLOAD_MANIFEST_BYTES + 1)
+    if len(manifest_bytes) > MAX_UPLOAD_MANIFEST_BYTES:
+        raise HTTPException(status_code=413, detail="Livery file list is too large")
+    try:
+        raw_manifest = json.loads(manifest_bytes)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail="Livery file list is invalid") from exc
+    if not isinstance(raw_manifest, list) or not raw_manifest or len(raw_manifest) > MAX_ARCHIVE_FILES:
+        raise HTTPException(status_code=400, detail=f"Choose between 1 and {MAX_ARCHIVE_FILES} livery files")
+
+    files: list[dict] = []
+    total_bytes = 0
+    for item in raw_manifest:
+        if not isinstance(item, dict) or not isinstance(item.get("size"), int) or isinstance(item.get("size"), bool) or item["size"] < 0:
+            raise HTTPException(status_code=400, detail="Livery file list contains an invalid file size")
+        if not isinstance(item.get("path"), str):
+            raise HTTPException(status_code=400, detail="Livery file list contains an invalid path")
+        path = _livery_member_name(item["path"], skin_folder)
+        files.append({"path": path, "size": item["size"]})
+        total_bytes += item["size"]
+    if len({item["path"].casefold() for item in files}) != len(files):
+        raise HTTPException(status_code=400, detail="Livery folder contains duplicate file names")
+    if total_bytes > max_archive_mb * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"Livery archive is larger than {max_archive_mb} MB")
+
+    if len(images) > MAX_LIVERY_IMAGES:
+        raise HTTPException(status_code=400, detail=f"A livery can have at most {MAX_LIVERY_IMAGES} preview images")
+    image_metadata: list[dict] = []
+    image_data: list[bytes] = []
+    for index, image in enumerate(images):
+        extension = _image_extension(image)
+        original_name = PurePosixPath((image.filename or "").replace("\\", "/")).name[:255]
+        content = await image.read(max_image_mb * 1024 * 1024 + 1)
+        if len(content) > max_image_mb * 1024 * 1024:
+            raise HTTPException(status_code=413, detail=f"A livery image is larger than {max_image_mb} MB")
+        if not _image_signature_matches(extension, content[:12]):
+            raise HTTPException(status_code=415, detail="Preview file content does not match its image type")
+        image_path = f"images/{index}{extension}"
+        image_metadata.append({"path": image_path, "original_filename": original_name})
+        image_data.append(content)
+
+    session_id = requested_session_id or uuid4().hex
+    if not re.fullmatch(r"[0-9a-f]{32}", session_id):
+        raise HTTPException(status_code=400, detail="Livery upload session ID is invalid")
+    fingerprint = hashlib.sha256()
+    fingerprint.update(car_bytes)
+    fingerprint.update(json.dumps({"car": car_filename, "files": files, "images": image_metadata}, separators=(",", ":")).encode())
+    for content in image_data:
+        fingerprint.update(content)
+
+    base = root or USER_LIVERY_UPLOAD_SESSION_DIR
+    user_dir = base / str(user_id)
+    user_dir.mkdir(parents=True, exist_ok=True)
+    _cleanup_expired_upload_sessions(base)
+    session_dir = user_livery_upload_session_dir(user_id, session_id, base)
+    assert session_dir is not None
+    if session_dir.is_dir():
+        _, existing_metadata = _load_upload_session(user_id, session_id, base)
+        if existing_metadata.get("fingerprint") == fingerprint.hexdigest():
+            return session_id
+        raise HTTPException(status_code=409, detail="Livery upload session ID is already in use")
+    # A new upload replaces abandoned staging data; only one livery can be active per pilot.
+    for previous_session in user_dir.iterdir():
+        if previous_session.is_dir():
+            shutil.rmtree(previous_session, ignore_errors=True)
+    metadata = {
+        "car_filename": car_filename,
+        "skin_folder": skin_folder,
+        "files": files,
+        "images": image_metadata,
+        "fingerprint": fingerprint.hexdigest(),
+    }
+    try:
+        session_dir.mkdir()
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail="Livery upload session is already being created") from exc
+    try:
+        (session_dir / "chunks").mkdir()
+        (session_dir / "images").mkdir()
+        await asyncio.to_thread((session_dir / "car.json").write_bytes, car_bytes)
+        for image_path, content in zip(image_metadata, image_data, strict=True):
+            await asyncio.to_thread((session_dir / image_path["path"]).write_bytes, content)
+        await asyncio.to_thread(
+            (session_dir / "manifest.json").write_text,
+            json.dumps(metadata, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception:
+        shutil.rmtree(session_dir, ignore_errors=True)
+        raise
+    return session_id
+
+
+async def store_user_livery_upload_chunks(
+    user_id: int,
+    session_id: str,
+    file_indexes: list[int],
+    offsets: list[int],
+    chunks: list[UploadFile],
+    *,
+    root: Path | None = None,
+) -> int:
+    session_dir, metadata = _load_upload_session(user_id, session_id, root)
+    if (session_dir / ".finalizing").exists():
+        raise HTTPException(status_code=409, detail="Livery upload is being finalized")
+    if not chunks or len(chunks) > UPLOAD_BATCH_MAX_PARTS or len(chunks) != len(file_indexes) or len(chunks) != len(offsets):
+        raise HTTPException(status_code=400, detail="Livery upload batch is invalid")
+
+    entries = metadata["files"]
+    batch_size = 0
+    seen_chunks: set[tuple[int, int]] = set()
+    stored_chunks = 0
+    for file_index, offset, upload in zip(file_indexes, offsets, chunks, strict=True):
+        if isinstance(file_index, bool) or not isinstance(file_index, int) or not 0 <= file_index < len(entries):
+            raise HTTPException(status_code=400, detail="Livery upload batch contains an invalid file index")
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0 or offset % UPLOAD_CHUNK_SIZE:
+            raise HTTPException(status_code=400, detail="Livery upload batch contains an invalid chunk offset")
+        file_size = entries[file_index]["size"]
+        if offset >= file_size:
+            raise HTTPException(status_code=400, detail="Livery upload batch contains an out-of-range chunk")
+        expected_size = min(UPLOAD_CHUNK_SIZE, file_size - offset)
+        if (file_index, offset) in seen_chunks:
+            raise HTTPException(status_code=400, detail="Livery upload batch contains a duplicate chunk")
+        seen_chunks.add((file_index, offset))
+        content = await upload.read(UPLOAD_CHUNK_SIZE + 1)
+        if len(content) != expected_size:
+            raise HTTPException(status_code=400, detail="Livery upload chunk size does not match the file list")
+        batch_size += len(content)
+        if batch_size > UPLOAD_BATCH_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="Livery upload batch is larger than 48 MB")
+        target = session_dir / "chunks" / f"{file_index}-{offset}.part"
+        stored_chunks += 1
+        await asyncio.to_thread(_store_upload_chunk, target, content)
+    os.utime(session_dir, None)
+    return stored_chunks
+
+
+def _store_upload_chunk(target: Path, content: bytes) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}-{uuid4().hex}.tmp")
+    try:
+        with temporary.open("xb") as output:
+            output.write(content)
+        try:
+            os.link(temporary, target)
+        except FileExistsError:
+            if target.stat().st_size != len(content) or target.read_bytes() != content:
+                raise HTTPException(status_code=409, detail="A different livery chunk already exists")
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def build_user_livery_upload_archive(
+    user_id: int,
+    session_id: str,
+    *,
+    max_archive_mb: int,
+    root: Path | None = None,
+) -> Path:
+    session_dir, metadata = _load_upload_session(user_id, session_id, root)
+    lock_path = session_dir / ".finalizing"
+    try:
+        with lock_path.open("x", encoding="utf-8"):
+            pass
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail="Livery upload is already being finalized") from exc
+
+    archive_path = session_dir / "liveries.zip"
+    max_archive_bytes = max_archive_mb * 1024 * 1024
+    total_bytes = 0
+    try:
+        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as archive:
+            for file_index, item in enumerate(metadata["files"]):
+                filename = item["path"]
+                expected_file_size = item["size"]
+                with archive.open(filename, "w", force_zip64=True) as entry:
+                    offset = 0
+                    while offset < expected_file_size:
+                        expected_chunk_size = min(UPLOAD_CHUNK_SIZE, expected_file_size - offset)
+                        chunk_path = session_dir / "chunks" / f"{file_index}-{offset}.part"
+                        if not chunk_path.is_file() or chunk_path.stat().st_size != expected_chunk_size:
+                            raise HTTPException(status_code=400, detail="Livery upload is incomplete; retry the missing chunks")
+                        total_bytes += expected_chunk_size
+                        if total_bytes > max_archive_bytes:
+                            raise HTTPException(status_code=413, detail=f"Livery archive is larger than {max_archive_mb} MB")
+                        with chunk_path.open("rb") as source:
+                            shutil.copyfileobj(source, entry, length=CHUNK_SIZE)
+                        offset += expected_chunk_size
+        os.utime(session_dir, None)
+        return archive_path
+    except Exception:
+        archive_path.unlink(missing_ok=True)
+        raise
+    finally:
+        lock_path.unlink(missing_ok=True)
+
+
+def remove_user_livery_upload_session(user_id: int, session_id: str, root: Path | None = None) -> None:
+    session_dir = user_livery_upload_session_dir(user_id, session_id, root)
+    if session_dir is None:
+        return
+    try:
+        session_dir.resolve().relative_to((root or USER_LIVERY_UPLOAD_SESSION_DIR).resolve())
+    except (OSError, ValueError):
+        return
+    shutil.rmtree(session_dir, ignore_errors=True)
+
+
+def _write_livery_archive(
+    archive_path: Path,
+    uploads: list[UploadFile],
+    member_names: list[str],
+    max_archive_mb: int,
+) -> int:
+    """Write the uploaded files without blocking the async request event loop."""
+    total_bytes = 0
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as archive:
+        for upload, member_name in zip(uploads, member_names, strict=True):
+            upload.file.seek(0)
+            with archive.open(member_name, "w", force_zip64=True) as entry:
+                while chunk := upload.file.read(CHUNK_SIZE):
+                    total_bytes += len(chunk)
+                    if total_bytes > max_archive_mb * 1024 * 1024:
+                        raise HTTPException(status_code=413, detail=f"Livery archive is larger than {max_archive_mb} MB")
+                    entry.write(chunk)
+    return total_bytes
+
+
 async def create_user_livery_package(
     user_id: int,
     car_file: UploadFile,
@@ -157,6 +471,7 @@ async def create_user_livery_package(
     max_archive_mb: int,
     max_image_mb: int,
     root: Path | None = None,
+    prebuilt_livery_archive: Path | None = None,
 ) -> tuple[str, str, int, int, list[tuple[str, str]], Path]:
     if not (car_file.filename or "").lower().endswith(".json"):
         raise HTTPException(status_code=400, detail="Choose one .json file from the ACC Cars folder")
@@ -168,7 +483,7 @@ async def create_user_livery_package(
     skin_folder = skin_folder_from_car_json(car_bytes)
     car_filename = _car_json_filename(car_file.filename)
 
-    if not livery_files:
+    if not livery_files and prebuilt_livery_archive is None:
         raise HTTPException(status_code=400, detail="Choose the complete livery folder")
     if len(livery_files) > MAX_ARCHIVE_FILES:
         raise HTTPException(status_code=413, detail=f"A livery folder can contain at most {MAX_ARCHIVE_FILES} files")
@@ -186,25 +501,19 @@ async def create_user_livery_package(
     staging_dir = user_dir / f".upload-{uuid4().hex}"
     package_dir = user_livery_package_dir(user_id, package_id, base)
     staged_images: list[tuple[str, str]] = []
-    max_archive_bytes = max_archive_mb * 1024 * 1024
-
     try:
         staging_dir.mkdir()
         cars_archive = staging_dir / "cars.zip"
         with zipfile.ZipFile(cars_archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=1) as archive:
             archive.writestr(car_filename, car_bytes)
 
-        total_livery_bytes = 0
         liveries_archive = staging_dir / "liveries.zip"
-        with zipfile.ZipFile(liveries_archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=1) as archive:
-            for upload, member_name in zip(livery_files, member_names, strict=True):
-                await upload.seek(0)
-                with archive.open(member_name, "w", force_zip64=True) as entry:
-                    while chunk := await upload.read(CHUNK_SIZE):
-                        total_livery_bytes += len(chunk)
-                        if total_livery_bytes > max_archive_bytes:
-                            raise HTTPException(status_code=413, detail=f"Livery archive is larger than {max_archive_mb} MB")
-                        entry.write(chunk)
+        if prebuilt_livery_archive is not None:
+            if not prebuilt_livery_archive.is_file():
+                raise HTTPException(status_code=400, detail="Livery upload archive is not available")
+            await asyncio.to_thread(shutil.copyfile, prebuilt_livery_archive, liveries_archive)
+        else:
+            await asyncio.to_thread(_write_livery_archive, liveries_archive, livery_files, member_names, max_archive_mb)
 
         image_dir = staging_dir / "images"
         if images:

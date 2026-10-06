@@ -1,10 +1,13 @@
 ﻿from datetime import datetime, timezone
 
+import asyncio
 import csv
 import io
+import json
 import zipfile
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
@@ -32,10 +35,17 @@ from app.team_livery_uploads import (
     remove_team_livery_image_file,
 )
 from app.user_livery_uploads import (
+    UPLOAD_BATCH_MAX_BYTES,
+    UPLOAD_CHUNK_SIZE,
+    build_user_livery_upload_archive,
     copy_user_livery_images,
+    create_user_livery_upload_session,
     create_user_livery_package,
+    get_user_livery_upload_session,
     prune_user_livery_packages,
+    remove_user_livery_upload_session,
     remove_user_livery_package,
+    store_user_livery_upload_chunks,
     user_livery_asset_path,
 )
 
@@ -990,6 +1000,7 @@ async def save_user_livery(
     session: AsyncSession,
     required_role: Role | None = None,
     allow_replace: bool = True,
+    prebuilt_livery_archive: Path | None = None,
 ) -> dict:
     user_query = select(User).where(User.id == user_id, User.status == UserStatus.active)
     if required_role is not None:
@@ -1014,6 +1025,7 @@ async def save_user_livery(
         images,
         max_archive_mb=settings.max_team_livery_archive_mb,
         max_image_mb=settings.max_team_livery_image_mb,
+        prebuilt_livery_archive=prebuilt_livery_archive,
     )
     try:
         if current is not None and not image_files:
@@ -1059,6 +1071,108 @@ async def upload_my_livery(
     session: AsyncSession = Depends(get_session),
 ):
     return await save_user_livery(user.id, response, car_file, livery_files, images or [], session)
+
+
+@router.post("/me/livery/upload-sessions")
+@limiter.limit("5/hour")
+async def start_my_livery_upload_session(
+    request: Request,
+    upload_id: str = Form(...),
+    car_file: UploadFile = File(...),
+    manifest_file: UploadFile = File(...),
+    images: list[UploadFile] | None = File(default=None),
+    user: User = Depends(require_pilot_plus),
+):
+    session_id = await create_user_livery_upload_session(
+        user.id,
+        car_file,
+        manifest_file,
+        images or [],
+        max_archive_mb=settings.max_team_livery_archive_mb,
+        max_image_mb=settings.max_team_livery_image_mb,
+        requested_session_id=upload_id,
+    )
+    return {"upload_id": session_id, "chunk_size": UPLOAD_CHUNK_SIZE, "batch_max_bytes": UPLOAD_BATCH_MAX_BYTES}
+
+
+@router.put("/me/livery/upload-sessions/{upload_id}/chunks")
+@limiter.limit("120/minute")
+async def upload_my_livery_chunks(
+    upload_id: str,
+    request: Request,
+    file_indexes: str = Form(...),
+    offsets: str = Form(...),
+    chunks: list[UploadFile] = File(...),
+    user: User = Depends(require_pilot_plus),
+):
+    try:
+        parsed_indexes = json.loads(file_indexes)
+        parsed_offsets = json.loads(offsets)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Livery upload batch is invalid") from exc
+    if not isinstance(parsed_indexes, list) or not isinstance(parsed_offsets, list):
+        raise HTTPException(status_code=400, detail="Livery upload batch is invalid")
+    stored = await store_user_livery_upload_chunks(
+        user.id,
+        upload_id,
+        parsed_indexes,
+        parsed_offsets,
+        chunks,
+    )
+    return {"stored_chunks": stored}
+
+
+@router.post("/me/livery/upload-sessions/{upload_id}/complete", response_model=UserLiveryRead)
+@limiter.limit("5/hour")
+async def complete_my_livery_upload_session(
+    upload_id: str,
+    request: Request,
+    response: Response,
+    user: User = Depends(require_pilot_plus),
+    session: AsyncSession = Depends(get_session),
+):
+    session_dir, metadata = get_user_livery_upload_session(user.id, upload_id)
+    archive_path = await asyncio.to_thread(
+        build_user_livery_upload_archive,
+        user.id,
+        upload_id,
+        max_archive_mb=settings.max_team_livery_archive_mb,
+    )
+    car_upload = None
+    image_uploads: list[UploadFile] = []
+    try:
+        car_upload = UploadFile(filename=metadata["car_filename"], file=(session_dir / "car.json").open("rb"))
+        for image in metadata["images"]:
+            image_uploads.append(
+                UploadFile(filename=image["original_filename"], file=(session_dir / image["path"]).open("rb"))
+            )
+        result = await save_user_livery(
+            user.id,
+            response,
+            car_upload,
+            [],
+            image_uploads,
+            session,
+            prebuilt_livery_archive=archive_path,
+        )
+        remove_user_livery_upload_session(user.id, upload_id)
+        return result
+    finally:
+        if car_upload is not None:
+            await car_upload.close()
+        for image in image_uploads:
+            await image.close()
+
+
+@router.delete("/me/livery/upload-sessions/{upload_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("60/hour")
+async def cancel_my_livery_upload_session(
+    upload_id: str,
+    request: Request,
+    user: User = Depends(require_pilot_plus),
+):
+    remove_user_livery_upload_session(user.id, upload_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.put("/{user_id}/livery", response_model=UserLiveryRead)

@@ -22,6 +22,7 @@ const success = ref('')
 const carFile = ref(null)
 const liveryFiles = ref([])
 const previewFiles = ref([])
+const pendingUploadId = ref('')
 const carInput = ref(null)
 const folderInput = ref(null)
 const imageInput = ref(null)
@@ -31,6 +32,10 @@ const selectedFolderName = computed(() => {
   return path ? path.replaceAll('\\', '/').split('/')[0] : ''
 })
 const loaderUrl = '/downloads/BMRL-Livery-Loader-win-x64.zip'
+const CHUNKED_UPLOAD_THRESHOLD = 64 * 1024 * 1024
+const UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024
+const UPLOAD_BATCH_MAX_BYTES = 48 * 1024 * 1024
+const UPLOAD_BATCH_MAX_PARTS = 100
 
 function formatBytes(bytes) {
   const size = Number(bytes)
@@ -52,12 +57,22 @@ async function loadLivery() {
   }
 }
 
-function handleCarFile(event) {
+async function cancelPendingUpload() {
+  const uploadId = pendingUploadId.value
+  pendingUploadId.value = ''
+  if (uploadId) {
+    await api(`/users/me/livery/upload-sessions/${uploadId}`, { method: 'DELETE' }).catch(() => {})
+  }
+}
+
+async function handleCarFile(event) {
+  await cancelPendingUpload()
   carFile.value = event.target.files?.[0] || null
   error.value = ''
 }
 
-function handleFolder(event) {
+async function handleFolder(event) {
+  await cancelPendingUpload()
   liveryFiles.value = Array.from(event.target.files || [])
   error.value = ''
   const roots = new Set(liveryFiles.value.map((file) => (file.webkitRelativePath || '').replaceAll('\\', '/').split('/')[0]).filter(Boolean))
@@ -66,7 +81,8 @@ function handleFolder(event) {
   }
 }
 
-function handleImages(event) {
+async function handleImages(event) {
+  await cancelPendingUpload()
   const selected = Array.from(event.target.files || [])
   if (selected.length > 4) {
     previewFiles.value = []
@@ -96,9 +112,64 @@ async function openUploadDialog() {
   if (dialog.value && !dialog.value.open) dialog.value.showModal()
 }
 
-function closeUploadDialog() {
+async function closeUploadDialog() {
+  if (saving.value && pendingUploadId.value) return
+  await cancelPendingUpload()
   uploadDialogOpen.value = false
   if (dialog.value?.open) dialog.value.close()
+}
+
+function createChunkBatches(files, chunkSize, maxBytes, maxParts) {
+  const batches = []
+  let batch = []
+  let batchBytes = 0
+  const flush = () => {
+    if (batch.length) batches.push(batch)
+    batch = []
+    batchBytes = 0
+  }
+
+  files.forEach((file, fileIndex) => {
+    for (let offset = 0; offset < file.size; offset += chunkSize) {
+      const blob = file.slice(offset, Math.min(file.size, offset + chunkSize))
+      if (batch.length && (batch.length >= maxParts || batchBytes + blob.size > maxBytes)) flush()
+      batch.push({ fileIndex, offset, file, blob })
+      batchBytes += blob.size
+    }
+  })
+  flush()
+  return batches
+}
+
+async function saveChunkedLivery() {
+  const fileManifest = liveryFiles.value.map((file) => ({
+    path: file.webkitRelativePath || file.name,
+    size: file.size
+  }))
+
+  if (!pendingUploadId.value) pendingUploadId.value = crypto.randomUUID().replaceAll('-', '')
+  const uploadId = pendingUploadId.value
+  const start = new FormData()
+  start.append('upload_id', uploadId)
+  start.append('car_file', carFile.value, carFile.value.name)
+  start.append('manifest_file', new Blob([JSON.stringify(fileManifest)], { type: 'application/json' }), 'manifest.json')
+  for (const image of previewFiles.value) start.append('images', image, image.name)
+  const uploadConfig = await api('/users/me/livery/upload-sessions', { method: 'POST', body: start })
+
+  const chunkSize = Number(uploadConfig.chunk_size) || UPLOAD_CHUNK_SIZE
+  const batchMaxBytes = Number(uploadConfig.batch_max_bytes) || UPLOAD_BATCH_MAX_BYTES
+  const batches = createChunkBatches(liveryFiles.value, chunkSize, batchMaxBytes, UPLOAD_BATCH_MAX_PARTS)
+  for (const batch of batches) {
+    const form = new FormData()
+    form.append('file_indexes', JSON.stringify(batch.map((part) => part.fileIndex)))
+    form.append('offsets', JSON.stringify(batch.map((part) => part.offset)))
+    for (const part of batch) form.append('chunks', part.blob, part.file.name)
+    await api(`/users/me/livery/upload-sessions/${uploadId}/chunks`, { method: 'PUT', body: form })
+  }
+
+  const result = await api(`/users/me/livery/upload-sessions/${uploadId}/complete`, { method: 'POST' })
+  pendingUploadId.value = ''
+  return result
 }
 
 async function saveLivery() {
@@ -121,7 +192,10 @@ async function saveLivery() {
   error.value = ''
   success.value = ''
   try {
-    livery.value = await api('/users/me/livery', { method: 'PUT', body: form })
+    const totalBytes = carFile.value.size + liveryFiles.value.reduce((sum, file) => sum + file.size, 0) + previewFiles.value.reduce((sum, file) => sum + file.size, 0)
+    livery.value = totalBytes > CHUNKED_UPLOAD_THRESHOLD
+      ? await saveChunkedLivery()
+      : await api('/users/me/livery', { method: 'PUT', body: form })
     success.value = t('profile.liverySaved')
     closeUploadDialog()
     clearSelectedFiles()
@@ -230,24 +304,24 @@ onBeforeUnmount(() => {
       <form class="pilot-livery-form" @submit.prevent="saveLivery">
         <header class="pilot-livery-dialog-head">
           <h2 id="pilot-livery-dialog-title">{{ t('profile.liveryUploadTitle') }}</h2>
-          <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="closeUploadDialog">
+          <button class="icon-button" type="button" :disabled="saving" :title="t('common.close')" :aria-label="t('common.close')" @click="closeUploadDialog">
             <X :size="18" />
           </button>
         </header>
 
         <label class="pilot-livery-file-field">
           <span>{{ t('profile.liveryCarsFile') }}</span>
-          <input ref="carInput" type="file" accept=".json,application/json" required @change="handleCarFile" />
+          <input ref="carInput" type="file" accept=".json,application/json" required :disabled="saving" @change="handleCarFile" />
         </label>
         <label class="pilot-livery-file-field">
           <span>{{ t('profile.liveryFolderFiles') }}</span>
-          <input ref="folderInput" type="file" webkitdirectory directory multiple required @change="handleFolder" />
+          <input ref="folderInput" type="file" webkitdirectory directory multiple required :disabled="saving" @change="handleFolder" />
           <small v-if="selectedFolderName">{{ selectedFolderName }} · {{ liveryFiles.length }}</small>
           <small>{{ t('profile.liveryFolderHint') }}</small>
         </label>
         <label class="pilot-livery-file-field">
           <span>{{ t('profile.liveryScreenshots') }}</span>
-          <input ref="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple @change="handleImages" />
+          <input ref="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple :disabled="saving" @change="handleImages" />
           <small>{{ t('profile.liveryImagesHint') }}</small>
           <small v-if="previewFiles.length">{{ previewFiles.length }}/4</small>
         </label>
