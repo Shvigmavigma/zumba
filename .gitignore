@@ -9,5 +9,8 @@ node_modules/
 dist/
 coverage/
 tmp/
+**/bin/
+**/obj/
+desktop/**/publish/
 postgres_data/
 backups/

@@ -6,6 +6,7 @@ import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import ProfileAnalytics from '../components/ProfileAnalytics.vue'
+import PilotLiveryPanel from '../components/PilotLiveryPanel.vue'
 import PilotRoles from '../components/PilotRoles.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
@@ -23,6 +24,11 @@ const adminOpening = ref(false)
 const avatarViewerOpen = ref(false)
 const licenseTiers = ref(DEFAULT_LICENSE_TIERS)
 const canManagePilot = computed(() => state.user?.role === 'admin' && state.user?.status === 'active')
+const canManageLivery = computed(() => (
+  state.user?.id === pilot.value?.id
+  && pilot.value?.status === 'active'
+  && ['admin', 'moder', 'marshall', 'smm', 'pilot'].includes(state.user?.role)
+))
 
 function formatDate(value) {
   return formatShortDate(value, { month: 'long' })
@@ -165,6 +171,7 @@ onMounted(async () => {
         </div>
       </div>
     </section>
+    <PilotLiveryPanel v-if="pilot" :user-id="pilot.id" :can-manage="canManageLivery" />
     <ProfileAnalytics v-if="pilot" :user-id="pilot.id" :favorite-car="pilot.favorite_car" :user="pilot" />
     <AvatarViewer
       :open="avatarViewerOpen"

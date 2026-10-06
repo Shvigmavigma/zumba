@@ -7,6 +7,7 @@ import AvatarViewer from '../components/AvatarViewer.vue'
 import AccountModerationNotice from '../components/AccountModerationNotice.vue'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import ProfileAnalytics from '../components/ProfileAnalytics.vue'
+import PilotLiveryPanel from '../components/PilotLiveryPanel.vue'
 import PilotRoles from '../components/PilotRoles.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
@@ -196,6 +197,11 @@ onMounted(() => {
       </div>
     </article>
 
+    <PilotLiveryPanel
+      v-if="user"
+      :user-id="user.id"
+      :can-manage="user.status === 'active' && ['admin', 'moder', 'marshall', 'smm', 'pilot'].includes(user.role)"
+    />
     <ProfileAnalytics v-if="user" :user-id="user.id" :favorite-car="user.favorite_car" :user="user" />
 
     <RouterLink v-else class="button" to="/login">{{ t('nav.login') }}</RouterLink>
