@@ -72,14 +72,14 @@ class AccEntrylistTest(unittest.TestCase):
             for index in range(1, 32)
         }
 
-        changes, _ = build_rating_changes(rows, users, "ACC")
+        changes, _ = build_rating_changes(rows, users, "ACC", 1.0)
         deltas = {change["position"]: change["delta"] for change in changes}
 
-        self.assertEqual([deltas[float(position)] for position in range(1, 9)], [75, 70, 65, 60, 55, 50, 45, 40])
-        self.assertEqual(deltas[31.0], -75)
+        self.assertEqual([deltas[float(position)] for position in range(1, 9)], [188, 175, 162, 150, 138, 125, 113, 100])
+        self.assertEqual(deltas[31.0], -188)
         self.assertEqual(sum(deltas.values()), 0)
 
-    def test_rer_caps_an_extreme_upset_at_one_hundred(self):
+    def test_rer_caps_an_extreme_upset_at_delta_limit(self):
         rows = [{"user_id": index, "position": index, "finish_ms": index * 1000} for index in range(1, 10)]
         users = {
             index: SimpleNamespace(
@@ -92,9 +92,9 @@ class AccEntrylistTest(unittest.TestCase):
             for index in range(1, 10)
         }
 
-        changes, _ = build_rating_changes(rows, users, "ACC")
+        changes, _ = build_rating_changes(rows, users, "ACC", 1.0)
 
-        self.assertEqual(next(change["delta"] for change in changes if change["user_id"] == 1), 100)
+        self.assertEqual(next(change["delta"] for change in changes if change["user_id"] == 1), 250)
 
     def test_average_lap_ignores_missing_zero_fields(self):
         results = {

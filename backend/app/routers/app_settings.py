@@ -11,7 +11,7 @@ from app.deps import require_admin, require_news_editor
 from app.models import AppSetting, User
 from app.rate_limit import limiter, set_request_limits
 from app.schemas import BrandingSettingsRead, BrandingSettingsUpdate, DonationSettingsRead, DonationSettingsUpdate, LicenseSettingsRead, LicenseSettingsUpdate, NewsSettingsRead, NewsSettingsUpdate, SystemSettingsRead, SystemSettingsUpdate, WeatherSettingsRead
-from app.services import recalculate_all_ratings
+from app.services import DEFAULT_RATING_CHANGE_COEFFICIENT, recalculate_all_ratings
 
 
 router = APIRouter()
@@ -34,7 +34,6 @@ DEFAULT_BROWSER_TITLE = "BMRL Race Control"
 DEFAULT_BROWSER_ICON_URL = DEFAULT_LOGOS["light_logo_url"]
 DEFAULT_REQUESTS_PER_USER_PER_MINUTE = 1200
 DEFAULT_REQUESTS_PER_IP_PER_MINUTE = 1200
-DEFAULT_RATING_CHANGE_COEFFICIENT = 1.5
 DEFAULT_SR_PER_RACE = 0.3
 # Kept as an import-compatible alias for older callers.
 DEFAULT_SR_CHANGE_COEFFICIENT = DEFAULT_RATING_CHANGE_COEFFICIENT

@@ -12,6 +12,7 @@ RATING_EXPECTATION_WEIGHT = 50
 RATING_FULL_FIELD_SIZE = 8
 RATING_DELTA_LIMIT = 250
 SYSTEM_SETTINGS_KEY = "system_settings"
+DEFAULT_RATING_CHANGE_COEFFICIENT = 1.5
 RATING_ROW_KEYS = ("rating_old", "rating_new", "rating_delta", "rating_expected", "rating_score", "rating_k")
 SR_FINISH_BONUS = 0.3
 SR_BONUS_META_KEY = "sr_bonus"
@@ -183,14 +184,6 @@ def sr_bonus_user_ids(results: dict | list | None) -> list[int]:
         user_id = row.get("user_id")
         if user_id is None or row.get("status") == "missing":
             continue
-        lap_count = row.get("lap_count")
-        has_activity = (
-            isinstance(row.get("finish_ms"), (int, float))
-            or isinstance(row.get("best_lap_ms"), (int, float))
-            or (isinstance(lap_count, (int, float)) and lap_count > 0)
-        )
-        if not has_activity:
-            continue
         normalized_user_id = int(user_id)
         if normalized_user_id in seen:
             continue
@@ -303,7 +296,7 @@ def build_rating_changes(
     race_rows: list[dict],
     users: dict[int, User],
     game: str,
-    rating_change_coefficient: float = RATING_DELTA_SCALE,
+    rating_change_coefficient: float = 1.0,
 ) -> tuple[list[dict], float]:
     # Excluded pilots remain visible in results but never affect RER or the
     # strength of field used for the other participants.
@@ -344,7 +337,7 @@ def build_rating_changes(
             )
             * field_factor
             * RATING_DELTA_SCALE
-            / max(0.01, float(rating_change_coefficient))
+            * max(0.01, float(rating_change_coefficient))
         )
         delta = _bound_rating_delta(old_rating, delta)
         changes.append(
@@ -360,7 +353,7 @@ def build_rating_changes(
                     RATING_POSITION_WEIGHT
                     * field_factor
                     * RATING_DELTA_SCALE
-                    / max(0.01, float(rating_change_coefficient)),
+                    * max(0.01, float(rating_change_coefficient)),
                     4,
                 ),
                 "time_ms": rating_time_ms(row),
@@ -452,11 +445,16 @@ async def get_rating_change_coefficient(session: AsyncSession) -> float:
             0.01,
             min(
                 10.0,
-                float(value.get("rating_change_coefficient", value.get("sr_change_coefficient", RATING_DELTA_SCALE))),
+                float(
+                    value.get(
+                        "rating_change_coefficient",
+                        value.get("sr_change_coefficient", DEFAULT_RATING_CHANGE_COEFFICIENT),
+                    )
+                ),
             ),
         )
     except (TypeError, ValueError):
-        return RATING_DELTA_SCALE
+        return DEFAULT_RATING_CHANGE_COEFFICIENT
 
 
 async def apply_race_rating(

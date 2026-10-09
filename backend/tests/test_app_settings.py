@@ -1,6 +1,8 @@
 import unittest
+from types import SimpleNamespace
 
 from app.routers.app_settings import DEFAULT_AVATAR_URL, DEFAULT_BROWSER_ICON_URL, DEFAULT_BROWSER_TITLE, DEFAULT_LOGOS, DEFAULT_RATING_CHANGE_COEFFICIENT, DEFAULT_REQUESTS_PER_IP_PER_MINUTE, DEFAULT_REQUESTS_PER_USER_PER_MINUTE, DEFAULT_SR_PER_RACE, branding_settings_from_value, system_settings_from_value
+from app.services import get_rating_change_coefficient, get_sr_per_race
 
 
 class BrandingSettingsTest(unittest.TestCase):
@@ -49,6 +51,16 @@ class BrandingSettingsTest(unittest.TestCase):
         normalized = system_settings_from_value({"sr_change_coefficient": 2.5})
         self.assertEqual(normalized.rating_change_coefficient, 2.5)
         self.assertEqual(normalized.sr_per_race, DEFAULT_SR_PER_RACE)
+
+
+class RatingRuntimeSettingsTest(unittest.IsolatedAsyncioTestCase):
+    async def test_rating_runtime_uses_admin_settings(self):
+        class Session:
+            async def get(self, model, key):
+                return SimpleNamespace(value={"rating_change_coefficient": 2.0, "sr_per_race": 0.75})
+
+        self.assertEqual(await get_rating_change_coefficient(Session()), 2.0)
+        self.assertEqual(await get_sr_per_race(Session()), 0.75)
 
 
 if __name__ == "__main__":

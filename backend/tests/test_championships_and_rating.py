@@ -5,7 +5,7 @@ from unittest import TestCase
 from app.models import ChampionshipScoringSystem, RaceStatus, TeamApplicationStatus
 from app.routers.championships import build_standings
 from app.schemas import ChampionshipCreate
-from app.services import build_rating_changes
+from app.services import build_rating_changes, sr_bonus_user_ids
 
 
 def pilot(user_id: int, pilot_number: int) -> SimpleNamespace:
@@ -122,6 +122,34 @@ class ChampionshipAndRatingTests(TestCase):
 
         self.assertGreater(winner_ratings[29], winner_ratings[19])
         self.assertEqual(next(index + 1 for index, rating in enumerate(winner_ratings) if rating >= 10000), 71)
+
+    def test_higher_admin_rer_multiplier_increases_race_gain(self):
+        users = {
+            user_id: SimpleNamespace(
+                rating=1000,
+                rating_race_count=0,
+                game_ratings={"ACC": {"rating": 1000, "race_count": 0}},
+                exclude_from_rer=False,
+            )
+            for user_id in range(1, 9)
+        }
+        rows = [{"user_id": user_id, "position": user_id, "finish_ms": user_id * 1000} for user_id in users]
+
+        normal, _ = build_rating_changes(rows, users, "ACC", 1.0)
+        increased, _ = build_rating_changes(rows, users, "ACC", 2.0)
+
+        self.assertGreater(increased[0]["delta"], normal[0]["delta"])
+
+    def test_sr_bonus_includes_result_participants_without_timing_data(self):
+        results = {
+            "rows": [
+                {"user_id": 1, "position": 1},
+                {"user_id": 2, "status": "missing", "finish_ms": 1234},
+                {"user_id": 1, "position": 2},
+            ]
+        }
+
+        self.assertEqual(sr_bonus_user_ids(results), [1])
 
 
 if __name__ == "__main__":
