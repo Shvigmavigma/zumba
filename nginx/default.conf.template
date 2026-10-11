@@ -11,7 +11,7 @@ server {
     gzip on;
     gzip_types text/plain text/css application/json application/javascript application/xml image/svg+xml;
 
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.twitch.tv https://id.twitch.tv; frame-src https://player.twitch.tv https://www.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'self'; form-action 'self' https://steamcommunity.com; frame-ancestors 'none'" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com 'sha256-tk3sakn64f3TqBjzT6H/LAH3++9cUrfZkZJc1+nZIco='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.twitch.tv https://id.twitch.tv; frame-src https://player.twitch.tv https://www.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'self'; form-action 'self' https://steamcommunity.com; frame-ancestors 'none'" always;
     add_header X-Frame-Options "DENY" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
@@ -32,7 +32,7 @@ server {
     location /api/uploads/ {
         alias /app/uploads/;
         add_header Cache-Control "public, max-age=86400";
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.twitch.tv https://id.twitch.tv; frame-src https://player.twitch.tv https://www.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'self'; form-action 'self' https://steamcommunity.com; frame-ancestors 'none'" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com 'sha256-tk3sakn64f3TqBjzT6H/LAH3++9cUrfZkZJc1+nZIco='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.twitch.tv https://id.twitch.tv; frame-src https://player.twitch.tv https://www.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'self'; form-action 'self' https://steamcommunity.com; frame-ancestors 'none'" always;
         add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
@@ -77,7 +77,7 @@ server {
     location / {
         root /usr/share/nginx/html;
         add_header Cache-Control "no-store, no-cache, must-revalidate";
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.twitch.tv https://id.twitch.tv; frame-src https://player.twitch.tv https://www.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'self'; form-action 'self' https://steamcommunity.com; frame-ancestors 'none'" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com 'sha256-tk3sakn64f3TqBjzT6H/LAH3++9cUrfZkZJc1+nZIco='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.twitch.tv https://id.twitch.tv; frame-src https://player.twitch.tv https://www.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'self'; form-action 'self' https://steamcommunity.com; frame-ancestors 'none'" always;
         add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
@@ -90,7 +90,7 @@ server {
         # SPA routes or accidentally resolved as a directory.
         alias /usr/share/nginx/html/assets/;
         add_header Cache-Control "public, max-age=31536000, immutable";
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.twitch.tv https://id.twitch.tv; frame-src https://player.twitch.tv https://www.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'self'; form-action 'self' https://steamcommunity.com; frame-ancestors 'none'" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com 'sha256-tk3sakn64f3TqBjzT6H/LAH3++9cUrfZkZJc1+nZIco='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.twitch.tv https://id.twitch.tv; frame-src https://player.twitch.tv https://www.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'self'; form-action 'self' https://steamcommunity.com; frame-ancestors 'none'" always;
         add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
