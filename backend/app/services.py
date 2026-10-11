@@ -10,7 +10,6 @@ RATING_DELTA_SCALE = 2.5
 RATING_POSITION_WEIGHT = 100
 RATING_EXPECTATION_WEIGHT = 50
 RATING_FULL_FIELD_SIZE = 8
-RATING_DELTA_LIMIT = 250
 SYSTEM_SETTINGS_KEY = "system_settings"
 DEFAULT_RATING_CHANGE_COEFFICIENT = 1.5
 RATING_ROW_KEYS = ("rating_old", "rating_new", "rating_delta", "rating_expected", "rating_score", "rating_k")
@@ -259,10 +258,10 @@ def rating_positions(rows: list[dict]) -> dict[int, float]:
 
 
 def _bound_rating_delta(old_rating: int, delta: int) -> int:
-    limited = max(-RATING_DELTA_LIMIT, min(RATING_DELTA_LIMIT, int(delta)))
+    # There is no per-race delta cap; only keep ratings inside the global scale.
     minimum_delta = int(MIN_RATING - old_rating)
     maximum_delta = int(MAX_RATING - old_rating)
-    return max(minimum_delta, min(maximum_delta, limited))
+    return max(minimum_delta, min(maximum_delta, int(delta)))
 
 
 def _balance_rating_changes(changes: list[dict]) -> None:

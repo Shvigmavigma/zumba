@@ -79,7 +79,7 @@ class AccEntrylistTest(unittest.TestCase):
         self.assertEqual(deltas[31.0], -188)
         self.assertEqual(sum(deltas.values()), 0)
 
-    def test_rer_caps_an_extreme_upset_at_delta_limit(self):
+    def test_rer_allows_large_deltas_for_extreme_upset(self):
         rows = [{"user_id": index, "position": index, "finish_ms": index * 1000} for index in range(1, 10)]
         users = {
             index: SimpleNamespace(
@@ -92,9 +92,12 @@ class AccEntrylistTest(unittest.TestCase):
             for index in range(1, 10)
         }
 
-        changes, _ = build_rating_changes(rows, users, "ACC", 1.0)
+        changes, _ = build_rating_changes(rows, users, "ACC", 1.5)
 
-        self.assertEqual(next(change["delta"] for change in changes if change["user_id"] == 1), 250)
+        winner_delta = next(change["delta"] for change in changes if change["user_id"] == 1)
+        last_place_delta = next(change["delta"] for change in changes if change["user_id"] == 9)
+        self.assertGreater(winner_delta, 250)
+        self.assertLess(last_place_delta, -250)
 
     def test_average_lap_ignores_missing_zero_fields(self):
         results = {

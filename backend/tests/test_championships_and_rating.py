@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest import TestCase
 
-from app.models import ChampionshipScoringSystem, RaceStatus, TeamApplicationStatus
+from app.models import MAX_RATING, MIN_RATING, ChampionshipScoringSystem, RaceStatus, TeamApplicationStatus
 from app.routers.championships import build_standings
 from app.schemas import ChampionshipCreate
 from app.services import build_rating_changes, sr_bonus_user_ids
@@ -67,7 +67,7 @@ class ChampionshipAndRatingTests(TestCase):
         self.assertEqual(standings[0]["wins"], standings[1]["wins"])
         self.assertGreater(standings[0]["second_places"], standings[1]["second_places"])
 
-    def test_rating_changes_are_bounded_balanced_and_can_reach_maximum(self):
+    def test_rating_changes_are_balanced_and_stay_within_global_scale(self):
         users = {
             user_id: SimpleNamespace(
                 rating=1000,
@@ -82,8 +82,7 @@ class ChampionshipAndRatingTests(TestCase):
         changes, _ = build_rating_changes(rows, users, "ACC", 1.0)
 
         self.assertEqual(sum(change["delta"] for change in changes), 0)
-        self.assertLessEqual(max(change["delta"] for change in changes), 250)
-        self.assertGreaterEqual(min(change["delta"] for change in changes), -250)
+        self.assertTrue(all(MIN_RATING <= change["new_rating"] <= MAX_RATING for change in changes))
 
         maxed_users = {
             user_id: SimpleNamespace(
