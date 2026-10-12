@@ -1,15 +1,26 @@
+import json
 import unittest
+from datetime import datetime
 from types import SimpleNamespace
 
 from pydantic import ValidationError
 
 from app.race_assets import DEFAULT_ACC_CAR_MODEL_IDS, DEFAULT_RACE_ASSETS, normalize_race_assets, preserve_track_metadata
-from app.routers.races import acc_best_lap_map, acc_driver_category_for_user, acc_forced_car_model, acc_line_car_model, build_acc_results_payload, race_average_lap_ms
+from app.routers.races import acc_best_lap_map, acc_driver_category_for_user, acc_forced_car_model, acc_line_car_model, build_acc_results_payload, race_average_lap_ms, storable_results
 from app.schemas import RaceRegisterRequest, TeamRaceRegisterRequest
 from app.services import build_rating_changes, rating_positions
 
 
 class AccEntrylistTest(unittest.TestCase):
+    def test_storable_results_encodes_datetimes_in_pilot_roles(self):
+        timestamp = datetime(2026, 10, 13, 12, 0)
+        results = {"rows": [{"pilot_roles": [{"created_at": timestamp, "updated_at": timestamp}]}]}
+
+        encoded = storable_results(results)
+
+        self.assertEqual(encoded["rows"][0]["pilot_roles"][0]["created_at"], "2026-10-13T12:00:00")
+        json.dumps(encoded)
+
     def test_results_skip_zero_lap_rows_and_match_active_profiles(self):
         def line(player_id, name, laps, *, race_number=7, best_lap=95000, total_time=1900000):
             return {

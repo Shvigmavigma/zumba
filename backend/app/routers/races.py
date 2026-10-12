@@ -1,6 +1,7 @@
 ﻿from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import delete
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -1033,6 +1034,10 @@ async def get_manual_result_pilots(session: AsyncSession, user_ids: set[int]) ->
         )
     ).all()
     return {user.id: manual_result_pilot_data(user, team_name, team_abbreviation) for user, team_name, team_abbreviation in rows}
+
+
+def storable_results(results: dict) -> dict:
+    return jsonable_encoder(results)
 
 
 def build_manual_results_payload(race: Race, payload: ManualResultsUpload, registered: list[dict], manual_pilots: dict[int, dict] | None = None) -> dict:
@@ -2127,7 +2132,7 @@ async def upload_results(
         raise HTTPException(status_code=400, detail="Use manual result upload for LMU races")
     if race.status == RaceStatus.finished:
         await restore_race_sr_bonus(session, race)
-    race.results = payload.results
+    race.results = storable_results(payload.results)
     race.status = RaceStatus.finished
     race.is_passed = True
     await recalculate_race_results(session, race)
@@ -2157,7 +2162,7 @@ async def upload_acc_results(
     known_users_by_steam = {} if race.is_team_event else await acc_result_user_lookup(session, payload.qualification_results, payload.race_results)
     if race.status == RaceStatus.finished:
         await restore_race_sr_bonus(session, race)
-    race.results = (
+    race.results = storable_results(
         build_acc_team_results_payload(race, payload.qualification_results, payload.race_results, team_registration_rows)
         if race.is_team_event
         else build_acc_results_payload(race, payload.qualification_results, payload.race_results, registration_rows, known_users_by_steam)
@@ -2188,7 +2193,7 @@ async def upload_manual_results(
     manual_pilots = await get_manual_result_pilots(session, {row.user_id for row in payload.rows}) if race.game == "LMU" else None
     if race.status == RaceStatus.finished:
         await restore_race_sr_bonus(session, race)
-    race.results = build_manual_results_payload(race, payload, registered, manual_pilots)
+    race.results = storable_results(build_manual_results_payload(race, payload, registered, manual_pilots))
     race.status = RaceStatus.finished
     race.is_passed = True
     await recalculate_race_results(session, race)
