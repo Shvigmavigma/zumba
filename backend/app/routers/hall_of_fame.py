@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.models import RACE_GAMES, Race, RaceStatus, Team, User, UserStatus
+from app.pilot_roles import pilot_roles_payload
 from app.rate_limit import limiter
 from app.schemas import HallOfFamePilotRead, HallOfFameRead, HallOfFameTeamRead
 from app.services import result_rows
@@ -93,6 +94,7 @@ def pilot_payload(user: User, team_name: str | None, team_abbreviation: str | No
         bronze=stats["bronze"],
         podiums=stats["podiums"],
         stats_by_game=complete_game_stats(stats_by_game),
+        pilot_roles=pilot_roles_payload(user),
     )
 
 

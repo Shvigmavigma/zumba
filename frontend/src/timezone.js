@@ -196,3 +196,11 @@ export function dateKeyInTimeZone(value) {
   const data = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]))
   return `${data.year}-${data.month}-${data.day}`
 }
+
+/** Short name of the active time zone, e.g. "GMT+3" or "МСК". */
+export function timeZoneShortName(value = Date.now()) {
+  const part = new Intl.DateTimeFormat(localeCode(), { timeZone: activeTimeZone(), timeZoneName: 'short' })
+    .formatToParts(new Date(value))
+    .find((item) => item.type === 'timeZoneName')
+  return part?.value || ''
+}

@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown, Plus, Save, Trash2 } from 'lucide-vue-next'
 import { api } from '../api'
+import { updateRaceAssetsCache } from '../raceDisplay'
 
 const { t } = useI18n()
 const emit = defineEmits(['error'])
@@ -156,6 +157,7 @@ async function saveRaceAssets() {
     })
     raceAssetsByGame.value = normalizeRaceAssetsDraft(config)
     accCarModelMappings.value = carModelMappingsFromConfig(config)
+    updateRaceAssetsCache(config)
     raceAssetsSaved.value = true
   } catch (err) {
     setError(err)

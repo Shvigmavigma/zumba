@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import { browserStorage, readTheme } from './shell/themePilot'
 
 const savedLocale = localStorage.getItem('locale')
 const initialLocale = savedLocale === 'en' ? 'en' : 'ru'
@@ -11,7 +12,9 @@ const initialTimeZone = savedTimeZone && (savedTimeZone !== 'UTC' || savedTimeZo
 export const state = reactive({
   token: localStorage.getItem('token') || '',
   user: JSON.parse(localStorage.getItem('user') || 'null'),
-  theme: localStorage.getItem('theme') || 'light',
+  // Dark is the default look; a saved preference always wins, and a light theme
+  // taken just this once (ThemePilot.vue) holds for this tab.
+  theme: readTheme(browserStorage('localStorage'), browserStorage('sessionStorage')).theme,
   locale: initialLocale,
   timeZone: initialTimeZone,
   licenseTiers: null,

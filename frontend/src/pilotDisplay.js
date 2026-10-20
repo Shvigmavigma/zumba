@@ -45,6 +45,17 @@ export function ratingRaceCountForGame(user, game = RATING_GAMES[0]) {
   return item?.race_count ?? user?.rating_race_count ?? 0
 }
 
+/**
+ * Simulators to show ratings and licences for: the ones the pilot ticked plus any
+ * they have actually raced in (ratings exist even for unticked games). ACC when none.
+ * @param {object | null | undefined} user
+ * @returns {string[]}
+ */
+export function ratedGames(user) {
+  const games = RATING_GAMES.filter((game) => user?.games?.includes(game) || Number(user?.game_ratings?.[game]?.race_count) > 0)
+  return games.length ? games : [RATING_GAMES[0]]
+}
+
 export function normalizeLicenseTiers(data) {
   const items = Array.isArray(data?.tiers) ? data.tiers : Array.isArray(data) ? data : []
   return DEFAULT_LICENSE_TIERS.map((fallback, index) => {
@@ -95,6 +106,36 @@ export function pilotName(user, fallback = '') {
   return fullName || user?.nickname || user?.login || fallback
 }
 
+/**
+ * A pilot's surname, for big display type: the first last name any of the
+ * records knows, otherwise the whole name they go by (a nickname, a login).
+ * @param {string} name  the name the pilot is shown under
+ * @param {...({ last_name?: string | null } | null | undefined)} people  records that may know the last name
+ * @returns {string}
+ */
+export function pilotSurname(name, ...people) {
+  for (const person of people) {
+    const last = String(person?.last_name ?? '').trim()
+    if (last) return last
+  }
+  return String(name ?? '').trim()
+}
+
+/**
+ * A pilot's first name, for big display type: the first first name any of the
+ * records knows, otherwise the whole name they go by.
+ * @param {string} name  the name the pilot is shown under
+ * @param {...({ first_name?: string | null } | null | undefined)} people  records that may know the first name
+ * @returns {string}
+ */
+export function pilotFirstName(name, ...people) {
+  for (const person of people) {
+    const first = String(person?.first_name ?? '').trim()
+    if (first) return first
+  }
+  return String(name ?? '').trim()
+}
+
 export function pilotSearchText(user) {
   const ratings = RATING_GAMES.flatMap((game) => [formatRating(ratingForGame(user, game)), ratingLicense(ratingForGame(user, game))])
   return [
@@ -133,4 +174,26 @@ export function sortPilots(users, sortMode = 'rating_desc', ratingGame = RATING_
     return byRating(a, b) || bySr(a, b) || byName(a, b)
   })
   return sorted
+}
+
+/**
+ * Where a rating sits inside its licence tier.
+ * @param {number|string} value rating
+ * @param {Array<{min_rating:number,max_rating:number,name:string,color:string}>} [tiers]
+ * @returns {{ tier: object, next: object|null, progress: number, toNext: number }}
+ */
+export function licenseProgress(value, tiers = DEFAULT_LICENSE_TIERS) {
+  const list = tiers || DEFAULT_LICENSE_TIERS
+  const rating = Number(value)
+  const tier = ratingLicenseTier(value, list)
+  const index = list.indexOf(tier)
+  const next = index >= 0 && index < list.length - 1 ? list[index + 1] : null
+  if (!Number.isFinite(rating) || !next) return { tier, next, progress: next ? 0 : 1, toNext: 0 }
+  const span = Math.max(1, next.min_rating - tier.min_rating)
+  return {
+    tier,
+    next,
+    progress: Math.max(0, Math.min(1, (rating - tier.min_rating) / span)),
+    toNext: Math.max(0, Math.ceil(next.min_rating - rating))
+  }
 }

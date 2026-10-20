@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Check, ChevronDown, Eye, Shield, Trash2, X } from 'lucide-vue-next'
+import { Check, ChevronDown, Eye, Shield, ShieldAlert, Trash2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import { setSession, state } from '../store'
@@ -96,46 +96,46 @@ onBeforeUnmount(() => window.clearInterval(clockInterval))
 </script>
 
 <template>
-  <section v-if="showNotice" class="account-moderation-notice" :class="{ 'is-rejected': rejection }" role="status">
-    <Shield :size="19" />
-    <div class="account-moderation-content">
-      <strong>
+  <section v-if="showNotice" class="mod-notice" :class="{ 'is-rejected': rejection }" role="status">
+    <component :is="rejection ? ShieldAlert : Shield" class="mod-notice__icon" :size="19" />
+    <div class="mod-notice__content">
+      <strong class="mod-notice__title">
         {{ isUnderReview ? t('profile.waitingApproval') : isRejectedRegistration ? t('profile.registrationRejected') : t('profile.profileRequestRejected') }}
       </strong>
-      <p v-if="rejection" class="account-rejection-reason">
-        <span>{{ t('profile.rejectionReasonLabel') }}:</span> {{ rejection.reason }}
+      <p v-if="rejection" class="mod-notice__reason">
+        <b>{{ t('profile.rejectionReasonLabel') }}:</b> {{ rejection.reason }}
       </p>
       <p v-else>{{ t('profile.accountUnderReview') }}</p>
-      <p v-if="rejection" class="account-rejection-date">{{ t('profile.requestSubmittedAt', { date: formatDate(rejection.rejected_at) }) }}</p>
+      <p v-if="rejection" class="mod-notice__meta">{{ t('profile.requestSubmittedAt', { date: formatDate(rejection.rejected_at) }) }}</p>
 
-      <div class="account-moderation-actions">
-        <button v-if="rejection" class="button small" type="button" :aria-expanded="detailsOpen" @click="detailsOpen = !detailsOpen">
+      <div v-if="rejection" class="mod-notice__actions">
+        <button class="ui-btn ui-btn--ghost ui-btn--sm" type="button" :aria-expanded="detailsOpen" @click="detailsOpen = !detailsOpen">
           <Eye v-if="!detailsOpen" :size="15" />
           <ChevronDown v-else :size="15" />
           {{ detailsOpen ? t('profile.closeRejectedRequest') : t('profile.openRejectedRequest') }}
         </button>
-        <button v-if="isRejectedRegistration" class="button small primary" type="button" :disabled="!canResubmit || resubmitting" @click="resubmitRegistration">
+        <button v-if="isRejectedRegistration" class="ui-btn ui-btn--primary ui-btn--sm" type="button" :disabled="!canResubmit || resubmitting" @click="resubmitRegistration">
           <Check :size="15" />
           {{ resubmitting ? t('common.loading') : t('profile.resubmitRegistration') }}
         </button>
-        <span v-if="isRejectedRegistration && !canResubmit && resubmitAfter" class="muted account-resubmit-time">
+        <span v-if="isRejectedRegistration && !canResubmit && resubmitAfter" class="mod-notice__meta">
           {{ t('profile.resubmitAvailableAt', { date: formatDate(resubmitAfter) }) }}
         </span>
-        <span v-if="resubmitted" class="account-resubmit-success">{{ t('profile.registrationResubmitted') }}</span>
-        <span v-if="error" class="error">{{ error }}</span>
-        <button v-if="props.scope === 'profile' && isRejectedProfile" class="button small danger" type="button" :disabled="dismissing" @click="dismissProfileRejection">
+        <span v-if="resubmitted" class="mod-notice__success">{{ t('profile.registrationResubmitted') }}</span>
+        <span v-if="error" class="mod-notice__error" role="alert">{{ error }}</span>
+        <button v-if="props.scope === 'profile' && isRejectedProfile" class="ui-btn ui-btn--danger ui-btn--sm" type="button" :disabled="dismissing" @click="dismissProfileRejection">
           <Trash2 :size="15" />
           {{ dismissing ? t('common.loading') : t('profile.dismissRejection') }}
         </button>
       </div>
 
-      <div v-if="detailsOpen && rejection" class="account-request-card">
-        <div class="account-request-card-heading">
+      <div v-if="detailsOpen && rejection" class="mod-notice__card">
+        <div class="mod-notice__card-head">
           <h2>{{ t('profile.rejectedRequestCard') }}</h2>
-          <button class="icon-button" type="button" :aria-label="t('common.close')" @click="detailsOpen = false"><X :size="16" /></button>
+          <button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" type="button" :aria-label="t('common.close')" @click="detailsOpen = false"><X :size="16" /></button>
         </div>
-        <p class="account-request-type">{{ t(`moderation.requestTypes.${rejection.request_type}`) }}</p>
-        <dl v-if="requestRows.length" class="account-request-fields">
+        <p class="mod-notice__meta">{{ t(`moderation.requestTypes.${rejection.request_type}`) }}</p>
+        <dl v-if="requestRows.length" class="mod-notice__fields">
           <div v-for="row in requestRows" :key="row.key">
             <dt>{{ row.label }}</dt>
             <dd>{{ row.value }}</dd>
@@ -147,52 +147,122 @@ onBeforeUnmount(() => window.clearInterval(clockInterval))
 </template>
 
 <style scoped>
-.account-moderation-notice {
+.mod-notice {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  width: 100%;
-  margin-bottom: 16px;
   padding: 14px 16px;
-  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
-  border-radius: var(--control-radius);
-  background: color-mix(in srgb, var(--primary) 8%, var(--panel));
-  color: var(--text);
+  border: 1px solid var(--c-blue-line);
+  border-radius: var(--r-md);
+  background: var(--c-blue-soft);
+  color: var(--c-text);
+  font-size: 14px;
+  line-height: 1.45;
 }
 
-.account-moderation-notice > svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: var(--primary);
+.mod-notice.is-rejected {
+  border-color: color-mix(in srgb, var(--bm-red) 34%, transparent);
+  background: color-mix(in srgb, var(--bm-red) 8%, transparent);
 }
 
-.account-moderation-notice.is-rejected {
-  border-color: color-mix(in srgb, var(--danger) 38%, var(--border));
-  background: color-mix(in srgb, var(--danger) 6%, var(--panel));
+.mod-notice__icon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--c-accent-text);
 }
 
-.account-moderation-notice.is-rejected > svg {
-  color: var(--danger);
+.is-rejected .mod-notice__icon {
+  color: var(--bm-red);
 }
 
-.account-moderation-content { min-width: 0; flex: 1; }
-.account-moderation-content > strong { display: block; margin-bottom: 4px; }
-.account-moderation-content p { margin: 4px 0; }
-.account-rejection-reason span { font-weight: 700; }
-.account-rejection-date, .account-resubmit-time { font-size: 13px; }
-.account-moderation-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.account-resubmit-success { color: var(--success); font-weight: 700; }
-.account-request-card { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
-.account-request-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.account-request-card-heading h2 { margin: 0; font-size: 17px; }
-.account-request-type { color: var(--muted); font-size: 13px; }
-.account-request-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 8px 18px; margin: 12px 0 0; }
-.account-request-fields > div { min-width: 0; }
-.account-request-fields dt { color: var(--muted); font-size: 12px; }
-.account-request-fields dd { margin: 2px 0 0; overflow-wrap: anywhere; font-weight: 600; }
+.mod-notice__content {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mod-notice__content p {
+  margin: 0;
+}
+
+.mod-notice__title {
+  font-size: 15px;
+}
+
+.mod-notice__reason {
+  overflow-wrap: anywhere;
+}
+
+.mod-notice__meta {
+  color: var(--c-text-2);
+  font-size: 13px;
+}
+
+.mod-notice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.mod-notice__success {
+  color: var(--bm-green);
+  font-weight: 700;
+}
+
+.mod-notice__error {
+  color: var(--bm-red);
+  font-weight: 600;
+}
+
+.mod-notice__card {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--c-line);
+}
+
+.mod-notice__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mod-notice__card-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.mod-notice__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 8px 18px;
+  margin: 6px 0 0;
+}
+
+.mod-notice__fields > div {
+  min-width: 0;
+}
+
+.mod-notice__fields dt {
+  color: var(--c-text-3);
+  font-size: 12px;
+}
+
+.mod-notice__fields dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 
 @media (max-width: 600px) {
-  .account-moderation-notice { padding: 12px; }
-  .account-moderation-actions { align-items: flex-start; flex-direction: column; }
+  .mod-notice__actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

@@ -1,0 +1,10 @@
+/* Declares layer order: everything in `legacy` loses to the unlayered design system. */
+@layer legacy;
+
+@import './tokens.css';
+@import './base.css';
+@import './primitives.css';
+@import './components.css';
+@import './motion.css';
+@import './fx.css';
+@import './ranks.css';

@@ -1,3 +1,5 @@
+import { safeHttpUrl } from './safeUrl'
+
 export function translatedValue(t, scope, value, fallback = (item) => String(item || '').replaceAll('_', ' ')) {
   const key = `${scope}.${value}`
   const translated = t(key)
@@ -30,7 +32,8 @@ export function isExternalRace(race) {
 }
 
 export function raceOpenHref(race) {
-  return isExternalRace(race) ? race.server_link : `/races/${race.id}`
+  const external = isExternalRace(race) ? safeHttpUrl(race.server_link) : ''
+  return external || `/races/${race.id}`
 }
 
 export function countryLabel(t, country) {

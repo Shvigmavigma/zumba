@@ -1,0 +1,355 @@
+/* Shared building blocks for redesigned pages: cards, section heads, forms, tables, dialogs. */
+
+/* ---------- Cards ---------- */
+.ui-card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: clamp(16px, 2vw, 24px);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-xl);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-1);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+}
+
+.ui-card--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.ui-card--solid {
+  background: var(--c-surface-solid);
+}
+
+.ui-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.ui-card__title {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ui-card__title h2,
+.ui-card__title h3 {
+  margin: 0;
+  color: var(--c-text);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+/* ---------- Section head ---------- */
+.ui-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ui-section-head > div {
+  display: grid;
+  gap: 8px;
+}
+
+.ui-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+/* ---------- Key/value list ---------- */
+.ui-kv {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  background: var(--c-line);
+}
+
+.ui-kv > div {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--c-surface-solid);
+}
+
+.ui-kv dt {
+  color: var(--c-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ui-kv dd {
+  margin: 0;
+  overflow: hidden;
+  color: var(--c-text);
+  font-size: 14px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Forms ---------- */
+.ui-form {
+  display: grid;
+  gap: 18px;
+}
+
+.ui-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.ui-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--c-text);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.ui-input,
+.ui-select,
+.ui-textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-md);
+  background: var(--c-sunken);
+  box-shadow: none;
+  color: var(--c-text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  outline: none;
+  transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), background-color var(--dur-2);
+}
+
+.ui-textarea {
+  min-height: 110px;
+  padding: 12px 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.ui-input:hover,
+.ui-select:hover,
+.ui-textarea:hover {
+  border-color: color-mix(in srgb, var(--bm-blue) 30%, var(--c-line-strong));
+}
+
+.ui-input:focus,
+.ui-select:focus,
+.ui-textarea:focus {
+  border-color: var(--bm-blue-bright);
+  background: color-mix(in srgb, var(--bm-blue) 5%, var(--c-sunken));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bm-blue) 22%, transparent);
+}
+
+.ui-input[aria-invalid='true'],
+.ui-select[aria-invalid='true'],
+.ui-textarea[aria-invalid='true'] {
+  border-color: color-mix(in srgb, var(--bm-red) 70%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bm-red) 14%, transparent);
+}
+
+.ui-input:disabled,
+.ui-select:disabled,
+.ui-textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Native checkbox styled as a rounded tick. */
+.ui-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--c-text);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.ui-check input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--bm-blue);
+}
+
+/* ---------- Tables ---------- */
+.ui-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  background: var(--c-surface-solid);
+}
+
+.ui-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+}
+
+.ui-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--c-line);
+  background: color-mix(in srgb, var(--c-surface-solid) 92%, var(--bm-blue));
+  color: var(--c-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ui-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--c-line);
+  color: var(--c-text);
+  vertical-align: middle;
+}
+
+.ui-table tbody tr {
+  transition: background-color var(--dur-1);
+}
+
+.ui-table tbody tr:hover {
+  background: var(--c-blue-soft);
+}
+
+.ui-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.ui-table .is-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ui-table .is-center {
+  text-align: center;
+}
+
+/* Position plates for standings and results. */
+.ui-pos {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--c-sunken);
+  color: var(--c-text-2);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ui-pos--1 {
+  background: var(--bm-gold);
+  color: #1b1300;
+}
+
+.ui-pos--2 {
+  background: var(--bm-silver);
+  color: #0e141f;
+}
+
+.ui-pos--3 {
+  background: var(--bm-bronze);
+  color: #1d0d02;
+}
+
+/* ---------- Dialogs ---------- */
+.ui-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  overflow-y: auto;
+  background: var(--c-overlay);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.ui-modal {
+  position: relative;
+  display: grid;
+  gap: 16px;
+  width: min(640px, 100%);
+  max-height: calc(100dvh - 40px);
+  padding: clamp(18px, 2.4vw, 26px);
+  overflow-y: auto;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-xl);
+  background: var(--c-surface-2);
+  box-shadow: var(--shadow-2);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+}
+
+.ui-modal--wide {
+  width: min(1080px, 100%);
+}
+
+.ui-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ui-modal__head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+/* ---------- Avatar sizing helpers (legacy avatars ignore --size otherwise). ---------- */
+.ui-avatar-sm {
+  width: 32px;
+  height: 32px;
+  border-width: 1px;
+  box-shadow: none;
+}
+
+.ui-avatar-md {
+  width: 44px;
+  height: 44px;
+}
+
+.ui-avatar-lg {
+  width: 72px;
+  height: 72px;
+}

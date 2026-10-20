@@ -1,21 +1,24 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Medal, RefreshCw, Search, Trophy, Users } from 'lucide-vue-next'
+import { AlertTriangle, Gauge, Medal, RefreshCw, Search, SearchX, Trophy, User, Users, X } from 'lucide-vue-next'
 import { api } from '../api'
-import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
-import PilotRoles from '../components/PilotRoles.vue'
-import TeamAvatar from '../components/TeamAvatar.vue'
-import UserAvatar from '../components/UserAvatar.vue'
+import EmptyState from '../ui/EmptyState.vue'
+import PageHeader from '../ui/PageHeader.vue'
+import SegmentedControl from '../ui/SegmentedControl.vue'
+import CountUp from '../ui/fx/CountUp.vue'
+import HallPodium from './hall-of-fame/HallPodium.vue'
+import HallStandings from './hall-of-fame/HallStandings.vue'
+import { HALL_MODE_MEDALS, HALL_MODE_RATING, hallRating, hallStat, rankHallItems } from './hall-of-fame/hallRanking'
 import { gameOptions } from '../i18nLabels'
-import { OVERALL_RATING_GAME, RATING_GAMES, formatPilotNumber, formatRating, pilotName, ratingForGame, teamHref, teamShortName } from '../pilotDisplay'
+import { OVERALL_RATING_GAME, RATING_GAMES, ratingForGame } from '../pilotDisplay'
 
 const { t } = useI18n()
 
 const data = ref({ pilots: [], teams: [] })
 const activeTab = ref('pilots')
-const ratingMode = ref('rating')
+const ratingMode = ref(HALL_MODE_RATING)
 const search = ref('')
 const ratingGame = ref(OVERALL_RATING_GAME)
 const loading = ref(false)
@@ -24,10 +27,14 @@ const pilotPage = ref(1)
 const teamPage = ref(1)
 const pageSize = 20
 const ratingGameOptions = computed(() => gameOptions(t, true))
+const modeOptions = computed(() => [
+  { value: HALL_MODE_RATING, label: t('hallOfFame.byRating'), icon: Gauge },
+  { value: HALL_MODE_MEDALS, label: t('hallOfFame.byMedals'), icon: Medal }
+])
 
 const tabs = computed(() => [
-  { id: 'pilots', label: t('hallOfFame.pilotsTab'), count: rankedPilots.value.length },
-  { id: 'teams', label: t('hallOfFame.teamsTab'), count: rankedTeams.value.length }
+  { value: 'pilots', label: t('hallOfFame.pilotsTab'), icon: User, count: rankedPilots.value.length },
+  { value: 'teams', label: t('hallOfFame.teamsTab'), icon: Users, count: rankedTeams.value.length }
 ])
 const rankedPilots = computed(() => rankItems(data.value.pilots))
 const rankedTeams = computed(() => rankItems(data.value.teams))
@@ -39,52 +46,32 @@ const pilotTotalPages = computed(() => Math.max(1, Math.ceil(visiblePilots.value
 const teamTotalPages = computed(() => Math.max(1, Math.ceil(visibleTeams.value.length / pageSize)))
 const totalMedals = computed(() => rankedPilots.value.reduce((sum, pilot) => sum + statValue(pilot, 'podiums'), 0))
 
-function statSource(item) {
-  if (ratingGame.value === OVERALL_RATING_GAME) return item || {}
-  return item?.stats_by_game?.[ratingGame.value] || {}
-}
+// View helpers for the redesigned layout (no change to ranking or filtering).
+const isPilots = computed(() => activeTab.value === 'pilots')
+const ranked = computed(() => (isPilots.value ? rankedPilots.value : rankedTeams.value))
+const visible = computed(() => (isPilots.value ? visiblePilots.value : visibleTeams.value))
+const paged = computed(() => (isPilots.value ? pagedPilots.value : pagedTeams.value))
+const currentPage = computed(() => (isPilots.value ? pilotPage.value : teamPage.value))
+const scopeLabel = computed(() => ratingGameOptions.value.find((option) => option.value === ratingGame.value)?.label || ratingGame.value)
+const hasData = computed(() => data.value.pilots.length > 0 || data.value.teams.length > 0)
+const revealKey = computed(() => `${activeTab.value}-${ratingMode.value}-${ratingGame.value}-${currentPage.value}`)
+const summary = computed(() => [
+  { key: 'pilots', icon: Trophy, label: t('hallOfFame.ratedPilots'), value: data.value.pilots.length },
+  { key: 'teams', icon: Users, label: t('hallOfFame.ratedTeams'), value: data.value.teams.length },
+  { key: 'medals', icon: Medal, label: t('hallOfFame.totalMedals'), value: totalMedals.value }
+])
 
 function statValue(item, field) {
-  return Number(statSource(item)?.[field] || 0)
+  return hallStat(item, field, ratingGame.value)
 }
 
-function isTeam(item) {
-  return item?.member_count !== undefined
-}
-
-function teamRatingForGame(team, game) {
-  if (game === OVERALL_RATING_GAME) {
-    const ratings = RATING_GAMES
-      .map((itemGame) => Number(team?.ratings_by_game?.[itemGame]))
-      .filter((rating) => Number.isFinite(rating))
-    return ratings.length ? Math.max(...ratings) : team?.average_rating
-  }
-  return team?.ratings_by_game?.[game] ?? team?.average_rating
-}
-
+/** The RER the item is ranked by in the selected simulator. */
 function ratingValue(item) {
-  return isTeam(item) ? teamRatingForGame(item, ratingGame.value) : ratingForGame(item, ratingGame.value)
-}
-
-function medalCompare(left, right) {
-  return (
-    statValue(right, 'points') - statValue(left, 'points') ||
-    statValue(right, 'gold') - statValue(left, 'gold') ||
-    statValue(right, 'silver') - statValue(left, 'silver') ||
-    statValue(right, 'bronze') - statValue(left, 'bronze')
-  )
+  return hallRating(item, ratingGame.value)
 }
 
 function rankItems(items) {
-  return [...items]
-    .filter((item) => ratingMode.value === 'rating' || statValue(item, 'points') > 0)
-    .sort((left, right) => (
-      (ratingMode.value === 'rating'
-        ? Number(ratingValue(right) || 0) - Number(ratingValue(left) || 0)
-        : medalCompare(left, right)) ||
-      medalCompare(left, right) ||
-      String(left.nickname || left.name || '').localeCompare(String(right.nickname || right.name || ''), undefined, { sensitivity: 'base' })
-    ))
+  return rankHallItems(items, { mode: ratingMode.value, game: ratingGame.value })
 }
 
 function bestPilotFor(team) {
@@ -95,14 +82,6 @@ function filterItems(items, textFactory) {
   const needle = search.value.trim().toLowerCase()
   if (!needle) return items
   return items.filter((item) => textFactory(item).includes(needle))
-}
-
-function pilotTitle(pilot) {
-  return pilotName(pilot, pilot.login)
-}
-
-function pilotLine(pilot) {
-  return `#${formatPilotNumber(pilot.pilot_number)} - ${pilot.nickname || pilot.login}`
 }
 
 function pilotSearchText(pilot) {
@@ -133,7 +112,7 @@ function teamSearchText(team) {
     statValue(team, 'gold'),
     statValue(team, 'silver'),
     statValue(team, 'bronze'),
-    ...RATING_GAMES.map((game) => teamRatingForGame(team, game)),
+    ...RATING_GAMES.map((game) => hallRating(team, game)),
     bestPilotFor(team)?.login,
     bestPilotFor(team)?.nickname,
     bestPilotFor(team)?.first_name,
@@ -143,13 +122,6 @@ function teamSearchText(team) {
     .filter((value) => value !== undefined && value !== null)
     .join(' ')
     .toLowerCase()
-}
-
-function rankClass(index) {
-  if (index === 0) return 'is-gold'
-  if (index === 1) return 'is-silver'
-  if (index === 2) return 'is-bronze'
-  return ''
 }
 
 async function load() {
@@ -173,7 +145,7 @@ watch(activeTab, () => {
   pilotPage.value = 1
   teamPage.value = 1
 })
-watch(ratingGame, () => {
+watch([ratingGame, ratingMode], () => {
   pilotPage.value = 1
   teamPage.value = 1
 })
@@ -190,206 +162,358 @@ watch(visibleTeams, () => {
 </script>
 
 <template>
-  <section class="section hall-page">
-    <div class="section-header hall-header">
-      <div>
-        <h1>{{ t('nav.hallOfFame') }}</h1>
-        <p class="muted">{{ t('hallOfFame.subtitle') }}</p>
-      </div>
-      <div class="hall-header-actions">
-        <div class="hall-mode-toggle" role="group" :aria-label="t('hallOfFame.mode')">
-          <button type="button" :class="{ active: ratingMode === 'rating' }" :aria-pressed="ratingMode === 'rating'" @click="ratingMode = 'rating'">
-            {{ t('hallOfFame.byRating') }}
-          </button>
-          <button type="button" :class="{ active: ratingMode === 'medals' }" :aria-pressed="ratingMode === 'medals'" @click="ratingMode = 'medals'">
-            {{ t('hallOfFame.byMedals') }}
-          </button>
+  <div class="ui-page ui-shell ui-shell--wide hall">
+    <PageHeader :eyebrow="t('hallPage.eyebrow')" :title="t('nav.hallOfFame')" :lead="t('hallOfFame.subtitle')">
+      <template #aside>
+        <dl class="hall__summary" :aria-label="t('hallPage.summary')">
+          <div v-for="(item, index) in summary" :key="item.key" v-reveal="{ delay: 260 + index * 90, y: 10, blur: 4 }" v-spotlight class="hall__stat">
+            <dt><component :is="item.icon" :size="14" aria-hidden="true" />{{ item.label }}</dt>
+            <dd><CountUp :value="item.value" /></dd>
+          </div>
+        </dl>
+      </template>
+      <template #actions>
+        <button v-spark class="ui-btn ui-btn--outline ui-btn--sm hall__reload" type="button" :disabled="loading" @click="load">
+          <RefreshCw :size="15" :class="{ 'is-spinning': loading }" aria-hidden="true" />
+          {{ loading ? t('hallPage.updating') : t('common.reload') }}
+        </button>
+      </template>
+    </PageHeader>
+
+    <div v-reveal="{ delay: 120, y: 14 }" class="hall__controls">
+      <SegmentedControl v-model="activeTab" :options="tabs" :aria-label="t('nav.hallOfFame')" />
+      <SegmentedControl v-model="ratingMode" :options="modeOptions" size="sm" :aria-label="t('hallOfFame.mode')" />
+      <SegmentedControl v-model="ratingGame" :options="ratingGameOptions" size="sm" :aria-label="t('hallOfFame.priorityGame')" />
+      <p class="hall__order">{{ ratingMode === HALL_MODE_RATING ? t('hallPage.orderRating') : t('hallPage.order') }}</p>
+    </div>
+
+    <p v-if="error" class="ui-alert" role="alert">
+      <AlertTriangle :size="18" aria-hidden="true" />
+      <span class="hall__error-text">{{ error }}</span>
+      <button class="ui-btn ui-btn--outline ui-btn--sm" type="button" :disabled="loading" @click="load">{{ t('ui.common.retry') }}</button>
+    </p>
+
+    <EmptyState v-if="loading && !hasData" loading :title="t('ui.common.loading')" />
+
+    <template v-else-if="hasData || !error">
+      <section v-if="ranked.length" class="hall__podium" :class="{ 'is-loading': loading }" aria-labelledby="hall-podium-title">
+        <header class="hall__podium-head">
+          <p class="ui-eyebrow ui-eyebrow--accent">{{ t('hallPage.podium.eyebrow', { scope: scopeLabel }) }}</p>
+          <h2 id="hall-podium-title" :key="activeTab" v-split class="ui-title">{{ isPilots ? t('hallPage.podium.pilots') : t('hallPage.podium.teams') }}</h2>
+        </header>
+        <HallPodium :key="`${activeTab}-${ratingMode}-${ratingGame}`" :items="ranked.slice(0, 3)" :kind="activeTab" :game="ratingGame" :mode="ratingMode" :stat="statValue" :rating="ratingValue" />
+      </section>
+
+      <EmptyState
+        v-else
+        :icon="Trophy"
+        :title="isPilots ? t('hallOfFame.emptyPilots') : t('hallOfFame.emptyTeams')"
+        :text="ratingMode === HALL_MODE_RATING ? '' : t('hallPage.emptyText')"
+      />
+
+      <section v-if="ranked.length" v-reveal="{ y: 24 }" class="hall__board ui-card ui-card--flush" :class="{ 'is-loading': loading }" aria-labelledby="hall-board-title">
+        <header class="hall__board-head">
+          <div class="hall__board-title">
+            <p class="ui-eyebrow">{{ t('hallPage.table.eyebrow', { scope: scopeLabel }) }}</p>
+            <h2 id="hall-board-title" class="hall__board-h">{{ isPilots ? t('hallPage.table.pilots') : t('hallPage.table.teams') }}</h2>
+            <span class="hall__board-count ui-num">
+              {{ search.trim() ? t('hallPage.table.shown', { shown: visible.length, total: ranked.length }) : t('hallPage.table.total', { total: ranked.length }) }}
+            </span>
+          </div>
+          <label class="hall__search">
+            <Search class="hall__search-icon" :size="17" aria-hidden="true" />
+            <input v-model="search" class="ui-input hall__search-input" type="search" :placeholder="t('hallOfFame.searchPlaceholder')" :aria-label="t('hallOfFame.searchPlaceholder')" />
+            <Transition name="ui-fade">
+              <button v-if="search" class="hall__search-clear" type="button" :aria-label="t('hallPage.clearSearch')" @click="search = ''"><X :size="15" /></button>
+            </Transition>
+          </label>
+        </header>
+
+        <HallStandings
+          v-if="visible.length"
+          :kind="activeTab"
+          :rows="paged"
+          :offset="(currentPage - 1) * pageSize"
+          :game="ratingGame"
+          :mode="ratingMode"
+          :stat="statValue"
+          :rating="ratingValue"
+          :best-pilot="bestPilotFor"
+          :reveal-key="revealKey"
+        />
+        <div v-else class="hall__no-match">
+          <EmptyState :icon="SearchX" :title="t('hallPage.noMatchTitle')" :text="t('hallPage.noMatchText', { query: search.trim() })" compact>
+            <button class="ui-btn ui-btn--outline ui-btn--sm" type="button" @click="search = ''">{{ t('hallPage.resetSearch') }}</button>
+          </EmptyState>
         </div>
-        <button class="button" type="button" :disabled="loading" @click="load">
-          <RefreshCw :size="16" />
-          {{ t('common.reload') }}
-        </button>
-      </div>
-    </div>
 
-    <div class="hall-summary-grid">
-      <article class="card hall-summary-card">
-        <Trophy :size="22" />
-        <span>{{ t('hallOfFame.ratedPilots') }}</span>
-        <strong>{{ data.pilots.length }}</strong>
-      </article>
-      <article class="card hall-summary-card">
-        <Users :size="22" />
-        <span>{{ t('hallOfFame.ratedTeams') }}</span>
-        <strong>{{ data.teams.length }}</strong>
-      </article>
-      <article class="card hall-summary-card">
-        <Medal :size="22" />
-        <span>{{ t('hallOfFame.totalMedals') }}</span>
-        <strong>{{ totalMedals }}</strong>
-      </article>
-    </div>
-
-    <div class="card hall-controls">
-      <div class="hall-tabs" role="tablist" :aria-label="t('nav.hallOfFame')">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          type="button"
-          :class="{ active: activeTab === tab.id }"
-          @click="activeTab = tab.id"
-        >
-          {{ tab.label }}
-          <span>{{ tab.count }}</span>
-        </button>
-      </div>
-      <label class="hall-search">
-        <Search :size="16" />
-        <input v-model="search" type="search" :placeholder="t('hallOfFame.searchPlaceholder')" />
-      </label>
-      <label class="hall-priority-control">
-        <span>{{ t('hallOfFame.priorityGame') }}</span>
-        <select v-model="ratingGame" class="pilot-list-sort" :aria-label="t('hallOfFame.priorityGame')">
-          <option v-for="option in ratingGameOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-        </select>
-      </label>
-    </div>
-
-    <p v-if="error" class="error">{{ error }}</p>
-
-    <div v-if="loading" class="card hall-empty">{{ t('common.loading') }}</div>
-
-    <div v-else-if="activeTab === 'pilots'" class="hall-table-wrap card">
-      <table class="hall-table" :class="{ 'is-rating-mode': ratingMode === 'rating', 'is-medals-mode': ratingMode === 'medals' }">
-        <thead>
-          <tr>
-            <th>{{ t('hallOfFame.rank') }}</th>
-            <th>{{ t('roles.pilot') }}</th>
-            <th>{{ t('fields.team') }}</th>
-            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.goldShort') }}</th>
-            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.silverShort') }}</th>
-            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.bronzeShort') }}</th>
-            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.podiums') }}</th>
-            <th v-if="ratingMode === 'rating'">{{ t('hallOfFame.ratings') }}</th>
-            <th v-if="ratingMode === 'rating'">SR</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(pilot, index) in pagedPilots" :key="pilot.id">
-            <td><span class="hall-rank" :class="rankClass((pilotPage - 1) * pageSize + index)">{{ (pilotPage - 1) * pageSize + index + 1 }}</span></td>
-            <td>
-              <div class="hall-person-cell">
-                <UserAvatar mini :src="pilot.avatar_url" :color="pilot.avatar_color" :label="pilotTitle(pilot)" />
-                <RouterLink class="hall-title" :to="`/pilots/${pilot.id}`">
-                  <span class="user-name-line">
-                    <strong>{{ pilotTitle(pilot) }}</strong>
-                    <LicenseBadge :user="pilot" :game="ratingGame" />
-                    <PilotRoles :roles="pilot.pilot_roles" />
-                  </span>
-                  <span>{{ pilotLine(pilot) }}</span>
-                </RouterLink>
-              </div>
-            </td>
-            <td>
-              <RouterLink v-if="pilot.team_id" class="team-mini-chip team-link-chip" :to="teamHref(pilot.team_id)" :title="pilot.team_name || t('common.none')">
-                {{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}
-              </RouterLink>
-              <span v-else class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span>
-            </td>
-            <td v-if="ratingMode === 'medals'"><span class="hall-medal-value gold">{{ statValue(pilot, 'gold') }}</span></td>
-            <td v-if="ratingMode === 'medals'"><span class="hall-medal-value silver">{{ statValue(pilot, 'silver') }}</span></td>
-            <td v-if="ratingMode === 'medals'"><span class="hall-medal-value bronze">{{ statValue(pilot, 'bronze') }}</span></td>
-            <td v-if="ratingMode === 'medals'">{{ statValue(pilot, 'podiums') }}</td>
-            <td v-if="ratingMode === 'rating'" class="hall-ratings-cell">
-              <div class="hall-rating-list">
-                <span
-                  v-for="game in RATING_GAMES"
-                  :key="game"
-                  class="hall-rating-chip"
-                  :class="{ 'is-priority': ratingGame === game }"
-                >
-                  <small>{{ game }}</small>
-                  <strong>{{ formatRating(ratingForGame(pilot, game)) }}</strong>
-                </span>
-              </div>
-            </td>
-            <td v-if="ratingMode === 'rating'">{{ Number(pilot.sr).toFixed(1) }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-if="!visiblePilots.length" class="hall-empty">{{ t('hallOfFame.emptyPilots') }}</div>
-      <PaginationControls v-model:page="pilotPage" :page-size="pageSize" :total-items="visiblePilots.length" />
-    </div>
-
-    <div v-else class="hall-table-wrap card">
-      <table class="hall-table hall-team-table" :class="{ 'is-rating-mode': ratingMode === 'rating', 'is-medals-mode': ratingMode === 'medals' }">
-        <thead>
-          <tr>
-            <th>{{ t('hallOfFame.rank') }}</th>
-            <th>{{ t('fields.team') }}</th>
-            <th>{{ t('fields.participants') }}</th>
-            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.goldShort') }}</th>
-            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.silverShort') }}</th>
-            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.bronzeShort') }}</th>
-            <th v-if="ratingMode === 'medals'">{{ t('hallOfFame.podiums') }}</th>
-            <th v-if="ratingMode === 'rating'">{{ t('hallOfFame.ratings') }}</th>
-            <th>{{ t('hallOfFame.bestPilot') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(team, index) in pagedTeams" :key="team.id">
-            <td><span class="hall-rank" :class="rankClass((teamPage - 1) * pageSize + index)">{{ (teamPage - 1) * pageSize + index + 1 }}</span></td>
-            <td>
-              <div class="hall-person-cell">
-                <TeamAvatar mini :src="team.avatar_url" :color="team.avatar_color" :label="team.name" />
-                <RouterLink class="hall-title" :to="teamHref(team.id)">
-                  <strong>{{ team.name }}</strong>
-                  <span>{{ team.abbreviation }} · {{ team.description || t('common.none') }}</span>
-                </RouterLink>
-              </div>
-            </td>
-            <td>{{ team.member_count }}</td>
-            <td v-if="ratingMode === 'medals'"><span class="hall-medal-value gold">{{ statValue(team, 'gold') }}</span></td>
-            <td v-if="ratingMode === 'medals'"><span class="hall-medal-value silver">{{ statValue(team, 'silver') }}</span></td>
-            <td v-if="ratingMode === 'medals'"><span class="hall-medal-value bronze">{{ statValue(team, 'bronze') }}</span></td>
-            <td v-if="ratingMode === 'medals'">{{ statValue(team, 'podiums') }}</td>
-            <td v-if="ratingMode === 'rating'" class="hall-ratings-cell">
-              <div class="hall-rating-list">
-                <span
-                  v-for="game in RATING_GAMES"
-                  :key="game"
-                  class="hall-rating-chip"
-                  :class="{ 'is-priority': ratingGame === game }"
-                >
-                  <small>{{ game }}</small>
-                  <strong>{{ formatRating(teamRatingForGame(team, game)) }}</strong>
-                </span>
-              </div>
-            </td>
-            <td>
-              <RouterLink v-if="bestPilotFor(team)" class="hall-best-link" :to="`/pilots/${bestPilotFor(team).id}`">
-                <UserAvatar mini :src="bestPilotFor(team).avatar_url" :color="bestPilotFor(team).avatar_color" :label="pilotTitle(bestPilotFor(team))" />
-                <span class="hall-best-content">
-                  <span class="user-name-line">
-                    <strong>{{ pilotTitle(bestPilotFor(team)) }}</strong>
-                    <LicenseBadge :user="bestPilotFor(team)" :game="ratingGame" />
-                    <PilotRoles :roles="bestPilotFor(team)?.pilot_roles" />
-                   </span>
-                   <small>#{{ formatPilotNumber(bestPilotFor(team).pilot_number) }} - {{ teamShortName(bestPilotFor(team).team_name, bestPilotFor(team).team_abbreviation) }}</small>
-                   <span v-if="ratingMode === 'medals'" class="hall-best-achievements" :aria-label="t('hallOfFame.achievements')">
-                     <span class="hall-best-medal gold" :title="t('hallOfFame.goldMedal')"><Medal :size="13" /> {{ statValue(bestPilotFor(team), 'gold') }}</span>
-                     <span class="hall-best-medal silver" :title="t('hallOfFame.silverMedal')"><Medal :size="13" /> {{ statValue(bestPilotFor(team), 'silver') }}</span>
-                     <span class="hall-best-medal bronze" :title="t('hallOfFame.bronzeMedal')"><Medal :size="13" /> {{ statValue(bestPilotFor(team), 'bronze') }}</span>
-                   </span>
-                 </span>
-              </RouterLink>
-              <span v-else>{{ t('common.none') }}</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-if="!visibleTeams.length" class="hall-empty">{{ t('hallOfFame.emptyTeams') }}</div>
-      <PaginationControls v-model:page="teamPage" :page-size="pageSize" :total-items="visibleTeams.length" />
-    </div>
-  </section>
+        <footer class="hall__board-foot">
+          <PaginationControls v-if="isPilots" v-model:page="pilotPage" :page-size="pageSize" :total-items="visiblePilots.length" />
+          <PaginationControls v-else v-model:page="teamPage" :page-size="pageSize" :total-items="visibleTeams.length" />
+        </footer>
+      </section>
+    </template>
+  </div>
 </template>
+
+<style scoped>
+.hall {
+  gap: clamp(22px, 3.2vw, 40px);
+}
+
+/* ---------- Header summary ---------- */
+.hall__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.hall__stat {
+  display: grid;
+  gap: 6px;
+  min-width: 120px;
+  padding: 12px 14px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+}
+
+.hall__stat dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--c-text-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.hall__stat dt svg {
+  flex: 0 0 auto;
+  color: var(--c-accent-text);
+}
+
+.hall__stat dd {
+  margin: 0;
+  color: var(--c-text);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.hall__reload .is-spinning {
+  animation: hall-spin 900ms linear infinite;
+}
+
+/* ---------- Controls ---------- */
+.hall__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.hall__order {
+  margin: 0 0 0 auto;
+  color: var(--c-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.hall__error-text {
+  flex: 1 1 auto;
+}
+
+/* ---------- Podium ---------- */
+.hall__podium {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: clamp(18px, 2.6vw, 30px);
+  padding-top: 6px;
+  transition: opacity var(--dur-2);
+}
+
+/* A soft stage light behind the podium. */
+.hall__podium::before {
+  position: absolute;
+  inset: 8% 10% auto;
+  z-index: -1;
+  height: 80%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--bm-blue) 26%, transparent), transparent);
+  content: '';
+  filter: blur(30px);
+  pointer-events: none;
+}
+
+.hall__podium-head {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+/* ---------- Standings board ---------- */
+.hall__board {
+  gap: 0;
+  transition: opacity var(--dur-2);
+}
+
+.is-loading {
+  opacity: 0.55;
+}
+
+.hall__board-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px 20px;
+  padding: clamp(16px, 2vw, 22px) clamp(16px, 2vw, 22px) 16px;
+  border-bottom: 1px solid var(--c-line);
+}
+
+.hall__board-title {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.hall__board-h {
+  margin: 0;
+  color: var(--c-text);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.hall__board-count {
+  color: var(--c-text-3);
+  font-size: 12px;
+}
+
+.hall__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 1 360px;
+  min-width: min(100%, 240px);
+}
+
+.hall__search-icon {
+  position: absolute;
+  left: 14px;
+  z-index: 1;
+  color: var(--c-text-3);
+  pointer-events: none;
+  transition: color var(--dur-2);
+}
+
+.hall__search:focus-within .hall__search-icon {
+  color: var(--c-accent-text);
+}
+
+.hall__search-input {
+  min-height: 44px;
+  padding-right: 42px;
+  padding-left: 42px;
+  border-radius: var(--r-pill);
+}
+
+.hall__search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.hall__search-clear {
+  position: absolute;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--c-text) 10%, transparent);
+  color: var(--c-text-2);
+  cursor: pointer;
+  transition: background-color var(--dur-2), transform var(--dur-2) var(--ease-spring);
+}
+
+.hall__search-clear:hover {
+  background: var(--c-blue-soft);
+  color: var(--c-text);
+}
+
+.hall__search-clear:active {
+  transform: scale(0.9);
+}
+
+.hall__no-match {
+  padding: 18px;
+}
+
+.hall__board-foot {
+  padding: 14px 16px;
+  border-top: 1px solid var(--c-line);
+}
+
+.hall__board-foot:empty,
+.hall__board-foot:not(:has(*)) {
+  display: none;
+}
+
+@keyframes hall-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 760px) {
+  .hall__summary {
+    width: 100%;
+  }
+
+  .hall__stat {
+    min-width: 0;
+    padding: 10px 12px;
+  }
+
+  .hall__stat dd {
+    font-size: 22px;
+  }
+
+  .hall__controls > :deep(.segmented:first-child) {
+    width: 100%;
+  }
+
+  .hall__controls > :deep(.segmented:first-child .segmented__option) {
+    flex: 1 1 0;
+  }
+
+  .hall__order {
+    margin-left: 0;
+  }
+
+  .hall__search {
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hall__reload .is-spinning {
+    animation: none;
+  }
+}
+</style>

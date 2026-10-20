@@ -1,28 +1,41 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Bell, Check, Crown, Download, Images, LogOut, Plus, Save, Search, Send, Trash2, Upload, UserCheck, UserMinus, Users, X, XCircle } from 'lucide-vue-next'
-import { API_BASE, api } from '../api'
+import { AlertCircle, LogIn, Plus, RotateCcw, Search, Shield, Users, X } from 'lucide-vue-next'
+import { api } from '../api'
 import AvatarViewer from '../components/AvatarViewer.vue'
-import LicenseBadge from '../components/LicenseBadge.vue'
-import PilotRoles from '../components/PilotRoles.vue'
 import PaginationControls from '../components/PaginationControls.vue'
-import TeamAvatar from '../components/TeamAvatar.vue'
-import TeamLiveryViewer from '../components/TeamLiveryViewer.vue'
-import UserAvatar from '../components/UserAvatar.vue'
-import { gameOptions } from '../i18nLabels'
-import { filterPilots, formatPilotNumber, formatRating, pilotName, ratingForGame, sortPilots, teamShortName } from '../pilotDisplay'
+import { pilotName } from '../pilotDisplay'
 import { state } from '../store'
+import EmptyState from '../ui/EmptyState.vue'
+import PageHeader from '../ui/PageHeader.vue'
+import { prefersReducedMotion } from '../ui/motion/env'
+import TeamCard from './teams/TeamCard.vue'
+import TeamCreateDialog from './teams/TeamCreateDialog.vue'
+import TeamCreateRequests from './teams/TeamCreateRequests.vue'
+import TeamHero from './teams/TeamHero.vue'
+import TeamLiveries from './teams/TeamLiveries.vue'
+import TeamOwnerTools from './teams/TeamOwnerTools.vue'
+import TeamRoster from './teams/TeamRoster.vue'
+import TeamSearchBar from './teams/TeamSearchBar.vue'
+import TeamStats from './teams/TeamStats.vue'
+import TeamSwitcher from './teams/TeamSwitcher.vue'
+import TeamToasts from './teams/TeamToasts.vue'
+import { DEFAULT_TEAM_COLOR, normalizeTeamAbbreviation } from './teams/teamUtils'
+
+const SAVED_TOAST_MS = 3500
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 
 const teams = ref([])
 const selectedTeam = ref(null)
 const createRequests = ref([])
 const config = ref({ member_limit: 5, my_create_request_status: null, pending_creation_request_count: 0 })
 const search = ref('')
+const appliedSearch = ref('')
 const error = ref('')
 const saved = ref(false)
 const loading = ref(false)
@@ -35,47 +48,42 @@ const deleteSaving = ref(false)
 const teamAvatarFile = ref(null)
 const teamAvatarSaving = ref(false)
 const teamAvatarViewerOpen = ref(false)
-const teamLiveryViewerOpen = ref(false)
-const teamLiverySaving = ref(false)
-const teamLiveryLoading = ref(false)
-const teamLiveryLoaded = ref(false)
 const busyApplications = ref({})
 const busyMembers = ref({})
 const busyCreateRequests = ref({})
-const memberSearch = ref('')
-const memberSort = ref('rating_desc')
 const memberRatingGame = ref('ACC')
 const teamPage = ref(1)
 const teamPageSize = 12
-const memberPage = ref(1)
-const memberPageSize = 10
+const navDirection = ref('forward')
+const stage = ref(null)
 const createForm = ref({
   name: '',
   abbreviation: '',
   description: '',
-  avatar_color: '#dc2626'
+  avatar_color: DEFAULT_TEAM_COLOR
 })
 const editForm = ref({
   name: '',
   abbreviation: '',
   description: '',
-  avatar_color: '#dc2626'
+  avatar_color: DEFAULT_TEAM_COLOR
 })
+let savedTimer = 0
 
 const canModerateTeams = computed(() => ['admin', 'moder'].includes(state.user?.role))
 const canCreateTeam = computed(() => state.user?.status === 'active' && !state.user?.team_id && config.value.my_create_request_status !== 'pending')
-const selectedIsOwner = computed(() => Boolean(selectedTeam.value?.is_owner))
 const selectedCanManage = computed(() => Boolean(selectedTeam.value?.can_manage))
-const selectedLiveries = computed(() => selectedTeam.value?.livery_images || [])
-const selectedLiveryCount = computed(() => Number(selectedTeam.value?.livery_image_count ?? selectedLiveries.value.length))
-const TEAM_LIVERY_CACHE_NAME = 'bmrl-team-liveries-v1'
 const transferOwnerId = ref('')
 const transferCandidates = computed(() => selectedTeam.value?.members?.filter((member) => member.id !== selectedTeam.value.owner_id) || [])
 const teamTotalPages = computed(() => Math.max(1, Math.ceil(teams.value.length / teamPageSize)))
 const pagedTeams = computed(() => teams.value.slice((teamPage.value - 1) * teamPageSize, teamPage.value * teamPageSize))
-const visibleTeamMembers = computed(() => sortPilots(filterPilots(selectedTeam.value?.members || [], memberSearch.value), memberSort.value, memberRatingGame.value))
-const memberTotalPages = computed(() => Math.max(1, Math.ceil(visibleTeamMembers.value.length / memberPageSize)))
-const pagedTeamMembers = computed(() => visibleTeamMembers.value.slice((memberPage.value - 1) * memberPageSize, memberPage.value * memberPageSize))
+const queryTeamId = computed(() => {
+  const id = Number(route.query.team)
+  return Number.isInteger(id) && id > 0 ? id : null
+})
+/** A ?team= deep link is still loading: show the gantry instead of flashing the grid. */
+const openingFromLink = computed(() => loading.value && !selectedTeam.value && queryTeamId.value !== null)
+const showMyTeam = computed(() => Boolean(state.user?.team_id) && selectedTeam.value?.id !== state.user.team_id)
 
 function updateStoredUser(patch) {
   if (!state.user) return
@@ -104,16 +112,8 @@ function resetCreateForm() {
     name: '',
     abbreviation: '',
     description: '',
-    avatar_color: '#dc2626'
+    avatar_color: DEFAULT_TEAM_COLOR
   }
-}
-
-function memberRating(member) {
-  return ratingForGame(member, memberRatingGame.value)
-}
-
-function memberRerLabel(member) {
-  return formatRating(memberRating(member))
 }
 
 function fillEditForm(team) {
@@ -121,118 +121,36 @@ function fillEditForm(team) {
     name: team?.name || '',
     abbreviation: team?.abbreviation || '',
     description: team?.description || '',
-    avatar_color: team?.avatar_color || '#dc2626'
+    avatar_color: team?.avatar_color || DEFAULT_TEAM_COLOR
   }
   transferOwnerId.value = team?.members?.find((member) => member.id !== team.owner_id)?.id || ''
-}
-
-function normalizeTeamAbbreviation(value) {
-  return String(value || '').replace(/[^a-z]/gi, '').slice(0, 3).toUpperCase()
-}
-
-function setCreateAbbreviation(event) {
-  createForm.value.abbreviation = normalizeTeamAbbreviation(event.target.value)
-}
-
-function setEditAbbreviation(event) {
-  editForm.value.abbreviation = normalizeTeamAbbreviation(event.target.value)
 }
 
 function setTeamAvatarFile(event) {
   teamAvatarFile.value = event.target.files?.[0] || null
 }
 
-function teamLiveryCacheKey(teamId) {
-  return `${API_BASE}/teams/${teamId}/liveries`
-}
-
-function teamLiveryStorageKey(teamId) {
-  return `${TEAM_LIVERY_CACHE_NAME}:${teamId}`
-}
-
-async function readTeamLiveryCache(teamId) {
-  if (typeof window === 'undefined') return null
-  if ('caches' in window) {
-    try {
-      const cache = await window.caches.open(TEAM_LIVERY_CACHE_NAME)
-      const response = await cache.match(teamLiveryCacheKey(teamId))
-      if (response) {
-        const cached = await response.json()
-        if (Array.isArray(cached?.images)) return cached.images
-      }
-    } catch {
-      // Fall back to local storage below.
-    }
-  }
-  try {
-    const cached = JSON.parse(window.localStorage.getItem(teamLiveryStorageKey(teamId)) || 'null')
-    return Array.isArray(cached?.images) ? cached.images : null
-  } catch {
-    return null
-  }
-}
-
-async function writeTeamLiveryCache(teamId, images) {
-  if (typeof window === 'undefined') return
-  const cached = JSON.stringify({ images })
-  try {
-    window.localStorage.setItem(teamLiveryStorageKey(teamId), cached)
-  } catch {
-    // Cache storage below may still be available.
-  }
-  if (!('caches' in window)) return
-  try {
-    const cache = await window.caches.open(TEAM_LIVERY_CACHE_NAME)
-    await cache.put(
-      teamLiveryCacheKey(teamId),
-      new Response(cached, { headers: { 'Content-Type': 'application/json' } })
-    )
-  } catch {
-    // Cache storage is optional; the server remains the source of truth.
-  }
-}
-
-function setSelectedTeamLiveries(images) {
-  if (!selectedTeam.value) return
-  selectedTeam.value = {
-    ...selectedTeam.value,
-    livery_images: images,
-    livery_image_count: images.length
-  }
-}
-
 function memberTitle(member) {
   return pilotName(member, member.nickname || member.login)
 }
 
-function memberTeamName(member) {
-  return member.team_name || selectedTeam.value?.name || ''
+function queryWithoutTeam() {
+  const query = { ...route.query }
+  delete query.team
+  return query
 }
 
-function memberTeamAbbreviation(member) {
-  return member.team_abbreviation || selectedTeam.value?.abbreviation || ''
+/** Mirrors the open team in the URL so the page can be shared and Back returns to the grid. */
+function syncTeamQuery(teamId) {
+  if (String(route.query.team) === String(teamId)) return
+  const query = { ...route.query, team: String(teamId) }
+  if (route.query.team === undefined) router.push({ query })
+  else router.replace({ query })
 }
 
-function ownerLabel(team) {
-  return team.owner_nickname || team.owner_login || t('teams.noOwner')
-}
-
-function gamesLabel(games) {
-  return games?.length ? games.map((game) => t(`games.${game}`)).join(', ') : t('common.none')
-}
-
-function requestStatusLabel(status) {
-  if (!status) return ''
-  return t(`teams.applicationStatuses.${status}`)
-}
-
-function pendingApplicationsTitle(team) {
-  return t('teams.pendingApplicationsNotice', { count: team.pending_application_count || 0 })
-}
-
-function teamFillPercent(team) {
-  if (!team?.member_limit) return 0
-  return Math.min(100, Math.round((team.member_count / team.member_limit) * 100))
+async function clearTeamQuery() {
+  if (route.query.team === undefined) return
+  await router.replace({ query: queryWithoutTeam() })
 }
 
 async function syncCurrentUser() {
@@ -250,20 +168,20 @@ async function load() {
   error.value = ''
   try {
     await syncCurrentUser()
-    const suffix = search.value.trim() ? `?search=${encodeURIComponent(search.value.trim())}` : ''
+    const query = search.value.trim()
+    const suffix = query ? `?search=${encodeURIComponent(query)}` : ''
     const [loadedTeams, loadedConfig] = await Promise.all([
       api(`/teams${suffix}`),
       api('/teams/config')
     ])
     teams.value = loadedTeams
     config.value = loadedConfig
+    appliedSearch.value = query
     createRequests.value = canModerateTeams.value ? await api('/teams/create-requests') : []
 
-    const queryTeamId = Number(route.query.team)
-    const selectedId = selectedTeam.value?.id || (Number.isInteger(queryTeamId) && queryTeamId > 0 ? queryTeamId : null)
+    const selectedId = selectedTeam.value?.id || queryTeamId.value
     if (selectedId && loadedTeams.some((team) => team.id === selectedId)) {
       selectedTeam.value = await api(`/teams/${selectedId}`)
-      teamLiveryLoaded.value = false
       fillEditForm(selectedTeam.value)
     } else if (selectedId) {
       selectedTeam.value = null
@@ -275,15 +193,13 @@ async function load() {
   }
 }
 
-async function openTeam(team) {
+async function openTeam(team, { updateUrl = true } = {}) {
   setBusy(team.id, true)
   error.value = ''
   try {
     selectedTeam.value = await api(`/teams/${team.id}`)
-    teamLiveryViewerOpen.value = false
-    teamLiveryLoaded.value = false
-    memberPage.value = 1
     fillEditForm(selectedTeam.value)
+    if (updateUrl) syncTeamQuery(selectedTeam.value.id)
   } catch (err) {
     error.value = err.message
   } finally {
@@ -293,8 +209,27 @@ async function openTeam(team) {
 
 async function openTeamFromQuery(value) {
   const id = Number(value)
-  if (!Number.isInteger(id) || id <= 0 || selectedTeam.value?.id === id) return
-  await openTeam({ id })
+  if (!Number.isInteger(id) || id <= 0) {
+    // Browser Back from an open team: return to the grid.
+    if (value === undefined) selectedTeam.value = null
+    return
+  }
+  if (selectedTeam.value?.id === id) return
+  await openTeam({ id }, { updateUrl: false })
+}
+
+function closeTeam() {
+  selectedTeam.value = null
+  if (route.query.team === undefined) return
+  const query = queryWithoutTeam()
+  const listPath = router.resolve({ path: route.path, query }).fullPath
+  if (window.history.state?.back === listPath) router.back()
+  else router.replace({ query })
+}
+
+async function resetSearch() {
+  search.value = ''
+  await load()
 }
 
 async function createTeam() {
@@ -401,76 +336,6 @@ async function uploadTeamAvatar() {
   }
 }
 
-async function loadTeamLivery() {
-  if (!selectedTeam.value || selectedCanManage.value || teamLiveryLoading.value || !selectedLiveryCount.value) return
-  const teamId = selectedTeam.value.id
-  teamLiveryLoading.value = true
-  error.value = ''
-  try {
-    const cachedImages = await readTeamLiveryCache(teamId)
-    const images = cachedImages && cachedImages.length === selectedLiveryCount.value
-      ? cachedImages
-      : await api(`/teams/${teamId}/liveries`)
-    setSelectedTeamLiveries(Array.isArray(images) ? images : [])
-    await writeTeamLiveryCache(teamId, selectedLiveries.value)
-    teamLiveryLoaded.value = true
-    if (selectedLiveries.value.length) teamLiveryViewerOpen.value = true
-  } catch (err) {
-    error.value = err.message
-  } finally {
-    teamLiveryLoading.value = false
-  }
-}
-
-async function uploadTeamLiveries(event) {
-  const files = Array.from(event.target.files || [])
-  if (!selectedTeam.value || !files.length) return
-  const availableSlots = 4 - selectedLiveries.value.length
-  if (files.length > availableSlots) {
-    error.value = t('teams.liveryMaximum')
-    event.target.value = ''
-    return
-  }
-
-  teamLiverySaving.value = true
-  error.value = ''
-  saved.value = false
-  try {
-    for (const file of files) {
-      const payload = new FormData()
-      payload.append('file', file)
-      selectedTeam.value = await api(`/teams/${selectedTeam.value.id}/liveries`, {
-        method: 'POST',
-        body: payload
-      })
-    }
-    await writeTeamLiveryCache(selectedTeam.value.id, selectedLiveries.value)
-    saved.value = true
-  } catch (err) {
-    error.value = err.message
-  } finally {
-    teamLiverySaving.value = false
-    event.target.value = ''
-  }
-}
-
-async function deleteTeamLivery(image) {
-  if (!selectedTeam.value || !image || !window.confirm(t('teams.deleteLiveryConfirm'))) return
-  teamLiverySaving.value = true
-  error.value = ''
-  saved.value = false
-  try {
-    selectedTeam.value = await api(`/teams/${selectedTeam.value.id}/liveries/${image.id}`, { method: 'DELETE' })
-    await writeTeamLiveryCache(selectedTeam.value.id, selectedLiveries.value)
-    saved.value = true
-    if (!selectedLiveries.value.length) teamLiveryViewerOpen.value = false
-  } catch (err) {
-    error.value = err.message
-  } finally {
-    teamLiverySaving.value = false
-  }
-}
-
 async function requestJoin(team) {
   setBusy(team.id, true)
   error.value = ''
@@ -499,6 +364,7 @@ async function leaveTeam() {
       updateStoredUser({ team_id: null })
     }
     selectedTeam.value = null
+    await clearTeamQuery()
     saved.value = true
     await load()
   } catch (err) {
@@ -542,6 +408,7 @@ async function deleteTeam() {
       updateStoredUser({ team_id: null })
     }
     selectedTeam.value = null
+    await clearTeamQuery()
     saved.value = true
     await load()
   } catch (err) {
@@ -604,7 +471,18 @@ async function removeMember(member) {
   }
 }
 
+/** Brings the list/detail stage into view when switching views from far down the page. */
+function scrollStageIntoView() {
+  const el = stage.value
+  if (!el) return
+  const offset = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-h')) || 76) + 16
+  const top = el.getBoundingClientRect().top
+  if (top >= offset) return
+  window.scrollTo({ top: top + window.scrollY - offset, behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
+}
+
 onMounted(load)
+onBeforeUnmount(() => window.clearTimeout(savedTimer))
 watch(() => route.query.team, openTeamFromQuery)
 watch(search, () => {
   teamPage.value = 1
@@ -614,404 +492,295 @@ watch(teams, () => {
     teamPage.value = teamTotalPages.value
   }
 })
-watch([memberSearch, memberSort], () => {
-  memberPage.value = 1
+// Push forward into a team, slide back to the grid.
+watch(() => selectedTeam.value?.id ?? null, (id, previous) => {
+  navDirection.value = id === null ? 'back' : 'forward'
+  if (id !== previous) nextTick(scrollStageIntoView)
+}, { flush: 'sync' })
+watch(saved, (value) => {
+  window.clearTimeout(savedTimer)
+  if (value) savedTimer = window.setTimeout(() => { saved.value = false }, SAVED_TOAST_MS)
 })
-watch(visibleTeamMembers, () => {
-  if (memberPage.value > memberTotalPages.value) {
-    memberPage.value = memberTotalPages.value
-  }
+watch(createOpen, (open) => {
+  if (!open && !createSaving.value) error.value = ''
 })
 </script>
 
 <template>
-  <section class="section teams-page">
-    <div class="section-header teams-header">
-      <div>
-        <h1>{{ t('teams.title') }}</h1>
-        <p class="muted">{{ t('teams.subtitle', { limit: config.member_limit }) }}</p>
-      </div>
-      <button v-if="canCreateTeam" class="button primary" type="button" @click="createOpen = !createOpen">
-        <X v-if="createOpen" :size="16" />
-        <Plus v-else :size="16" />
-        {{ createOpen ? t('common.close') : t('teams.createTeam') }}
-      </button>
-      <span v-else-if="config.my_create_request_status === 'pending'" class="team-request-state application-pending">
-        {{ t('teams.createRequestSent') }}
-      </span>
+  <div class="ui-page ui-shell ui-shell--wide teams">
+    <PageHeader :eyebrow="t('teamsPage.eyebrow')" :title="t('teams.title')" :lead="t('teamsPage.lead')">
+      <template #aside>
+        <TeamStats :teams="teams" />
+      </template>
+      <template #actions>
+        <button v-if="showMyTeam" class="ui-btn ui-btn--outline" type="button" :disabled="busyTeams[state.user.team_id]" @click="openTeam({ id: state.user.team_id })">
+          <Shield :size="16" />{{ t('teamsPage.myTeam') }}
+        </button>
+        <button v-if="canCreateTeam" v-magnet v-spark class="ui-btn ui-btn--primary" type="button" @click="createOpen = true">
+          <Plus :size="17" />{{ t('teams.createTeam') }}
+        </button>
+        <span v-else-if="config.my_create_request_status === 'pending'" class="ui-chip ui-chip--amber teams__pending">
+          <span class="ui-dot ui-dot--amber ui-dot--live"></span>{{ t('teams.createRequestSent') }}
+        </span>
+      </template>
+    </PageHeader>
+
+    <div ref="stage" class="teams__stage">
+      <Transition name="ui-fade">
+        <TeamSwitcher v-if="selectedTeam" :teams="teams" :current-id="selectedTeam.id" :busy="busyTeams" @select="openTeam" @back="closeTeam" />
+      </Transition>
+
+      <Transition :name="`teams-${navDirection}`" mode="out-in">
+        <!-- Deep link (?team=) still loading -->
+        <EmptyState v-if="openingFromLink" key="opening" loading :title="t('teamsPage.loadingTeam')" />
+
+        <!-- One team -->
+        <div v-else-if="selectedTeam" :key="`team-${selectedTeam.id}`" class="teams__detail">
+          <TeamHero
+            :team="selectedTeam"
+            :busy="Boolean(busyTeams[selectedTeam.id])"
+            :signed-in="Boolean(state.user)"
+            @join="requestJoin"
+            @leave="leaveTeam"
+            @open-avatar="teamAvatarViewerOpen = true"
+          />
+          <TeamLiveries
+            v-if="selectedCanManage || selectedTeam.livery_image_count"
+            v-reveal="{ delay: 80, y: 18 }"
+            :team="selectedTeam"
+            :can-manage="selectedCanManage"
+            @update:team="selectedTeam = $event"
+            @error="error = $event"
+            @saved="saved = true"
+          />
+          <div class="teams__detail-grid" :class="{ 'has-tools': selectedCanManage }">
+            <TeamRoster
+              v-model:game="memberRatingGame"
+              v-reveal="{ delay: 120, y: 18 }"
+              :team="selectedTeam"
+              :can-manage="selectedCanManage"
+              :busy-members="busyMembers"
+              @remove="removeMember"
+            />
+            <TeamOwnerTools
+              v-if="selectedCanManage"
+              v-model:form="editForm"
+              v-model:transferOwnerId="transferOwnerId"
+              v-reveal="{ delay: 200, y: 18 }"
+              :team="selectedTeam"
+              :candidates="transferCandidates"
+              :game="memberRatingGame"
+              :edit-saving="editSaving"
+              :transfer-saving="transferSaving"
+              :delete-saving="deleteSaving"
+              :avatar-saving="teamAvatarSaving"
+              :avatar-file="teamAvatarFile"
+              :busy-applications="busyApplications"
+              @save="saveTeam"
+              @select-file="setTeamAvatarFile"
+              @upload="uploadTeamAvatar"
+              @transfer="transferOwnership"
+              @delete="deleteTeam"
+              @approve="approveApplication"
+              @reject="rejectApplication"
+              @open-avatar="teamAvatarViewerOpen = true"
+            />
+          </div>
+        </div>
+
+        <!-- All teams -->
+        <div v-else key="grid" class="teams__browse">
+          <TeamSearchBar v-model="search" :loading="loading" :limit="config.member_limit" @submit="load" />
+
+          <p v-if="!state.user" class="ui-alert ui-alert--info teams__guest">
+            <LogIn :size="18" />
+            <span>{{ t('teamsPage.guest.text') }}</span>
+            <RouterLink class="ui-link" to="/login">{{ t('teamsPage.guest.login') }}</RouterLink>
+          </p>
+
+          <TeamCreateRequests
+            v-if="canModerateTeams"
+            :requests="createRequests"
+            :busy="busyCreateRequests"
+            :game="memberRatingGame"
+            @approve="approveCreateRequest"
+            @reject="rejectCreateRequest"
+          />
+
+          <template v-if="teams.length">
+            <ul class="teams__grid" :class="{ 'is-loading': loading }" :aria-busy="loading || null">
+              <li v-for="(team, index) in pagedTeams" :key="team.id" v-reveal="{ delay: (index % 4) * 70, y: 26 }">
+                <TeamCard :team="team" :busy="Boolean(busyTeams[team.id])" @open="openTeam" />
+              </li>
+            </ul>
+            <PaginationControls v-model:page="teamPage" :page-size="teamPageSize" :total-items="teams.length" />
+          </template>
+          <EmptyState v-else-if="loading" loading :title="t('ui.common.loading')" />
+          <EmptyState v-else-if="error" :icon="AlertCircle" :title="error">
+            <button class="ui-btn ui-btn--outline ui-btn--sm" type="button" @click="load"><RotateCcw :size="15" />{{ t('ui.common.retry') }}</button>
+          </EmptyState>
+          <EmptyState v-else-if="appliedSearch" :icon="Search" :title="t('teamsPage.emptySearch.title')" :text="t('teamsPage.emptySearch.text')">
+            <button class="ui-btn ui-btn--outline ui-btn--sm" type="button" @click="resetSearch"><X :size="15" />{{ t('teamsPage.search.reset') }}</button>
+          </EmptyState>
+          <EmptyState v-else :icon="Users" :title="t('teams.empty')" :text="t('teamsPage.empty.text')">
+            <button v-if="canCreateTeam" class="ui-btn ui-btn--primary ui-btn--sm" type="button" @click="createOpen = true"><Plus :size="15" />{{ t('teams.createTeam') }}</button>
+          </EmptyState>
+        </div>
+      </Transition>
     </div>
 
-    <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="saved" class="pill">{{ t('common.saved') }}</p>
-
-    <div class="teams-toolbar">
-      <label class="field teams-search-field">
-        <span>{{ t('common.search') }}</span>
-        <div class="input-with-icon">
-          <Search :size="16" />
-          <input v-model="search" type="search" :placeholder="t('teams.searchPlaceholder')" @keyup.enter="load" />
-        </div>
-      </label>
-      <button class="button" type="button" :disabled="loading" @click="load">
-        <Search :size="16" />
-        {{ t('common.apply') }}
-      </button>
-    </div>
-
-    <form v-if="createOpen && canCreateTeam" class="team-create-panel card" @submit.prevent="createTeam">
-      <div class="team-form-preview">
-        <TeamAvatar :color="createForm.avatar_color" :label="createForm.name || t('teams.newTeam')" />
-        <div>
-          <h2>{{ t('teams.createTitle') }}</h2>
-          <p class="muted">{{ t('teams.createHint') }}</p>
-        </div>
-      </div>
-      <div class="team-form-grid">
-        <label class="field">
-          <span>{{ t('fields.name') }}</span>
-          <input v-model="createForm.name" type="text" maxlength="80" required />
-        </label>
-        <label class="field">
-          <span>{{ t('teams.abbreviation') }}</span>
-          <input :value="createForm.abbreviation" type="text" maxlength="3" minlength="3" :placeholder="t('teams.abbreviationPlaceholder')" required @input="setCreateAbbreviation" />
-        </label>
-        <label class="field team-avatar-color-field">
-          <span>{{ t('teams.avatarColor') }}</span>
-          <span class="team-avatar-color-control">
-            <input v-model="createForm.avatar_color" type="color" :aria-label="t('teams.avatarColor')" />
-            <code>{{ createForm.avatar_color }}</code>
-          </span>
-        </label>
-        <label class="field team-form-description">
-          <span>{{ t('fields.description') }}</span>
-          <textarea v-model="createForm.description" maxlength="1000" :placeholder="t('teams.descriptionPlaceholder')" />
-        </label>
-      </div>
-      <button class="button primary" type="submit" :disabled="createSaving">
-        <Plus :size="16" />
-        {{ t('teams.sendCreateRequest') }}
-      </button>
-    </form>
-
-    <section v-if="canModerateTeams" class="team-applications-section card">
-      <div class="section-header">
-        <div>
-          <h2>{{ t('teams.creationRequestsTitle') }}</h2>
-          <p class="muted">{{ t('teams.creationRequestsHint') }}</p>
-        </div>
-        <span class="pill">{{ createRequests.length }}</span>
-      </div>
-      <div class="team-application-list">
-        <div v-for="requestItem in createRequests" :key="requestItem.id" class="team-application-row">
-          <TeamAvatar mini :src="requestItem.avatar_url" :color="requestItem.avatar_color" :label="requestItem.name" />
-          <span class="team-application-main">
-            <strong>{{ requestItem.name }}</strong>
-            <span class="user-name-line">
-              <span>{{ requestItem.abbreviation }} · {{ t('teams.requestedBy', { name: memberTitle(requestItem.requester) }) }}</span>
-              <LicenseBadge :user="requestItem.requester" :game="memberRatingGame" />
-            </span>
-          </span>
-          <span class="team-member-stat">
-            <strong>#{{ formatPilotNumber(requestItem.requester.pilot_number) }}</strong>
-            <span>RER {{ memberRerLabel(requestItem.requester) }}</span>
-          </span>
-          <div class="team-application-actions">
-            <button class="icon-button" type="button" :title="t('teams.approveCreateRequest')" :disabled="busyCreateRequests[requestItem.id]" @click="approveCreateRequest(requestItem)">
-              <Check :size="16" />
-            </button>
-            <button class="icon-button danger-icon" type="button" :title="t('teams.rejectCreateRequest')" :disabled="busyCreateRequests[requestItem.id]" @click="rejectCreateRequest(requestItem)">
-              <XCircle :size="16" />
-            </button>
-          </div>
-        </div>
-        <div v-if="!createRequests.length" class="empty-row">{{ t('teams.noCreationRequests') }}</div>
-      </div>
-    </section>
-
-    <div class="teams-layout">
-      <div class="teams-list card">
-        <div v-for="(team, index) in pagedTeams" :key="team.id" class="team-list-item" :class="{ 'is-selected': selectedTeam?.id === team.id, 'is-full': team.member_count >= team.member_limit }">
-          <button class="team-list-open" type="button" :disabled="busyTeams[team.id]" @click="openTeam(team)">
-            <span class="team-list-rank">#{{ (teamPage - 1) * teamPageSize + index + 1 }}</span>
-            <TeamAvatar mini :src="team.avatar_url" :color="team.avatar_color" :label="team.name" />
-            <span class="team-list-main">
-              <strong>{{ team.name }}</strong>
-              <span>{{ team.abbreviation }} · {{ t('teams.ownerLine', { owner: ownerLabel(team) }) }} · RER {{ formatRating(team.average_rating) }}</span>
-            </span>
-            <span class="team-list-side">
-              <span v-if="team.pending_application_count > 0" class="team-notification-badge" :title="pendingApplicationsTitle(team)" :aria-label="pendingApplicationsTitle(team)">
-                <Bell :size="14" />
-                {{ team.pending_application_count }}
-              </span>
-              <span class="team-capacity" :class="{ 'is-full': team.member_count >= team.member_limit }">
-                <Users :size="15" />
-                {{ team.member_count }}/{{ team.member_limit }}
-              </span>
-            </span>
-            <span class="team-list-meter" aria-hidden="true">
-              <span :style="{ width: `${teamFillPercent(team)}%` }"></span>
-            </span>
-          </button>
-        </div>
-        <div v-if="!teams.length" class="empty-row">{{ t('teams.empty') }}</div>
-        <PaginationControls v-model:page="teamPage" :page-size="teamPageSize" :total-items="teams.length" />
-      </div>
-
-      <article v-if="selectedTeam" class="team-detail-card card">
-        <div class="team-detail-hero">
-          <button class="avatar-open-button" type="button" :title="t('avatar.open')" @click="teamAvatarViewerOpen = true">
-            <TeamAvatar :src="selectedTeam.avatar_url" :color="selectedTeam.avatar_color" :label="selectedTeam.name" />
-          </button>
-          <div class="team-detail-main">
-            <div class="team-detail-title">
-              <h2>{{ selectedTeam.name }}</h2>
-              <span class="team-mini-chip">{{ selectedTeam.abbreviation }}</span>
-              <span class="status-badge">{{ selectedTeam.member_count }}/{{ selectedTeam.member_limit }}</span>
-            </div>
-            <p>{{ selectedTeam.description || t('teams.noDescription') }}</p>
-            <div class="team-detail-meta">
-              <span><Crown :size="15" />{{ ownerLabel(selectedTeam) }}</span>
-              <span><Users :size="15" />{{ t('teams.membersCount', { count: selectedTeam.member_count, limit: selectedTeam.member_limit }) }}</span>
-              <span>RER {{ formatRating(selectedTeam.average_rating) }}</span>
-            </div>
-          </div>
-          <div class="team-detail-actions">
-            <button v-if="selectedTeam.can_join" class="button primary" type="button" :disabled="busyTeams[selectedTeam.id]" @click="requestJoin(selectedTeam)">
-              <Send :size="16" />
-              {{ t('teams.requestJoin') }}
-            </button>
-            <span v-else-if="selectedTeam.my_application_status && !selectedTeam.is_member" class="team-request-state" :class="`application-${selectedTeam.my_application_status}`">
-              {{ requestStatusLabel(selectedTeam.my_application_status) }}
-            </span>
-            <button v-if="selectedTeam.is_member && !selectedTeam.is_owner" class="button danger" type="button" :disabled="busyTeams[selectedTeam.id]" @click="leaveTeam">
-              <LogOut :size="16" />
-              {{ t('teams.leave') }}
-            </button>
-          </div>
-        </div>
-
-        <section class="team-livery-panel">
-          <div class="team-livery-panel-head">
-            <div class="team-livery-panel-title">
-              <span class="team-livery-panel-icon"><Images :size="17" /></span>
-              <span>
-                <strong>{{ t('teams.liveryTitle') }}</strong>
-                <small>{{ t('teams.liveryCount', { count: selectedLiveryCount }) }}</small>
-              </span>
-            </div>
-            <button v-if="selectedLiveries.length" class="button small team-livery-open-button" type="button" @click="teamLiveryViewerOpen = true">
-              <Images :size="15" />
-              {{ t('teams.openLiveries') }}
-            </button>
-            <button v-else-if="!selectedCanManage && selectedLiveryCount && !teamLiveryLoaded" class="button small team-livery-open-button" type="button" :disabled="teamLiveryLoading" @click="loadTeamLivery">
-              <Download :size="15" />
-              {{ teamLiveryLoading ? t('teams.loadingLivery') : t('teams.loadLivery') }}
-            </button>
-          </div>
-          <div class="team-livery-strip">
-            <button v-for="(image, index) in selectedLiveries" :key="image.id" class="team-livery-preview" type="button" :title="image.original_filename || t('teams.liveryImageAlt', { number: index + 1 })" @click="teamLiveryViewerOpen = true">
-              <img :src="image.image_url" :alt="image.original_filename || t('teams.liveryImageAlt', { number: index + 1 })" />
-            </button>
-            <span v-if="!selectedLiveries.length && selectedLiveryCount" class="team-livery-deferred-copy">{{ t('teams.liveryDeferred') }}</span>
-            <span v-else-if="!selectedLiveries.length" class="team-livery-empty-copy">{{ t('teams.liveryEmpty') }}</span>
-            <label v-if="selectedCanManage && selectedLiveries.length < 4" class="button small team-livery-upload-button" :class="{ 'is-disabled': teamLiverySaving }" :for="`team-livery-upload-${selectedTeam.id}`">
-              <Upload :size="15" />
-              {{ selectedLiveries.length ? t('teams.addLivery') : t('teams.uploadLivery') }}
-            </label>
-            <span v-else-if="selectedCanManage" class="team-livery-limit">{{ t('teams.liveryMaximum') }}</span>
-            <input :id="`team-livery-upload-${selectedTeam.id}`" class="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple :disabled="teamLiverySaving" @change="uploadTeamLiveries" />
-          </div>
-        </section>
-
-        <form v-if="selectedCanManage" class="team-edit-panel" @submit.prevent="saveTeam">
-          <div class="section-header">
-            <h2>{{ t('teams.editTitle') }}</h2>
-            <button class="button primary" type="submit" :disabled="editSaving">
-              <Save :size="16" />
-              {{ t('common.save') }}
-            </button>
-          </div>
-          <div class="team-form-grid">
-            <label class="field">
-              <span>{{ t('fields.name') }}</span>
-              <input v-model="editForm.name" type="text" maxlength="80" required />
-            </label>
-            <label class="field">
-              <span>{{ t('teams.abbreviation') }}</span>
-              <input :value="editForm.abbreviation" type="text" maxlength="3" minlength="3" :placeholder="t('teams.abbreviationPlaceholder')" required @input="setEditAbbreviation" />
-            </label>
-            <label class="field team-avatar-color-field">
-              <span>{{ t('teams.avatarColor') }}</span>
-              <span class="team-avatar-color-control">
-                <input v-model="editForm.avatar_color" type="color" :aria-label="t('teams.avatarColor')" />
-                <code>{{ editForm.avatar_color }}</code>
-              </span>
-            </label>
-            <label class="field team-form-description">
-              <span>{{ t('fields.description') }}</span>
-              <textarea v-model="editForm.description" maxlength="1000" />
-            </label>
-          </div>
-          <div class="avatar-edit-panel team-avatar-upload-panel">
-            <button class="avatar-open-button" type="button" :title="t('avatar.open')" @click="teamAvatarViewerOpen = true">
-              <TeamAvatar :src="selectedTeam.avatar_url" :color="editForm.avatar_color" :label="editForm.name || selectedTeam.name" />
-            </button>
-            <div class="avatar-edit-main">
-              <strong>{{ t('avatar.teamTitle') }}</strong>
-              <p class="muted">{{ t('avatar.teamHint') }}</p>
-              <div class="avatar-upload-row">
-                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="setTeamAvatarFile" />
-                <button class="button" type="button" :disabled="teamAvatarSaving || !teamAvatarFile" @click="uploadTeamAvatar">
-                  <Upload :size="16" />
-                  {{ t('common.upload') }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </form>
-
-        <section v-if="selectedCanManage" class="team-owner-panel">
-          <div>
-            <h2>{{ t('teams.ownerToolsTitle') }}</h2>
-            <p class="muted">{{ t('teams.ownerLeaveHint') }}</p>
-          </div>
-          <form class="team-owner-tools" @submit.prevent="transferOwnership">
-            <label class="field">
-              <span>{{ t('teams.newOwner') }}</span>
-              <select v-model="transferOwnerId" :disabled="!transferCandidates.length" required>
-                <option value="">{{ t('teams.chooseMember') }}</option>
-                <option v-for="member in transferCandidates" :key="member.id" :value="member.id">
-                  {{ memberTitle(member) }} · #{{ formatPilotNumber(member.pilot_number) }} · RER {{ memberRerLabel(member) }}
-                </option>
-              </select>
-            </label>
-            <button class="button" type="submit" :disabled="transferSaving || !transferOwnerId">
-              <UserCheck :size="16" />
-              {{ t('teams.transferOwner') }}
-            </button>
-            <button class="button danger" type="button" :disabled="deleteSaving" @click="deleteTeam">
-              <Trash2 :size="16" />
-              {{ t('teams.deleteTeam') }}
-            </button>
-          </form>
-          <p v-if="!transferCandidates.length" class="muted team-owner-note">{{ t('teams.noTransferCandidates') }}</p>
-        </section>
-
-        <section v-if="selectedCanManage" class="team-applications-section">
-          <div class="section-header">
-            <h2>{{ t('teams.applicationsTitle') }}</h2>
-            <span class="pill">{{ selectedTeam.applications.length }}</span>
-          </div>
-          <div class="team-application-list">
-            <div v-for="application in selectedTeam.applications" :key="application.id" class="team-application-row">
-              <UserAvatar mini :src="application.user.avatar_url" :color="application.user.avatar_color" :label="application.user.login" />
-              <span class="team-application-main">
-                <span class="user-name-line">
-                  <strong>{{ memberTitle(application.user) }}</strong>
-                  <LicenseBadge :user="application.user" :game="memberRatingGame" />
-                  <PilotRoles :roles="application.user.pilot_roles" />
-                </span>
-                <span>{{ application.user.login }} · #{{ formatPilotNumber(application.user.pilot_number) }} · RER {{ memberRerLabel(application.user) }} · {{ teamShortName(application.user.team_name, application.user.team_abbreviation) }}</span>
-              </span>
-              <span class="team-member-stat">
-                <strong>{{ application.user.sr.toFixed(1) }}</strong>
-                <span>SR</span>
-              </span>
-              <div class="team-application-actions">
-                <button class="icon-button" type="button" :title="t('teams.approveApplication')" :disabled="busyApplications[application.id]" @click="approveApplication(application)">
-                  <Check :size="16" />
-                </button>
-                <button class="icon-button danger-icon" type="button" :title="t('teams.rejectApplication')" :disabled="busyApplications[application.id]" @click="rejectApplication(application)">
-                  <XCircle :size="16" />
-                </button>
-              </div>
-            </div>
-            <div v-if="!selectedTeam.applications.length" class="empty-row">{{ t('teams.noApplications') }}</div>
-          </div>
-        </section>
-
-        <section class="team-members-section">
-          <div class="section-header">
-            <h2>{{ t('fields.participants') }}</h2>
-            <span class="pill">RER {{ formatRating(selectedTeam.average_rating) }}</span>
-          </div>
-          <div class="pilot-inline-controls">
-            <input v-model="memberSearch" type="search" :placeholder="t('teams.memberSearch')" />
-            <select v-model="memberSort" :aria-label="t('common.sort')">
-              <option value="rating_desc">{{ t('sort.ratingDesc') }}</option>
-              <option value="rating_asc">{{ t('sort.ratingAsc') }}</option>
-              <option value="sr_desc">{{ t('sort.srDesc') }}</option>
-              <option value="sr_asc">{{ t('sort.srAsc') }}</option>
-              <option value="alpha_asc">{{ t('sort.alphaAsc') }}</option>
-              <option value="alpha_desc">{{ t('sort.alphaDesc') }}</option>
-            </select>
-            <select v-model="memberRatingGame" :aria-label="t('fields.game')">
-              <option v-for="option in gameOptions(t)" :key="option.value" :value="option.value">{{ option.label }}</option>
-            </select>
-          </div>
-          <div class="team-members-list">
-            <div v-for="member in pagedTeamMembers" :key="member.id" class="team-member-row">
-              <UserAvatar mini :src="member.avatar_url" :color="member.avatar_color" :label="member.login" />
-              <RouterLink class="team-member-main" :to="`/pilots/${member.id}`">
-                <span class="user-name-line">
-                  <strong>{{ memberTitle(member) }}</strong>
-                  <LicenseBadge :user="member" :game="memberRatingGame" />
-                  <PilotRoles :roles="member.pilot_roles" />
-                </span>
-                <span>{{ member.login }} · #{{ formatPilotNumber(member.pilot_number) }} · {{ teamShortName(memberTeamName(member), memberTeamAbbreviation(member)) }}</span>
-              </RouterLink>
-              <span class="team-member-stat">
-                <strong>{{ memberRerLabel(member) }}</strong>
-                <span>RER {{ memberRatingGame }}</span>
-              </span>
-              <span class="team-member-stat">
-                <strong>{{ member.sr.toFixed(1) }}</strong>
-                <span>SR</span>
-              </span>
-              <span class="team-member-games">
-                <span v-if="member.id === selectedTeam.owner_id" class="team-owner-chip"><Crown :size="13" />{{ t('teams.owner') }}</span>
-                {{ gamesLabel(member.games) }}
-              </span>
-              <div class="team-member-actions">
-                <button
-                  v-if="selectedCanManage && member.id !== selectedTeam.owner_id"
-                  class="icon-button danger-icon"
-                  type="button"
-                  :title="t('teams.removeMember')"
-                  :disabled="busyMembers[member.id]"
-                  @click="removeMember(member)"
-                >
-                  <UserMinus :size="16" />
-                </button>
-              </div>
-            </div>
-            <div v-if="!visibleTeamMembers.length" class="empty-row">{{ selectedTeam.members.length ? t('common.noMatches') : t('teams.noMembers') }}</div>
-          </div>
-          <PaginationControls v-model:page="memberPage" :page-size="memberPageSize" :total-items="visibleTeamMembers.length" />
-        </section>
-      </article>
-
-      <div v-else class="team-detail-empty card">
-        <Users :size="34" />
-        <h2>{{ t('teams.pickTeam') }}</h2>
-        <p class="muted">{{ state.user ? t('teams.pickTeamHint') : t('teams.loginToJoin') }}</p>
-      </div>
-    </div>
-    <AvatarViewer
-      :open="teamAvatarViewerOpen"
-      :src="selectedTeam?.avatar_url"
-      :label="selectedTeam?.name || t('teams.newTeam')"
-      :fallback-color="selectedTeam?.avatar_color"
-      team
-      @close="teamAvatarViewerOpen = false"
+    <TeamCreateDialog
+      v-model:form="createForm"
+      :open="createOpen && canCreateTeam"
+      :saving="createSaving"
+      :error="createOpen ? error : ''"
+      :limit="config.member_limit"
+      @close="createOpen = false"
+      @submit="createTeam"
     />
-    <TeamLiveryViewer
-      :open="teamLiveryViewerOpen"
-      :team-name="selectedTeam?.name || t('teams.newTeam')"
-      :images="selectedLiveries"
-      :can-manage="selectedCanManage"
-      @close="teamLiveryViewerOpen = false"
-      @delete="deleteTeamLivery"
-    />
-  </section>
+
+    <!-- The create sheet and the empty grid show errors in place; everywhere else they float. -->
+    <TeamToasts :error="createOpen || !(teams.length || selectedTeam) ? '' : error" :saved="saved" @dismiss="error = ''" />
+
+    <Teleport to="body">
+      <AvatarViewer
+        class="teams__viewer"
+        :open="teamAvatarViewerOpen"
+        :src="selectedTeam?.avatar_url"
+        :label="selectedTeam?.name || t('teams.newTeam')"
+        :fallback-color="selectedTeam?.avatar_color"
+        team
+        @close="teamAvatarViewerOpen = false"
+      />
+    </Teleport>
+  </div>
 </template>
+
+<style scoped>
+.teams {
+  position: relative;
+}
+
+.teams__pending {
+  min-height: 34px;
+  padding: 0 14px;
+}
+
+/* ---------- Stage ---------- */
+.teams__stage {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.teams__browse,
+.teams__detail {
+  display: grid;
+  gap: clamp(16px, 2vw, 22px);
+  min-width: 0;
+}
+
+.teams__guest {
+  align-items: center;
+}
+
+.teams__guest span {
+  flex: 1 1 auto;
+}
+
+/* ---------- Grid ---------- */
+.teams__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
+  gap: clamp(14px, 1.6vw, 20px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+
+.teams__grid.is-loading {
+  opacity: 0.6;
+}
+
+/* ---------- Detail ---------- */
+.teams__detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(16px, 2vw, 22px);
+}
+
+.teams__detail-grid.has-tools {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
+}
+
+/* ---------- View transitions: push into a team, slide back to the grid ---------- */
+.teams-forward-enter-active,
+.teams-back-enter-active {
+  transition:
+    opacity 420ms var(--ease-out),
+    transform 560ms var(--ease-ios),
+    filter 420ms var(--ease-out);
+}
+
+.teams-forward-leave-active,
+.teams-back-leave-active {
+  transition:
+    opacity 180ms ease-in,
+    transform 200ms ease-in,
+    filter 180ms ease-in;
+}
+
+.teams-forward-enter-from {
+  opacity: 0;
+  filter: blur(8px);
+  transform: translate3d(32px, 0, 0) scale(0.99);
+}
+
+.teams-forward-leave-to {
+  opacity: 0;
+  filter: blur(4px);
+  transform: translate3d(-18px, 0, 0) scale(0.99);
+}
+
+.teams-back-enter-from {
+  opacity: 0;
+  filter: blur(8px);
+  transform: translate3d(-32px, 0, 0) scale(0.99);
+}
+
+.teams-back-leave-to {
+  opacity: 0;
+  filter: blur(4px);
+  transform: translate3d(18px, 0, 0) scale(0.99);
+}
+
+/* AvatarViewer is a shared legacy overlay; lift it above the sticky header. */
+.teams__viewer {
+  z-index: 120;
+}
+
+@media (max-width: 1180px) {
+  .teams__detail-grid.has-tools {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .teams-forward-enter-active,
+  .teams-forward-leave-active,
+  .teams-back-enter-active,
+  .teams-back-leave-active {
+    transition: opacity var(--dur-1);
+  }
+
+  .teams-forward-enter-from,
+  .teams-forward-leave-to,
+  .teams-back-enter-from,
+  .teams-back-leave-to {
+    filter: none;
+    transform: none;
+  }
+}
+</style>

@@ -1,0 +1,117 @@
+/* Route transitions: iOS-style push — the old page dims away, the new one settles in. */
+.route-enter-active {
+  transition:
+    opacity 420ms var(--ease-out),
+    transform 560ms var(--ease-ios),
+    filter 420ms var(--ease-out);
+}
+
+.route-leave-active {
+  transition:
+    opacity 170ms ease-in,
+    transform 200ms ease-in,
+    filter 170ms ease-in;
+}
+
+.route-enter-from {
+  opacity: 0;
+  filter: blur(8px);
+  transform: translate3d(0, 16px, 0) scale(0.996);
+}
+
+.route-leave-to {
+  opacity: 0;
+  filter: blur(4px);
+  transform: scale(0.992);
+}
+
+/* Generic fade/scale used by popovers, sheets and dialogs. */
+.ui-pop-enter-active,
+.ui-pop-leave-active {
+  transition:
+    opacity var(--dur-2) var(--ease-out),
+    transform var(--dur-3) var(--ease-ios),
+    filter var(--dur-2) var(--ease-out);
+}
+
+.ui-pop-enter-from,
+.ui-pop-leave-to {
+  opacity: 0;
+  filter: blur(6px);
+  transform: translateY(-6px) scale(0.96);
+}
+
+.ui-fade-enter-active,
+.ui-fade-leave-active {
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+
+.ui-fade-enter-from,
+.ui-fade-leave-to {
+  opacity: 0;
+}
+
+.ui-sheet-enter-active,
+.ui-sheet-leave-active {
+  transition: transform 520ms var(--ease-ios), opacity var(--dur-2) var(--ease-out);
+}
+
+.ui-sheet-enter-from,
+.ui-sheet-leave-to {
+  opacity: 0.6;
+  transform: translateY(100%);
+}
+
+.ui-list-move,
+.ui-list-enter-active,
+.ui-list-leave-active {
+  transition:
+    opacity var(--dur-3) var(--ease-out),
+    transform var(--dur-3) var(--ease-ios);
+}
+
+.ui-list-enter-from,
+.ui-list-leave-to {
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+}
+
+.ui-list-leave-active {
+  position: absolute;
+}
+
+/* Theme switch: the new theme grows out of the toggle as a circle (View Transitions). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-enter-active,
+  .route-leave-active,
+  .ui-pop-enter-active,
+  .ui-pop-leave-active,
+  .ui-sheet-enter-active,
+  .ui-sheet-leave-active,
+  .ui-list-move,
+  .ui-list-enter-active,
+  .ui-list-leave-active {
+    transition: none;
+  }
+
+  .route-enter-from,
+  .route-leave-to {
+    filter: none;
+    transform: none;
+  }
+
+  .ui-skeleton::after,
+  .ui-dot--live::after {
+    animation: none;
+  }
+}
