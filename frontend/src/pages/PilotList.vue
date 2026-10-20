@@ -1,18 +1,29 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ImagePlus, MapPinned, Search, SlidersHorizontal, Trash2 } from 'lucide-vue-next'
+import { Map as MapIcon, Search, SlidersHorizontal, Users, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import LicenseBadge from '../components/LicenseBadge.vue'
 import PaginationControls from '../components/PaginationControls.vue'
 import PilotRoles from '../components/PilotRoles.vue'
 import UserAvatar from '../components/UserAvatar.vue'
+import EmptyState from '../ui/EmptyState.vue'
+import PageHeader from '../ui/PageHeader.vue'
+import SegmentedControl from '../ui/SegmentedControl.vue'
+import TierPlate from './pilots/TierPlate.vue'
+import TrackRecords from './pilots/TrackRecords.vue'
+import { countryCode } from '../countries'
 import { countryLabel, gameLabel, gameOptions } from '../i18nLabels'
-import { formatPilotNumber, formatRating, pilotName, ratingForGame, ratingRaceCountForGame, teamHref, teamShortName } from '../pilotDisplay'
+import { ensureLicenseSettings } from '../licenseSettings'
+import { DEFAULT_LICENSE_TIERS, formatPilotNumber, formatRating, pilotName, ratingForGame, ratingLicenseTier, ratingRaceCountForGame, teamHref, teamShortName } from '../pilotDisplay'
+import { rankLadder } from '../ranks'
 import { state } from '../store'
+import { useRanks } from '../useRanks'
+import RankAura from '../ui/rank/RankAura.vue'
 
 const { t } = useI18n()
+const { rankOf } = useRanks()
 const route = useRoute()
 const activeTab = ref('pilots')
 const pilots = ref([])
@@ -20,24 +31,23 @@ const search = ref('')
 const sort = ref('rating_desc')
 const ratingGame = ref('ACC')
 const error = ref('')
+const loading = ref(true)
 const page = ref(1)
 const pageSize = 20
 const hasNextPage = computed(() => pilots.value.length === pageSize)
-const raceAssets = ref({ tracks: [], classes: [], games: {} })
-const trackGame = ref('ACC')
-const selectedTrack = ref('')
-const trackSearch = ref('')
-const trackRacesByGame = ref({})
-const trackLoading = ref(false)
-const trackError = ref('')
-const trackImageInput = ref(null)
-const trackImageUploading = ref(false)
-const ACC_MAX_TIME_MS = 2147483647
-const ACC_MAX_TIME_ALIASES = new Set([ACC_MAX_TIME_MS, 4294967295])
-const trackGameOptions = computed(() => gameOptions(t))
-const canManageTrackImages = computed(() => state.user?.role === 'admin')
+const tabOptions = computed(() => [
+  { value: 'pilots', label: t('pilotsPage.tabs.pilots'), icon: Users },
+  { value: 'tracks', label: t('pilotsPage.tabs.tracks'), icon: MapIcon }
+])
+const gameChoices = computed(() => gameOptions(t).map((option) => ({ ...option, label: `RER ${option.label}` })))
+const tiers = computed(() => state.licenseTiers || DEFAULT_LICENSE_TIERS)
+// Every tier with the rank it looks like, for the ladder of previews above the list.
+const ladder = computed(() => rankLadder(tiers.value))
+const myTier = computed(() => (state.user ? ratingLicenseTier(ratingForGame(state.user, ratingGame.value), tiers.value) : null))
+const showPodium = computed(() => sort.value === 'rating_desc' && page.value === 1 && !search.value.trim())
 
 async function load() {
+  loading.value = true
   try {
     const params = new URLSearchParams()
     if (search.value.trim()) params.set('search', search.value.trim())
@@ -46,42 +56,11 @@ async function load() {
     params.set('limit', String(pageSize))
     params.set('offset', String((page.value - 1) * pageSize))
     pilots.value = await api(`/users/pilots?${params.toString()}`)
+    error.value = ''
   } catch (err) {
     error.value = err.message
-  }
-}
-
-async function loadRaceAssets() {
-  try {
-    raceAssets.value = await api('/race-assets')
-  } catch {
-    raceAssets.value = { tracks: [], classes: [], games: {} }
-  }
-}
-
-async function loadTrackRaces(game) {
-  if (trackRacesByGame.value[game]) return
-  trackLoading.value = true
-  trackError.value = ''
-  try {
-    const loaded = []
-    for (let offset = 0; offset < 1000; offset += 100) {
-      const params = new URLSearchParams({
-        status_filter: 'finished',
-        game_filter: game,
-        include_championship: 'true',
-        limit: '100',
-        offset: String(offset)
-      })
-      const pageRows = await api(`/races?${params.toString()}`)
-      loaded.push(...pageRows)
-      if (pageRows.length < 100) break
-    }
-    trackRacesByGame.value = { ...trackRacesByGame.value, [game]: loaded }
-  } catch (err) {
-    trackError.value = err.message
   } finally {
-    trackLoading.value = false
+    loading.value = false
   }
 }
 
@@ -93,449 +72,506 @@ function resetPageAndLoad() {
   page.value = 1
 }
 
-onMounted(load)
 onMounted(() => {
-  loadRaceAssets()
-  loadTrackRaces(trackGame.value)
+  load()
+  ensureLicenseSettings()
 })
 watch(page, load)
 watch([search, sort, ratingGame], resetPageAndLoad)
-watch(trackGame, (game) => {
-  selectedTrack.value = ''
-  trackSearch.value = ''
-  loadTrackRaces(game)
-})
+watch(() => route.query.track, (track) => {
+  if (track) activeTab.value = 'tracks'
+}, { immediate: true })
+
+function place(index) {
+  return (page.value - 1) * pageSize + index + 1
+}
 
 function pilotGames(pilot) {
   return pilot.games?.length ? pilot.games.map((game) => gameLabel(t, game)).join(' / ') : t('common.none')
 }
 
-function pilotNumber(pilot) {
-  return pilot.pilot_number !== null && pilot.pilot_number !== undefined ? `#${formatPilotNumber(pilot.pilot_number)}` : '-'
-}
-
 function pilotCountry(pilot) {
   return pilot.country ? countryLabel(t, pilot.country) : t('common.none')
-}
-
-function formatDuration(ms) {
-  if (!Number.isFinite(Number(ms))) return '-'
-  const totalMs = Math.max(0, Math.round(Number(ms)))
-  const minutes = Math.floor(totalMs / 60000)
-  const seconds = Math.floor((totalMs % 60000) / 1000)
-  const millis = totalMs % 1000
-  return `${minutes}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`
-}
-
-function resultRows(race) {
-  if (Array.isArray(race?.results)) return race.results
-  return Array.isArray(race?.results?.rows) ? race.results.rows : []
-}
-
-function numericValue(...values) {
-  for (const value of values) {
-    const number = Number(value)
-    if (Number.isFinite(number) && number > 0) return number
-  }
-  return null
-}
-
-function isAccMaxTime(value) {
-  const number = Number(value)
-  return Number.isFinite(number) && (ACC_MAX_TIME_ALIASES.has(number) || number >= ACC_MAX_TIME_MS)
-}
-
-function raceTimeValue(value, game) {
-  const number = Number(value)
-  if (!Number.isFinite(number) || number <= 0) return null
-  return game === 'ACC' && isAccMaxTime(number) ? null : number
-}
-
-function registrationForRow(race, row) {
-  const userId = Number(row.user_id)
-  const raceNumber = Number(row.race_number ?? row.pilot_number)
-  return (race.registered_pilots || []).find((pilot) => {
-    if (Number.isFinite(userId) && Number(pilot.user_id) === userId) return true
-    return Number.isFinite(raceNumber) && Number(pilot.pilot_number) === raceNumber
-  })
-}
-
-function trackRaceEntry(race, row) {
-  if (row.status === 'missing') return null
-  const registered = registrationForRow(race, row)
-  const laps = numericValue(row.lap_count, row.laps)
-  const rawFinishMs = row.adjusted_finish_ms ?? row.finish_ms ?? row.driver_total_time_ms
-  const finishMs = raceTimeValue(rawFinishMs, race.game)
-  const lapCandidates = [
-    { value: raceTimeValue(row.best_lap_ms, race.game), session: 'race' },
-    { value: raceTimeValue(row.qualification_best_lap_ms, race.game), session: 'qualification' }
-  ].filter((candidate) => candidate.value !== null)
-  const bestLap = lapCandidates.sort((left, right) => left.value - right.value)[0] || { value: null, session: null }
-  const bestLapMs = bestLap.value
-  if (finishMs === null && bestLapMs === null) return null
-  const averageLapMs = finishMs !== null && laps && laps > 0 ? finishMs / laps : bestLapMs
-  const driverName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim()
-  const fallbackName = row.driver_name || row.nickname || row.login || registered?.nickname || registered?.login || t('common.none')
-  const pilotKey = row.user_id ? `user:${row.user_id}` : `driver:${fallbackName.toLowerCase()}`
-
-  return {
-    pilotKey,
-    user_id: row.user_id,
-    pilotName: driverName || fallbackName,
-    pilotNumber: row.race_number ?? row.pilot_number ?? registered?.pilot_number,
-    rating: row.rating ?? registered?.rating,
-    game_ratings: row.game_ratings ?? registered?.game_ratings,
-    pilot_roles: row.pilot_roles ?? registered?.pilot_roles ?? [],
-    carModel: row.car_model ?? registered?.car_model ?? t('common.none'),
-    bestLapMs,
-    bestLapSession: bestLap.session,
-    finishMs,
-    averageLapMs,
-    laps: laps || 0,
-    didNotFinish: race.game === 'ACC' && (isAccMaxTime(rawFinishMs) || row.status === 'dnf'),
-    raceId: race.id,
-    raceName: race.name,
-    raceDate: race.datetime_start
-  }
-}
-
-function trackIdFor(gameAssets, track) {
-  const trackName = String(track || '').trim()
-  const ids = gameAssets.track_ids || {}
-  return ids[trackName] || Object.entries(ids).find(([key]) => key.toLowerCase() === trackName.toLowerCase())?.[1] || trackName.toLowerCase()
-}
-
-function trackNameForId(gameAssets, trackId, fallback = '') {
-  if (!trackId) return fallback
-  return Object.entries(gameAssets.track_ids || {}).find(([, id]) => id === trackId)?.[0] || fallback
-}
-
-function trackImageFor(gameAssets, track, trackId = '') {
-  const trackName = String(track || '').trim()
-  const images = gameAssets.track_images || {}
-  const imageTrack = trackName || trackNameForId(gameAssets, trackId)
-  return images[imageTrack] || Object.entries(images).find(([key]) => key.toLowerCase() === imageTrack.toLowerCase())?.[1] || ''
-}
-
-function expectedAverageLapFor(gameAssets, track) {
-  const trackName = String(track || '').trim().toLowerCase()
-  const entry = Object.entries(gameAssets.expected_average_lap_ms || {}).find(([name]) => name.toLowerCase() === trackName)
-  return entry && Number(entry[1]) > 0 ? Number(entry[1]) : null
-}
-
-const trackSummaries = computed(() => {
-  const gameAssets = trackGame.value === 'ACC'
-    ? (raceAssets.value.games?.ACC || raceAssets.value || { tracks: [] })
-    : (raceAssets.value.games?.[trackGame.value] || { tracks: [] })
-  const map = new Map()
-
-  for (const track of gameAssets.tracks || []) {
-    const track_id = trackIdFor(gameAssets, track)
-    map.set(track_id, { track_id, track, image_url: trackImageFor(gameAssets, track, track_id), expected_lap_ms: expectedAverageLapFor(gameAssets, track), race_count: 0, averageSamples: [], topByPilot: new Map() })
-  }
-
-  for (const race of trackRacesByGame.value[trackGame.value] || []) {
-    const raceTrack = String(race.track || race.results?.track || '').trim()
-    const raceTrackId = race.track_id || trackIdFor(gameAssets, raceTrack)
-    let summary = map.get(raceTrackId)
-    if (!summary && raceTrack) {
-      summary = [...map.values()].find((item) => item.track.toLowerCase() === raceTrack.toLowerCase())
-    }
-    if (!summary && raceTrack) {
-      summary = { track_id: raceTrackId, track: raceTrack, image_url: trackImageFor(gameAssets, raceTrack, raceTrackId), expected_lap_ms: expectedAverageLapFor(gameAssets, raceTrack), race_count: 0, averageSamples: [], topByPilot: new Map() }
-      map.set(raceTrackId, summary)
-    }
-    if (!summary) continue
-    const entries = resultRows(race).map((row) => trackRaceEntry(race, row)).filter(Boolean)
-    if (!entries.length) continue
-    summary.race_count += 1
-    for (const entry of entries) {
-      if (entry.averageLapMs !== null) summary.averageSamples.push(entry.averageLapMs)
-      if (entry.bestLapMs === null) continue
-      const current = summary.topByPilot.get(entry.pilotKey)
-      if (!current || entry.bestLapMs < current.bestLapMs) {
-        summary.topByPilot.set(entry.pilotKey, entry)
-      }
-    }
-  }
-
-  return Array.from(map.values())
-    .map((summary) => {
-      const average_lap_ms = summary.averageSamples.length
-        ? summary.averageSamples.reduce((sum, value) => sum + value, 0) / summary.averageSamples.length
-        : null
-      return {
-        track: summary.track,
-        track_id: summary.track_id,
-        image_url: summary.image_url,
-        expected_lap_ms: summary.expected_lap_ms,
-        race_count: summary.race_count,
-        average_lap_ms,
-        topRows: Array.from(summary.topByPilot.values()).sort((left, right) => left.bestLapMs - right.bestLapMs).slice(0, 15)
-      }
-    })
-    .sort((left, right) => left.track.localeCompare(right.track, undefined, { sensitivity: 'base' }))
-})
-
-const filteredTrackSummaries = computed(() => {
-  const query = trackSearch.value.trim().toLowerCase()
-  if (!query) return trackSummaries.value
-  return trackSummaries.value.filter((summary) => summary.track.toLowerCase().includes(query))
-})
-
-watch(filteredTrackSummaries, (summaries) => {
-  if (summaries.some((summary) => summary.track === selectedTrack.value)) return
-  selectedTrack.value = summaries[0]?.track || ''
-})
-
-watch(() => route.query.track, (track) => {
-  if (track) {
-    activeTab.value = 'tracks'
-    selectedTrack.value = String(track)
-  }
-}, { immediate: true })
-
-const selectedTrackSummary = computed(() => trackSummaries.value.find((summary) => summary.track === selectedTrack.value))
-const selectedTrackRows = computed(() => selectedTrackSummary.value?.topRows || [])
-
-function trackRaceTime(row) {
-  if (row.didNotFinish) return t('raceDetails.didNotFinish')
-  if (row.finishMs === null) return '-'
-  const laps = row.laps ? `${row.laps} ${t('tracks.lapsShort')}` : t('tracks.noLaps')
-  return `${formatDuration(row.finishMs)} · ${laps}`
-}
-
-function carModelLabel(value) {
-  if (value === null || value === undefined || value === '') return t('common.none')
-  if (trackGame.value !== 'ACC') return String(value)
-  const numericId = Number(value)
-  if (!Number.isInteger(numericId)) return String(value)
-  const mapping = raceAssets.value.car_model_ids || {}
-  return Object.entries(mapping).find(([, id]) => Number(id) === numericId)?.[0] || String(value)
-}
-async function chooseTrackImage(event) {
-  const file = event.target.files?.[0]
-  event.target.value = ''
-  if (!file || !selectedTrack.value) return
-
-  trackError.value = ''
-  trackImageUploading.value = true
-  try {
-    const body = new FormData()
-    body.append('game', trackGame.value)
-    body.append('track', selectedTrack.value)
-    body.append('file', file, file.name)
-    raceAssets.value = await api('/race-assets/track-image', { method: 'POST', body })
-  } catch (err) {
-    trackError.value = err.message || t('tracks.cropError')
-  } finally {
-    trackImageUploading.value = false
-  }
-}
-
-async function deleteTrackImage() {
-  if (!selectedTrack.value || !selectedTrackSummary.value?.image_url || !window.confirm(t('tracks.deleteImageConfirm'))) return
-  trackError.value = ''
-  trackImageUploading.value = true
-  try {
-    const params = new URLSearchParams({ game: trackGame.value, track: selectedTrack.value })
-    raceAssets.value = await api(`/race-assets/track-image?${params.toString()}`, { method: 'DELETE' })
-  } catch (err) {
-    trackError.value = err.message
-  } finally {
-    trackImageUploading.value = false
-  }
 }
 </script>
 
 <template>
-  <section class="section pilot-list-page">
-    <div class="section-header pilot-list-header">
-      <h1>{{ t('nav.pilots') }}</h1>
-      <div class="pilot-page-tabs">
-        <button class="role-segment-option" type="button" :class="{ 'is-selected': activeTab === 'pilots' }" @click="activeTab = 'pilots'">
-          {{ t('pilotTabs.pilots') }}
-        </button>
-        <button class="role-segment-option" type="button" :class="{ 'is-selected': activeTab === 'tracks' }" @click="activeTab = 'tracks'">
-          {{ t('pilotTabs.tracks') }}
-        </button>
-      </div>
-      <div v-if="activeTab === 'pilots'" class="pilot-list-controls">
-        <label class="pilot-control-field">
-          <Search :size="16" />
-          <input v-model="search" class="pilot-list-search" :placeholder="t('common.search')" />
-        </label>
-        <label class="pilot-control-field pilot-control-select">
-          <SlidersHorizontal :size="16" />
-          <select v-model="sort" class="pilot-list-sort" :aria-label="t('common.sort')">
-            <option value="rating_desc">{{ t('sort.ratingDesc') }}</option>
-            <option value="rating_asc">{{ t('sort.ratingAsc') }}</option>
-            <option value="sr_desc">{{ t('sort.srDesc') }}</option>
-            <option value="sr_asc">{{ t('sort.srAsc') }}</option>
-            <option value="alpha_asc">{{ t('sort.alphaAsc') }}</option>
-            <option value="alpha_desc">{{ t('sort.alphaDesc') }}</option>
-          </select>
-        </label>
-        <label class="pilot-control-field pilot-control-select">
-          <select v-model="ratingGame" class="pilot-list-sort" :aria-label="t('fields.game')">
-            <option v-for="option in trackGameOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-          </select>
-        </label>
-      </div>
-    </div>
-    <p v-if="activeTab === 'pilots' && error" class="error">{{ error }}</p>
-    <div v-if="activeTab === 'pilots'" class="pilot-roster card" role="table" :aria-label="t('pilotTabs.pilots')">
-      <div class="pilot-roster-head" role="row">
-        <span role="columnheader">#</span>
-        <span role="columnheader">{{ t('roles.pilot') }}</span>
-        <span role="columnheader">{{ t('fields.team') }}</span>
-        <span role="columnheader">{{ t('fields.country') }}</span>
-        <span role="columnheader">RER</span>
-        <span role="columnheader">SR</span>
-        <span role="columnheader">{{ t('fields.ratingRaces') }}</span>
-      </div>
+  <div class="ui-page ui-shell ui-shell--wide pilots">
+    <PageHeader :eyebrow="t('pilotsPage.eyebrow')" :title="t('nav.pilots')" :lead="t('pilotsPage.lead')">
+      <template #actions>
+        <SegmentedControl v-model="activeTab" :options="tabOptions" :aria-label="t('nav.pilots')" />
+      </template>
+    </PageHeader>
 
-      <article v-for="pilot in pilots" :key="pilot.id" class="pilot-roster-row" :class="{ 'is-current-user': Number(pilot.id) === Number(state.user?.id) }" role="row">
-        <span class="pilot-roster-number" role="cell" data-label="#">{{ pilotNumber(pilot) }}</span>
+    <Transition name="ui-fade" mode="out-in">
+      <div v-if="activeTab === 'pilots'" key="pilots" class="pilots__panel">
+        <div class="pilots__controls">
+          <SegmentedControl v-model="ratingGame" :options="gameChoices" :aria-label="t('fields.game')" />
+          <label class="pilots__search">
+            <Search :size="16" />
+            <input v-model="search" type="search" :placeholder="t('pilotsPage.searchPlaceholder')" :aria-label="t('common.search')" />
+            <button v-if="search" class="pilots__clear" type="button" :aria-label="t('pilotsPage.resetSearch')" @click="search = ''"><X :size="14" /></button>
+          </label>
+          <label class="pilots__sort">
+            <SlidersHorizontal :size="16" />
+            <select v-model="sort" :aria-label="t('common.sort')">
+              <option value="rating_desc">{{ t('sort.ratingDesc') }}</option>
+              <option value="rating_asc">{{ t('sort.ratingAsc') }}</option>
+              <option value="sr_desc">{{ t('sort.srDesc') }}</option>
+              <option value="sr_asc">{{ t('sort.srAsc') }}</option>
+              <option value="alpha_asc">{{ t('sort.alphaAsc') }}</option>
+              <option value="alpha_desc">{{ t('sort.alphaDesc') }}</option>
+            </select>
+          </label>
+        </div>
 
-        <div class="pilot-roster-driver" role="cell" :data-label="t('roles.pilot')">
-          <UserAvatar mini :src="pilot.avatar_url" :color="pilot.avatar_color" :label="pilot.nickname || pilot.login" />
-          <RouterLink class="user-list-main" :to="`/pilots/${pilot.id}`">
-            <span class="user-name-line">
-              <strong>{{ pilotName(pilot, pilot.login) }}</strong>
-              <PilotRoles :roles="pilot.pilot_roles" />
-              <LicenseBadge :user="pilot" :game="ratingGame" />
+        <ul class="tiers" :aria-label="t('pilotsPage.tiersTitle')">
+          <TierPlate
+            v-for="(step, index) in ladder"
+            :key="step.name"
+            v-reveal="{ delay: index * 50, y: 10, blur: 0 }"
+            class="tiers__item"
+            :step="step"
+            :mine="Boolean(myTier && myTier.name === step.name)"
+            :mine-label="t('pilotsPage.yourTier')"
+          />
+        </ul>
+
+        <p v-if="error" class="ui-alert">{{ error }}</p>
+
+        <div class="roster" :class="{ 'is-loading': loading && pilots.length }" role="table" :aria-label="t('pilotTabs.pilots')">
+          <div class="roster__head" role="row">
+            <span role="columnheader">{{ t('pilotsPage.columns.place') }}</span>
+            <span role="columnheader">{{ t('pilotsPage.columns.pilot') }}</span>
+            <span role="columnheader">{{ t('pilotsPage.columns.team') }}</span>
+            <span role="columnheader">{{ t('pilotsPage.columns.country') }}</span>
+            <span role="columnheader" class="is-num">{{ t('pilotsPage.columns.rer') }}</span>
+            <span role="columnheader" class="is-num">{{ t('pilotsPage.columns.sr') }}</span>
+            <span role="columnheader" class="is-num">{{ t('pilotsPage.columns.races') }}</span>
+          </div>
+
+          <article
+            v-for="(pilot, index) in pilots"
+            :key="`${ratingGame}-${pilot.id}`"
+            class="roster__row rank-surface"
+            :class="{ [`is-p${index + 1}`]: showPodium && index < 3, 'is-me': state.user?.id === pilot.id }"
+            :data-rank="rankOf(pilot)"
+            :style="{ '--i': index }"
+            role="row"
+          >
+            <RankAura :rank="rankOf(pilot)" :seed="pilot.id" />
+            <span class="roster__place" role="cell" :data-label="t('pilotsPage.columns.place')">
+              <span class="ui-pos" :class="showPodium && index < 3 ? `ui-pos--${index + 1}` : ''">{{ place(index) }}</span>
             </span>
-            <span>{{ pilot.nickname || pilot.login }} - {{ pilotGames(pilot) }}</span>
-          </RouterLink>
+
+            <div class="roster__pilot" role="cell" :data-label="t('pilotsPage.columns.pilot')">
+              <UserAvatar mini class="roster__avatar rank-avatar" :data-rank="rankOf(pilot)" :src="pilot.avatar_url" :color="pilot.avatar_color" :label="pilot.nickname || pilot.login" />
+              <RouterLink class="roster__who" :to="`/pilots/${pilot.id}`">
+                <span class="roster__name">
+                  <strong class="rank-name" :data-rank="rankOf(pilot)">{{ pilotName(pilot, pilot.login) }}</strong>
+                  <PilotRoles :roles="pilot.pilot_roles" />
+                  <LicenseBadge :user="pilot" :game="ratingGame" />
+                </span>
+                <small><b class="ui-num">#{{ formatPilotNumber(pilot.pilot_number) }}</b> · {{ pilot.nickname || pilot.login }} · {{ pilotGames(pilot) }}</small>
+              </RouterLink>
+            </div>
+
+            <span class="roster__team" role="cell" :data-label="t('pilotsPage.columns.team')">
+              <RouterLink v-if="pilot.team_id" class="roster__chip" :to="teamHref(pilot.team_id)" :title="pilot.team_name || t('common.none')">
+                {{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}
+              </RouterLink>
+              <span v-else class="roster__chip is-empty" :title="t('common.none')">{{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span>
+            </span>
+
+            <span class="roster__country" role="cell" :data-label="t('pilotsPage.columns.country')">
+              <span v-if="countryCode(pilot.country)" class="roster__code">{{ countryCode(pilot.country) }}</span>
+              {{ pilotCountry(pilot) }}
+            </span>
+            <span class="roster__metric roster__metric--rer ui-num" role="cell" :data-label="`RER ${ratingGame}`">{{ formatRating(ratingForGame(pilot, ratingGame)) }}</span>
+            <span class="roster__metric ui-num" role="cell" data-label="SR">{{ pilot.sr }}</span>
+            <span class="roster__metric ui-num" role="cell" :data-label="t('fields.ratingRaces')">{{ ratingRaceCountForGame(pilot, ratingGame) }}</span>
+          </article>
+
+          <EmptyState v-if="loading && !pilots.length" class="roster__empty" loading :title="t('ui.common.loading')" compact />
+          <EmptyState v-else-if="!pilots.length" class="roster__empty" :icon="Users" :title="t('pilotsPage.emptyTitle')" :text="t('pilotsPage.emptyText')" compact>
+            <button v-if="search" class="ui-btn ui-btn--outline ui-btn--sm" type="button" @click="search = ''">{{ t('pilotsPage.resetSearch') }}</button>
+          </EmptyState>
         </div>
 
-        <span class="pilot-roster-team" role="cell" :data-label="t('fields.team')">
-          <RouterLink v-if="pilot.team_id" class="team-mini-chip team-link-chip" :to="teamHref(pilot.team_id)" :title="pilot.team_name || t('common.none')">
-            {{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}
-          </RouterLink>
-          <span v-else class="team-mini-chip" :title="pilot.team_name || t('common.none')">{{ teamShortName(pilot.team_name, pilot.team_abbreviation) }}</span>
-        </span>
-        <span class="pilot-roster-country" role="cell" :data-label="t('fields.country')">{{ pilotCountry(pilot) }}</span>
-        <span class="pilot-roster-metric pilot-roster-rer" role="cell" data-label="RER"><strong>{{ formatRating(ratingForGame(pilot, ratingGame)) }}</strong><small>RER {{ ratingGame }}</small></span>
-        <span class="pilot-roster-metric pilot-roster-sr" role="cell" data-label="SR"><strong>{{ pilot.sr }}</strong><small>SR</small></span>
-        <span class="pilot-roster-metric pilot-roster-races" role="cell" :data-label="t('fields.ratingRaces')"><strong>{{ ratingRaceCountForGame(pilot, ratingGame) }}</strong><small>{{ t('fields.ratingRaces') }}</small></span>
-      </article>
-
-      <div v-if="!pilots.length" class="pilot-roster-empty">{{ t('common.noMatches') }}</div>
-    </div>
-    <PaginationControls v-if="activeTab === 'pilots'" v-model:page="page" :page-size="pageSize" :loaded-count="pilots.length" :has-next="hasNextPage" />
-
-    <div v-else class="tracks-board">
-      <div class="track-toolbar card">
-        <label class="pilot-control-field pilot-control-select">
-          <MapPinned :size="16" />
-          <select v-model="trackGame" :aria-label="t('fields.game')">
-            <option v-for="option in trackGameOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-          </select>
-        </label>
-        <label class="pilot-control-field track-search-field">
-          <Search :size="16" />
-          <input v-model="trackSearch" type="search" :placeholder="t('fields.track')" :aria-label="t('fields.track')" />
-        </label>
-        <span class="track-toolbar-count">{{ trackLoading ? t('common.loading') : t('tracks.trackCount', { count: filteredTrackSummaries.length }) }}</span>
+        <PaginationControls v-model:page="page" :page-size="pageSize" :loaded-count="pilots.length" :has-next="hasNextPage" />
       </div>
 
-      <p v-if="trackError" class="error">{{ trackError }}</p>
-
-      <div v-if="filteredTrackSummaries.length" class="track-card-grid">
-        <button
-          v-for="track in filteredTrackSummaries"
-          :key="track.track_id"
-          class="track-summary-card"
-          type="button"
-          :class="{ active: selectedTrack === track.track }"
-          @click="selectedTrack = track.track"
-        >
-          <img v-if="track.image_url" class="track-summary-image" :src="track.image_url" alt="" />
-          <span>{{ track.track }}</span>
-          <strong>{{ formatDuration(track.average_lap_ms) }}</strong>
-          <small>{{ t('tracks.averageLap') }} · {{ t('tracks.racesCount', { count: track.race_count }) }}</small>
-          <small v-if="track.expected_lap_ms" class="track-expected-lap">{{ t('tracks.expectedAverageLap') }}: {{ formatDuration(track.expected_lap_ms) }}</small>
-        </button>
-      </div>
-      <div v-else class="pilot-roster-empty">{{ t('common.noMatches') }}</div>
-
-      <section class="card track-record-card">
-        <div class="section-header compact">
-          <div>
-            <h2>{{ selectedTrack || t('tracks.title') }}</h2>
-            <p class="muted">{{ t('tracks.subtitle') }}</p>
-          </div>
-          <div class="track-record-actions">
-            <label v-if="canManageTrackImages" class="button small track-image-button">
-              <ImagePlus :size="15" />
-              {{ t('tracks.addImage') }}
-              <input ref="trackImageInput" type="file" accept="image/png,image/jpeg,image/webp" @change="chooseTrackImage" />
-            </label>
-            <button
-              v-if="canManageTrackImages && selectedTrackSummary?.image_url"
-              class="button danger small"
-              type="button"
-              :disabled="trackImageUploading"
-              @click="deleteTrackImage"
-            >
-              <Trash2 :size="15" />
-              {{ t('tracks.deleteImage') }}
-            </button>
-            <span class="pill">{{ t('tracks.topLimit') }}</span>
-          </div>
-        </div>
-
-        <img v-if="selectedTrackSummary?.image_url" class="track-record-hero-image" :src="selectedTrackSummary.image_url" alt="" />
-
-        <div v-if="selectedTrackRows.length" class="track-record-table-wrap">
-          <table class="track-record-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>{{ t('roles.pilot') }}</th>
-                <th>{{ t('tracks.bestLap') }}</th>
-                <th>{{ t('common.car') }}</th>
-                <th>{{ t('tracks.raceTime') }}</th>
-                <th>{{ t('fields.race') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(row, index) in selectedTrackRows" :key="`${row.raceId}-${row.pilotKey}`">
-                <td data-label="#">{{ index + 1 }}</td>
-                <td :data-label="t('roles.pilot')">
-                  <RouterLink v-if="row.user_id" class="track-pilot-link" :to="`/pilots/${row.user_id}`">
-                    <span class="user-name-line">
-                      <strong>{{ row.pilotName }}</strong>
-                      <PilotRoles :roles="row.pilot_roles" />
-                      <LicenseBadge :user="row" :game="trackGame" />
-                    </span>
-                    <small>#{{ formatPilotNumber(row.pilotNumber) }}</small>
-                  </RouterLink>
-                  <span v-else class="track-pilot-link">
-                    <span class="user-name-line">
-                      <strong>{{ row.pilotName }}</strong>
-                      <PilotRoles :roles="row.pilot_roles" />
-                      <LicenseBadge :user="row" :game="trackGame" />
-                    </span>
-                    <small>#{{ formatPilotNumber(row.pilotNumber) }}</small>
-                  </span>
-                </td>
-                <td class="track-best-lap-cell" :data-label="t('tracks.bestLap')">
-                  <strong>{{ formatDuration(row.bestLapMs) }}</strong>
-                  <span v-if="row.bestLapSession" class="track-lap-source">{{ row.bestLapSession === 'qualification' ? t('tracks.lapSourceQualification') : t('tracks.lapSourceRace') }}</span>
-                </td>
-                <td :data-label="t('common.car')">{{ carModelLabel(row.carModel) }}</td>
-                <td :data-label="t('tracks.raceTime')">{{ trackRaceTime(row) }}</td>
-                <td :data-label="t('fields.race')"><RouterLink class="track-race-link" :to="`/races/${row.raceId}`">{{ row.raceName }}</RouterLink></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div v-else class="pilot-roster-empty">{{ t('tracks.noResults') }}</div>
-      </section>
-    </div>
-
-  </section>
+      <TrackRecords v-else key="tracks" />
+    </Transition>
+  </div>
 </template>
+
+<style scoped>
+.pilots__panel {
+  display: grid;
+  gap: 18px;
+}
+
+.pilots__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.pilots__search,
+.pilots__sort {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-pill);
+  background: var(--c-sunken);
+  color: var(--c-text-3);
+  transition: border-color var(--dur-2), box-shadow var(--dur-2);
+}
+
+.pilots__search {
+  flex: 1 1 240px;
+  max-width: 420px;
+}
+
+.pilots__search:focus-within,
+.pilots__sort:focus-within {
+  border-color: var(--bm-blue-bright);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bm-blue) 20%, transparent);
+}
+
+.pilots__search input,
+.pilots__sort select {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--c-text);
+  outline: none;
+}
+
+.pilots__search input:focus,
+.pilots__sort select:focus {
+  box-shadow: none;
+}
+
+.pilots__clear {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--c-text) 14%, transparent);
+  color: var(--c-text);
+  cursor: pointer;
+}
+
+/* The RER ladder: one preview plate per tier (pilots/TierPlate.vue). */
+.tiers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.roster {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-xl);
+  background: var(--c-surface);
+  transition: opacity var(--dur-2);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+}
+
+.roster.is-loading {
+  opacity: 0.6;
+}
+
+.roster__head,
+.roster__row {
+  display: grid;
+  grid-template-columns: 64px minmax(280px, 2.4fr) 96px minmax(130px, 1fr) 96px 72px 84px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+}
+
+.roster__head {
+  min-height: 46px;
+  border-bottom: 1px solid var(--c-line);
+  background: color-mix(in srgb, var(--c-surface-solid) 90%, var(--bm-blue));
+  color: var(--c-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.is-num {
+  text-align: right;
+}
+
+.roster__row {
+  position: relative;
+  min-height: 68px;
+  border-bottom: 1px solid var(--c-line);
+  animation: roster-in 560ms var(--ease-out) both;
+  animation-delay: calc(var(--i) * 28ms);
+  transition: background-color var(--dur-2);
+}
+
+@keyframes roster-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.roster__row:last-of-type {
+  border-bottom: 0;
+}
+
+/* Ranked pilots (bronze and up) sit in the table as banners: inset, rounded,
+   with the rank backdrop (.rank-surface) and rim (RankAura). */
+.roster__row[data-rank]:not([data-rank='rookie']) {
+  margin: 5px 6px;
+  padding-inline: 12px;
+  border-bottom-color: transparent;
+  border-radius: var(--r-md);
+}
+
+.roster__row[data-rank]:not([data-rank='rookie']):hover {
+  filter: brightness(1.12);
+}
+
+.roster__row:hover {
+  background: var(--c-blue-soft);
+}
+
+.roster__row::before {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: transparent;
+  content: '';
+}
+
+.roster__row.is-p1::before {
+  background: var(--bm-gold);
+}
+
+.roster__row.is-p2::before {
+  background: var(--bm-silver);
+}
+
+.roster__row.is-p3::before {
+  background: var(--bm-bronze);
+}
+
+.roster__row.is-p1 {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--bm-gold) 10%, transparent), transparent 45%);
+}
+
+.roster__row.is-me {
+  box-shadow: inset 0 0 0 1px var(--c-blue-line);
+}
+
+.roster__pilot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.roster__avatar {
+  width: 40px;
+  height: 40px;
+  border-width: 1px;
+  box-shadow: none;
+}
+
+.roster__who {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: var(--c-text);
+  text-decoration: none;
+}
+
+.roster__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.roster__name strong {
+  overflow: hidden;
+  font-size: 14.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster__who:hover strong {
+  color: var(--c-accent-text);
+}
+
+.roster__who small {
+  overflow: hidden;
+  color: var(--c-text-3);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster__who small b {
+  color: var(--c-text-2);
+  font-weight: 600;
+}
+
+.roster__chip {
+  display: inline-grid;
+  place-items: center;
+  min-width: 52px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 8px;
+  color: var(--c-text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+a.roster__chip:hover {
+  border-color: var(--bm-blue);
+  color: var(--c-accent-text);
+}
+
+.roster__chip.is-empty {
+  color: var(--c-text-3);
+}
+
+.roster__country {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--c-text-2);
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster__code {
+  padding: 1px 5px;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 4px;
+  color: var(--c-text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.roster__metric {
+  color: var(--c-text);
+  font-size: 15px;
+  text-align: right;
+}
+
+.roster__metric--rer {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.roster__empty {
+  margin: 16px;
+}
+
+@media (max-width: 1100px) {
+  .roster__head,
+  .roster__row {
+    grid-template-columns: 56px minmax(0, 1fr) 84px 80px 64px;
+  }
+
+  .roster__head > :nth-child(3),
+  .roster__head > :nth-child(4),
+  .roster__team,
+  .roster__country {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .tiers {
+    grid-auto-columns: 164px;
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    padding-bottom: 6px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+
+  .tiers__item {
+    scroll-snap-align: start;
+  }
+
+  .roster__head {
+    display: none;
+  }
+
+  .roster__row {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    grid-template-areas:
+      'place pilot rer'
+      'place pilot meta';
+    gap: 2px 10px;
+    padding: 12px 14px;
+  }
+
+  .roster__place {
+    grid-area: place;
+  }
+
+  .roster__pilot {
+    grid-area: pilot;
+  }
+
+  .roster__metric--rer {
+    grid-area: rer;
+  }
+
+  .roster__metric:not(.roster__metric--rer) {
+    display: none;
+  }
+
+  .roster__avatar {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roster__row {
+    animation: none;
+  }
+}
+</style>

@@ -317,6 +317,13 @@ def user_sort_columns(sort: str, rating_game: str = RACE_GAMES[0]) -> tuple:
     return (rating_expr.desc(), User.sr.desc(), func.lower(User.nickname).asc(), User.id.asc())
 
 
+def row_best_laps(row: dict) -> tuple[tuple[str, object], ...]:
+    """A result row's best laps by session; none where the stewards annulled the pilot's laps."""
+    if row.get("laps_annulled") is True:
+        return ()
+    return (("qualification", row.get("qualification_best_lap_ms")), ("race", row.get("best_lap_ms")))
+
+
 @router.get("/pilots", response_model=list[UserPublic])
 @limiter.limit("1200/minute")
 async def list_pilots(
@@ -1255,7 +1262,7 @@ async def get_user_analytics(user_id: int, request: Request, session: AsyncSessi
                 continue
             if row_user_id != user.id or row.get("status") == "missing":
                 continue
-            for session_name, value in (("qualification", row.get("qualification_best_lap_ms")), ("race", row.get("best_lap_ms"))):
+            for session_name, value in row_best_laps(row):
                 if not isinstance(value, (int, float)) or value <= 0:
                     continue
                 candidate = {

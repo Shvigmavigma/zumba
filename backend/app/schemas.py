@@ -950,12 +950,37 @@ class AccResultsUpload(BaseModel):
     race_results: dict
 
 
+LAP_SECTOR_COUNT = 3
+MAX_SECTOR_MS = 24 * 60 * 60 * 1000
+MAX_RESULT_LAPS = 10_000
+
+
 class ManualResultRow(BaseModel):
     user_id: int
     finish_ms: int = Field(ge=0)
     lap_count: int = Field(default=0, ge=0)
     best_lap_ms: int | None = Field(default=None, ge=0)
     qualification_best_lap_ms: int | None = Field(default=None, ge=0)
+    # Timing taken from the game's own session file when the results are entered:
+    # the pilot's best time in each of the lap's three sectors (None where there is
+    # none) and the number of valid laps they come from. Kept for the track records.
+    best_sectors_ms: list[int | None] | None = None
+    valid_laps: int | None = Field(default=None, ge=0, le=MAX_RESULT_LAPS)
+    qualification_best_sectors_ms: list[int | None] | None = None
+    qualification_valid_laps: int | None = Field(default=None, ge=0, le=MAX_RESULT_LAPS)
+    # The stewards annulled the pilot's laps: their best laps and sectors are not records. The result stands.
+    laps_annulled: bool | None = None
+
+    @field_validator("best_sectors_ms", "qualification_best_sectors_ms")
+    @classmethod
+    def validate_sector_times(cls, value: list[int | None] | None) -> list[int | None] | None:
+        if value is None:
+            return None
+        if len(value) != LAP_SECTOR_COUNT:
+            raise ValueError(f"Sector times must be {LAP_SECTOR_COUNT} values")
+        if any(item is not None and not 0 < item <= MAX_SECTOR_MS for item in value):
+            raise ValueError("A sector time must be a positive number of milliseconds")
+        return value
 
 
 class ManualResultsUpload(BaseModel):
@@ -1446,6 +1471,7 @@ class HallOfFamePilotRead(BaseModel):
     bronze: int = Field(ge=0)
     podiums: int = Field(ge=0)
     stats_by_game: dict[str, HallOfFameStatsRead] = Field(default_factory=dict)
+    pilot_roles: list[PilotRoleRead] = Field(default_factory=list)
 
 
 class HallOfFameTeamRead(BaseModel):

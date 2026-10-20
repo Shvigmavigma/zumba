@@ -2270,7 +2270,7 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
           <div>
             <h3>{{ detailDialogUser.first_name }} {{ detailDialogUser.last_name }}</h3>
             <p class="muted">@{{ detailDialogUser.login }} · {{ detailDialogUser.nickname }}</p>
-            <PilotRoles :roles="detailDialogUser.pilot_roles" />
+            <PilotRoles :roles="detailDialogUser.pilot_roles" :limit="50" />
             <button v-if="!detailDialogUser.is_system_admin" class="button small admin-user-details-roles-button" type="button" @click="editRolesFromDetails">
               {{ t('adminUsers.editPilotRoles') }}
             </button>

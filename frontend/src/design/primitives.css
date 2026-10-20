@@ -1,0 +1,214 @@
+/*
+ * Element-level rules are wrapped in :where() so they carry zero specificity:
+ * they still beat the legacy layer, but never outrank component classes such
+ * as .ui-input.
+ *
+ * Harmonises the legacy primitives (used by admin screens and shared widgets)
+ * with the new design language. Only visual properties are touched so legacy
+ * layouts keep their geometry.
+ */
+:where(h1, h2, h3) {
+  font-family: var(--font-display);
+  letter-spacing: -0.005em;
+}
+
+:where(h1) {
+  text-transform: uppercase;
+}
+
+.button,
+.icon-button {
+  border-radius: var(--r-sm);
+  border-color: var(--c-line-strong);
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  font-family: var(--font-body);
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 var(--c-highlight);
+  transition:
+    transform var(--dur-2) var(--ease-ios),
+    background-color var(--dur-2) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out),
+    color var(--dur-2) var(--ease-out);
+}
+
+.button:not(.primary):not(.danger):hover,
+.icon-button:hover {
+  border-color: var(--c-blue-line);
+  background: var(--c-blue-soft);
+  color: var(--c-text);
+}
+
+.button:active:not(:disabled),
+.icon-button:active:not(:disabled) {
+  transform: scale(0.965);
+}
+
+.button.primary {
+  border-color: color-mix(in srgb, var(--bm-blue) 70%, #fff 30%);
+  background: var(--bm-blue);
+  color: #fff;
+  box-shadow: var(--shadow-blue), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.button.primary:hover {
+  background: color-mix(in srgb, var(--bm-blue) 88%, #fff 12%);
+  color: #fff;
+}
+
+.button.danger {
+  border-color: color-mix(in srgb, var(--bm-red) 40%, transparent);
+  background: color-mix(in srgb, var(--bm-red) 14%, transparent);
+  color: color-mix(in srgb, var(--bm-red) 80%, var(--c-text));
+  box-shadow: none;
+}
+
+.button.danger:hover {
+  border-color: var(--bm-red);
+  background: color-mix(in srgb, var(--bm-red) 22%, transparent);
+}
+
+.button:disabled,
+.icon-button:disabled,
+.button.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+:where(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']), select, textarea, .country-combobox-trigger) {
+  border-color: var(--c-line-strong);
+  border-radius: var(--r-sm);
+  background-color: var(--c-sunken);
+  color: var(--c-text);
+  font-family: var(--font-body);
+  transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), background-color var(--dur-2);
+}
+
+:where(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']), select, textarea):focus {
+  border-color: var(--bm-blue-bright);
+  outline: none;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bm-blue) 24%, transparent);
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--bm-blue);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--c-text-3);
+}
+
+.card {
+  border-color: var(--c-line);
+  border-radius: var(--r-lg);
+  background: var(--c-surface-solid);
+  box-shadow: var(--shadow-1);
+}
+
+.pill {
+  border-color: var(--c-line-strong);
+  border-radius: var(--r-pill);
+  background: var(--c-sunken);
+  color: var(--c-text-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge {
+  border-radius: var(--r-pill);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+p.error,
+.error {
+  border: 1px solid color-mix(in srgb, var(--bm-red) 34%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--bm-red) 10%, transparent);
+  color: color-mix(in srgb, var(--bm-red) 72%, var(--c-text));
+}
+
+.muted {
+  color: var(--c-text-2);
+}
+
+.table th,
+.admin-users-table th,
+.race-admin-table th {
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Shared widgets used across the redesigned and legacy screens. */
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.pagination-controls .icon-button {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-pill);
+}
+
+.pagination-state {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 120px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.pagination-state strong {
+  color: var(--c-text);
+  font-weight: 600;
+}
+
+.pagination-state span {
+  color: var(--c-text-3);
+}
+
+.license-badge {
+  border-radius: var(--r-pill);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+/* Legacy screens keep their layout inside the classic .page container, now with
+   the shell's gutters. Section headings there use the body face: the wide
+   display face is reserved for page titles. */
+.app__view.page {
+  width: min(var(--shell-wide), 100%);
+  margin: 0 auto;
+  padding: clamp(20px, 3vw, 32px) var(--gutter) clamp(40px, 6vw, 72px);
+}
+
+.page h2,
+.page h3 {
+  font-family: var(--font-body);
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+/* Legacy full-screen overlays (moderation cards, banner lightboxes) were
+   layered for the old header; they must now cover the glass header (60) and
+   the phone tab bar (70). */
+.penalty-modal-backdrop,
+.banner-image-lightbox {
+  z-index: 100;
+}
+
+.banner-crop-lightbox {
+  z-index: 101;
+}

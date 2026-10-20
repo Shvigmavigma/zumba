@@ -1,991 +1,209 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, Eye, FileText, Flag, HeartHandshake, Mail, Maximize2, MessageCircle, Minimize2, Music2, PlayCircle, Plus, Radio, Send, ShieldCheck, Users, X } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { RefreshCw } from 'lucide-vue-next'
 import { api } from '../api'
-import PaginationControls from '../components/PaginationControls.vue'
-import RaceTypeFilters from '../components/RaceTypeFilters.vue'
-import { gameLabel, gameOptions, isExternalRace, raceOpenHref, statusLabel } from '../i18nLabels'
-import { isVideoUrl } from '../media'
-import { appendRaceTypeFilters, defaultRaceTypeFilters } from '../raceFilters'
-import { state } from '../store'
-import { formatDayPart, formatInTimeZone, formatMonthPart, formatTimeOnly } from '../timezone'
-import { validTwitchParent } from '../twitchEmbed'
+import ChampionshipCallout from './home/ChampionshipCallout.vue'
+import HomeHero from './home/HomeHero.vue'
+import HomeRaceList from './home/HomeRaceList.vue'
+import LatestRace from './home/LatestRace.vue'
+import NewsCarousel from './home/NewsCarousel.vue'
+import NextRaceCard from './home/NextRaceCard.vue'
+import PilotSnapshot from './home/PilotSnapshot.vue'
+import SetupsSection from './home/SetupsSection.vue'
+import SponsorBanner from './home/SponsorBanner.vue'
+import TopPilots from './home/TopPilots.vue'
+import TwitchWidget from './home/TwitchWidget.vue'
 
-const { t } = useI18n()
-const router = useRouter()
-const stats = ref(null)
-const races = ref([])
+const DEFAULT_NEWS_SETTINGS = { auto_rotate_seconds: 30, manual_pause_seconds: 300 }
+
+const stats = ref({ pilots: 0, completed_races: 0, open_races: 0, staff: 0 })
 const setups = ref([])
 const showSetupsSection = ref(true)
 const banners = ref([])
 const news = ref([])
-const newsSettings = ref({ auto_rotate_seconds: 30, manual_pause_seconds: 300 })
-const weatherSettings = ref({
-  clear_light_url: '', clear_dark_url: '',
-  partly_cloudy_light_url: '', partly_cloudy_dark_url: '',
-  overcast_light_url: '', overcast_dark_url: '',
-  light_rain_light_url: '', light_rain_dark_url: '',
-  heavy_rain_light_url: '', heavy_rain_dark_url: '',
-  storm_light_url: '', storm_dark_url: ''
-})
-const registrationChampionships = ref([])
-const donationSettings = ref({ donation_url: '', top_donations: [] })
-const newsTrack = ref(null)
-const activeNewsIndex = ref(0)
-const isNewsViewerOpen = ref(false)
-const isNewsTextHidden = ref(false)
-const mainDataError = ref(false)
-const racesError = ref(false)
-const mainLoading = ref(false)
-const raceGameFilter = ref('all')
-const raceStatusFilter = ref('not_finished')
-const myGamesOnly = ref(false)
-const raceTypeFilters = ref(defaultRaceTypeFilters())
-const racePage = ref(1)
-const racePageSize = 5
-const defaultTwitchStatus = {
-  channel_login: 'bmrlracing',
-  channel_url: 'https://www.twitch.tv/bmrlracing',
-  is_configured: false,
-  is_live: false,
-  status: 'channel',
-  embed_type: 'channel',
-  embed_value: 'bmrlracing',
-  external_url: 'https://www.twitch.tv/bmrlracing',
-  title: '',
-  game_name: '',
-  thumbnail_url: '',
-  viewer_count: null
-}
-const savedTwitchCollapsed = typeof localStorage === 'undefined' ? null : localStorage.getItem('twitchWidgetCollapsed')
-const twitchStatus = ref({ ...defaultTwitchStatus })
-const twitchError = ref('')
-const isTwitchViewerOpen = ref(false)
-const isTwitchCollapsed = ref(savedTwitchCollapsed === null ? true : savedTwitchCollapsed === 'true')
-const twitchWidgetPosition = ref({ x: 24, y: 120 })
-const twitchDragState = ref(null)
-const twitchWasDragged = ref(false)
-const twitchPreviewStartSecond = Math.floor(Math.random() * 900) + 15
-const weatherKeys = ['clear', 'partly_cloudy', 'overcast', 'light_rain', 'heavy_rain', 'storm']
-let newsAutoplayTimer = null
-let newsAutoplayPauseTimer = null
-let newsScrollResetTimer = null
-let newsProgrammaticScroll = false
-let newsManualPauseUntil = 0
-const currentNews = computed(() => news.value[activeNewsIndex.value] || null)
-const featuredChampionship = computed(() => registrationChampionships.value[0] || null)
-const featuredChampionshipStageCount = computed(() => featuredChampionship.value?.stage_count ?? featuredChampionship.value?.stages?.length ?? 0)
-const featuredChampionshipStageText = computed(() => stageCount(featuredChampionshipStageCount.value))
-const featuredChampionshipRegistered = computed(() => featuredChampionship.value?.my_registration_status === 'approved')
-const topDonations = computed(() => (donationSettings.value.top_donations || [])
-  .filter((donation) => donation?.name || donation?.amount)
-  .slice(0, 3))
-const contactEmailLinks = [
-  { text: '37foneziazaz0909@gmail.com', href: 'mailto:37foneziazaz0909@gmail.com' }
-]
-const directContactItems = computed(() => [
-  {
-    key: 'email',
-    icon: Mail,
-    label: t('main.contactMail'),
-    links: contactEmailLinks
-  },
-  { key: 'discord-direct', icon: MessageCircle, label: t('main.contactDiscord'), value: 'pianino22' }
-])
-const socialItems = computed(() => [
-  { key: 'discord-server', icon: Users, label: t('main.discordServer'), href: 'https://discord.gg/bmrlac', text: 'discord.gg/bmrlac' },
-  { key: 'telegram', icon: Send, label: t('main.telegramChannel'), href: 'https://t.me/bmrlleague', text: '@bmrlleague' },
-  { key: 'tiktok', icon: Music2, label: t('main.tiktok'), href: 'https://www.tiktok.com/@beamngrl', text: '@beamngrl' },
-  { key: 'twitch', icon: Radio, label: 'Twitch', href: 'https://www.twitch.tv/bmrlracing', text: 'bmrlracing' }
-])
-const raceGameOptions = computed(() => gameOptions(t, true))
-const canFilterMyGames = computed(() => Boolean(state.user?.games?.length))
-const racesHasNextPage = computed(() => races.value.length === racePageSize)
-const canEmbedTwitch = computed(() => {
-  if (!twitchParent.value) return false
-  if (twitchStatus.value.is_live && twitchStatus.value.embed_type === 'channel') return true
-  return twitchStatus.value.status === 'vod' && twitchStatus.value.embed_type === 'video' && Boolean(twitchStatus.value.embed_value)
-})
-const canEmbedTwitchPreview = computed(() => twitchStatus.value.is_live && canEmbedTwitch.value)
-const twitchWidgetStyle = computed(() => ({
-  transform: `translate3d(${twitchWidgetPosition.value.x}px, ${twitchWidgetPosition.value.y}px, 0)`
-}))
-const twitchParent = computed(() => validTwitchParent(typeof window === 'undefined' ? 'localhost' : window.location.hostname))
-const twitchEmbedSrc = computed(() => createTwitchEmbedSrc({ autoplay: twitchStatus.value.is_live }))
-const twitchPreviewSrc = computed(() => createTwitchEmbedSrc({ preview: true }))
-const error = computed(() => {
-  if (!mainDataError.value && !racesError.value) return ''
-  return t('main.dataLoadError')
-})
+const newsSettings = ref(DEFAULT_NEWS_SETTINGS)
+const weatherSettings = ref({})
+const championships = ref([])
+const { t } = useI18n()
+const loadFailed = ref(false)
+const loading = ref(false)
+// The news banner waits for its data, so the empty state never flashes first.
+const homeLoaded = ref(false)
 
-function formatTwitchTime(totalSeconds) {
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-  return `${hours}h${minutes}m${seconds}s`
-}
-
-function createTwitchEmbedSrc({ autoplay = false, preview = false } = {}) {
-  if (!twitchParent.value) return ''
-  const params = new URLSearchParams({
-    parent: twitchParent.value,
-    muted: 'true',
-    autoplay: autoplay ? 'true' : 'false',
-  })
-  if (twitchStatus.value.embed_type === 'video' && twitchStatus.value.embed_value) {
-    params.set('video', twitchStatus.value.embed_value)
-    if (preview) {
-      params.set('time', formatTwitchTime(twitchPreviewStartSecond))
-    }
-  } else {
-    params.set('channel', twitchStatus.value.channel_login || defaultTwitchStatus.channel_login)
-  }
-  return `https://player.twitch.tv/?${params.toString()}`
-}
-const twitchStatusText = computed(() => {
-  if (twitchStatus.value.is_live) return t('twitch.live')
-  if (twitchStatus.value.status === 'vod') return t('twitch.latestVideo')
-  return t('twitch.channel')
-})
-const twitchDisplayTitle = computed(() => {
-  if (twitchStatus.value.title) return twitchStatus.value.title
-  if (twitchStatus.value.status === 'vod') return t('twitch.latestVideo')
-  return t('twitch.channel')
-})
-
-function getTwitchWidgetSize() {
-  if (typeof window === 'undefined') return 420
-  return window.innerWidth <= 520 ? Math.max(280, window.innerWidth - 32) : 420
-}
-
-function getTwitchWidgetDimensions() {
-  if (isTwitchCollapsed.value) return { width: 270, height: 58 }
-  const width = getTwitchWidgetSize()
-  return { width, height: Math.max(300, Math.round(width * 0.76)) }
-}
+// Open registration first (it asks for action), then a season under way; two plates at most.
+const featuredChampionships = computed(() => [...championships.value]
+  .sort((a, b) => Number(b.status === 'registration_open') - Number(a.status === 'registration_open'))
+  .slice(0, 2))
 
 function banner(position) {
-  return banners.value.find((item) => item.position === position && item.image_url)
+  return banners.value.find((item) => item.position === position && item.image_url) || null
 }
 
-function formatRaceDate(value) {
-  return formatInTimeZone(value, {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23'
-  })
-}
-
-function formatRaceDay(value) {
-  return formatDayPart(value)
-}
-
-function formatRaceMonth(value) {
-  return formatMonthPart(value)
-}
-
-function formatRaceTime(value) {
-  return formatTimeOnly(value)
-}
-
-function stagePluralSuffix(count) {
-  if (state.locale !== 'ru') return count === 1 ? 'One' : 'Many'
-  const mod10 = count % 10
-  const mod100 = count % 100
-  if (mod10 === 1 && mod100 !== 11) return 'One'
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'Few'
-  return 'Many'
-}
-
-function stageCount(count) {
-  return `${count} ${t(`championships.stageWord${stagePluralSuffix(count)}`)}`
-}
-
-function registeredCount(race) {
-  if (race.game === 'LMU') return 0
-  if (race.is_team_event) return race.team_registrations?.length || 0
-  return race.registered_pilots?.length || 0
-}
-
-function isRaceRegistered(race) {
-  if (race.game === 'LMU') return false
-  if (race.is_team_event) {
-    return Boolean(state.user?.team_id && race.team_registrations?.some((item) => item.team_id === state.user.team_id))
-  }
-  return Boolean(state.user && race.registered_pilots?.some((item) => item.user_id === state.user.id))
-}
-
-function fillPercent(race) {
-  if (race.game === 'LMU') return 0
-  if (!race.max_pilots) return 0
-  return Math.min(100, Math.round((registeredCount(race) / race.max_pilots) * 100))
-}
-
-function dominantWeatherKey(race) {
-  const chances = race?.weather_chances || {}
-  return weatherKeys.reduce((best, key) => Number(chances[key] || 0) > Number(chances[best] || 0) ? key : best, weatherKeys[0])
-}
-
-function weatherImageUrl(race) {
-  const theme = state.theme === 'dark' ? 'dark' : 'light'
-  const condition = dominantWeatherKey(race)
-  return weatherSettings.value[`${condition}_${theme}_url`]
-    || weatherSettings.value[`${condition}_${theme === 'dark' ? 'light' : 'dark'}_url`]
-    || ''
-}
-
-function weatherLabel(key) {
-  return t(`weather.${key === 'partly_cloudy' ? 'partlyCloudy' : key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())}`)
-}
-
-function weatherTooltip(race) {
-  const key = dominantWeatherKey(race)
-  const chance = Math.round(Number(race?.weather_chances?.[key] || 0))
-  const temperature = race?.track_temperature === null || race?.track_temperature === undefined
-    ? Number.NaN
-    : Number(race.track_temperature)
-  const temperatureLabel = Number.isFinite(temperature) ? `${temperature.toFixed(1)} °C` : t('common.none')
-  return `${weatherLabel(key)}: ${chance}% · ${t('weather.trackTemperature')}: ${temperatureLabel}`
-}
-
-function clampNewsIndex(index) {
-  if (!news.value.length) return 0
-  return Math.min(Math.max(index, 0), news.value.length - 1)
-}
-
-function wrapNewsIndex(index) {
-  if (!news.value.length) return 0
-  return ((index % news.value.length) + news.value.length) % news.value.length
-}
-
-function clearNewsAutoplay() {
-  if (newsAutoplayTimer !== null) {
-    window.clearInterval(newsAutoplayTimer)
-    newsAutoplayTimer = null
-  }
-}
-
-function startNewsAutoplay() {
-  clearNewsAutoplay()
-  if (news.value.length < 2) return
-  const interval = Math.max(5, Number(newsSettings.value.auto_rotate_seconds) || 30) * 1000
-  newsAutoplayTimer = window.setInterval(() => {
-    if (isNewsViewerOpen.value || Date.now() < newsManualPauseUntil) return
-    goToNews(activeNewsIndex.value + 1, 'smooth', false)
-  }, interval)
-}
-
-function pauseNewsAutoplayAfterManualNavigation() {
-  const pause = Math.max(0, Number(newsSettings.value.manual_pause_seconds) || 0) * 1000
-  newsManualPauseUntil = Date.now() + pause
-  if (newsAutoplayPauseTimer !== null) window.clearTimeout(newsAutoplayPauseTimer)
-  if (!pause) {
-    startNewsAutoplay()
-    return
-  }
-  newsAutoplayPauseTimer = window.setTimeout(() => {
-    newsManualPauseUntil = 0
-    startNewsAutoplay()
-  }, pause)
-}
-
-function goToNews(index, behavior = 'smooth', manual = false) {
-  if (manual) pauseNewsAutoplayAfterManualNavigation()
-  const nextIndex = wrapNewsIndex(index)
-  activeNewsIndex.value = nextIndex
-  const track = newsTrack.value
-  if (!track) return
-  newsProgrammaticScroll = true
-  if (newsScrollResetTimer !== null) window.clearTimeout(newsScrollResetTimer)
-  newsScrollResetTimer = window.setTimeout(() => {
-    newsProgrammaticScroll = false
-  }, behavior === 'smooth' ? 700 : 80)
-  track.scrollTo({
-    left: nextIndex * track.clientWidth,
-    behavior
-  })
-}
-
-function scrollNews(direction) {
-  goToNews(activeNewsIndex.value + direction, 'smooth', true)
-}
-
-function syncNewsIndex() {
-  const track = newsTrack.value
-  if (!track || !track.clientWidth) return
-  const nextIndex = clampNewsIndex(Math.round(track.scrollLeft / track.clientWidth))
-  if (nextIndex !== activeNewsIndex.value && !newsProgrammaticScroll) {
-    pauseNewsAutoplayAfterManualNavigation()
-  }
-  activeNewsIndex.value = nextIndex
-}
-
-function openNews(index) {
-  goToNews(index, 'auto')
-  isNewsTextHidden.value = false
-  isNewsViewerOpen.value = true
-}
-
-function closeNewsViewer() {
-  isNewsViewerOpen.value = false
-  isNewsTextHidden.value = false
-}
-
-function moveNewsFromViewer(direction) {
-  goToNews(activeNewsIndex.value + direction, 'smooth', true)
-}
-
-function openRace(race, event) {
-  if (event?.target?.closest?.('a, button, input, select, textarea, summary')) return
-  const href = raceOpenHref(race)
-  if (isExternalRace(race)) {
-    window.location.assign(href)
-    return
-  }
-  router.push(href)
-}
-
-function handleNewsKeydown(event) {
-  if (event.key === 'Escape' && isTwitchViewerOpen.value) {
-    event.preventDefault()
-    closeTwitchViewer()
-    return
-  }
-  if (!isNewsViewerOpen.value) return
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    closeNewsViewer()
-    return
-  }
-  if (event.key === 'ArrowLeft') {
-    event.preventDefault()
-    moveNewsFromViewer(-1)
-    return
-  }
-  if (event.key === 'ArrowRight') {
-    event.preventDefault()
-    moveNewsFromViewer(1)
-  }
-}
-
-async function loadRaces() {
-  const params = new URLSearchParams({
-    limit: String(racePageSize),
-    offset: String((racePage.value - 1) * racePageSize),
-    game_filter: raceGameFilter.value,
-    status_filter: raceStatusFilter.value
-  })
-  if (myGamesOnly.value && canFilterMyGames.value) {
-    params.set('my_games_only', 'true')
-  }
-  appendRaceTypeFilters(params, raceTypeFilters.value)
-  races.value = await api(`/races?${params.toString()}`)
-  racesError.value = false
-}
-
-async function loadMainData() {
-  if (mainLoading.value) return
-  mainLoading.value = true
-  const failedRequests = []
-  let mainDataFailed = false
-  const loadOrKeepCurrent = async (request, currentValue) => {
+/**
+ * Loads every home block. A block that fails keeps what it already shows, so
+ * one bad request never blanks the page; the notice offers to try again.
+ */
+async function loadHome() {
+  if (loading.value) return
+  loading.value = true
+  let anyFailed = false
+  const loadOrKeep = async (path, current) => {
     try {
-      return await request
+      return await api(path)
     } catch {
-      failedRequests.push(true)
-      return currentValue
+      anyFailed = true
+      return current
     }
   }
 
-  try {
-    const [statsData, setupsData, bannerData, newsData, championshipData, donationData, loadedNewsSettings, loadedWeatherSettings, loadedSystemSettings] = await Promise.all([
-      loadOrKeepCurrent(api('/dashboard/stats'), stats.value),
-      loadOrKeepCurrent(api('/setups?limit=6'), setups.value),
-      loadOrKeepCurrent(api('/banners'), banners.value),
-      loadOrKeepCurrent(api('/news'), news.value),
-      loadOrKeepCurrent(api('/championships?status_filter=registration_open&limit=3'), registrationChampionships.value),
-      loadOrKeepCurrent(api('/app-settings/donations'), donationSettings.value),
-      loadOrKeepCurrent(api('/app-settings/news'), newsSettings.value),
-      loadOrKeepCurrent(api('/app-settings/weather'), weatherSettings.value),
-      loadOrKeepCurrent(api('/app-settings/system'), { show_setups_section: showSetupsSection.value })
-    ])
-
-    stats.value = statsData
-    setups.value = setupsData
-    showSetupsSection.value = loadedSystemSettings?.show_setups_section !== false
-    banners.value = bannerData
-    news.value = newsData
-    registrationChampionships.value = championshipData
-    donationSettings.value = donationData
-    newsSettings.value = loadedNewsSettings
-    weatherSettings.value = loadedWeatherSettings
-    const pinnedIndex = newsData.findIndex((item) => item.is_pinned)
-    activeNewsIndex.value = pinnedIndex >= 0 ? pinnedIndex : 0
-    startNewsAutoplay()
-
-    try {
-      await loadRaces()
-    } catch {
-      racesError.value = true
-    }
-  } catch {
-    mainDataFailed = true
-  } finally {
-    mainDataError.value = mainDataFailed || failedRequests.length > 0
-    mainLoading.value = false
-  }
+  const [statsData, setupsData, bannerData, newsData, championshipData, loadedNewsSettings, loadedWeather, systemSettings] = await Promise.all([
+    loadOrKeep('/dashboard/stats', stats.value),
+    loadOrKeep('/setups?limit=6', setups.value),
+    loadOrKeep('/banners', banners.value),
+    loadOrKeep('/news', news.value),
+    loadOrKeep('/championships?status_filter=active&limit=3', championships.value),
+    loadOrKeep('/app-settings/news', newsSettings.value),
+    loadOrKeep('/app-settings/weather', weatherSettings.value),
+    loadOrKeep('/app-settings/system', { show_setups_section: showSetupsSection.value })
+  ])
+  stats.value = statsData || stats.value
+  setups.value = setupsData || []
+  banners.value = bannerData || []
+  news.value = newsData || []
+  championships.value = championshipData || []
+  newsSettings.value = loadedNewsSettings || DEFAULT_NEWS_SETTINGS
+  weatherSettings.value = loadedWeather || {}
+  showSetupsSection.value = systemSettings?.show_setups_section !== false
+  loadFailed.value = anyFailed
+  loading.value = false
+  homeLoaded.value = true
 }
 
-async function resetRacePageAndLoad() {
-  if (racePage.value === 1) {
-    await loadRaces()
-    return
-  }
-  racePage.value = 1
-}
-
-async function loadTwitchStatus() {
-  try {
-    twitchStatus.value = { ...defaultTwitchStatus, ...(await api('/twitch/status')) }
-    twitchError.value = ''
-  } catch (err) {
-    twitchStatus.value = { ...defaultTwitchStatus }
-    twitchError.value = err.message
-  }
-}
-
-function openTwitchViewer() {
-  isTwitchViewerOpen.value = true
-}
-
-function closeTwitchViewer() {
-  isTwitchViewerOpen.value = false
-}
-
-function clampTwitchWidgetPosition(position = twitchWidgetPosition.value) {
-  if (typeof window === 'undefined') return position
-  const size = getTwitchWidgetDimensions()
-  const margin = 16
-  const maxX = Math.max(margin, window.innerWidth - size.width - margin)
-  const maxY = Math.max(margin, window.innerHeight - size.height - margin)
-  const nextPosition = {
-    x: Math.min(Math.max(margin, position.x), maxX),
-    y: Math.min(Math.max(margin, position.y), maxY)
-  }
-  twitchWidgetPosition.value = nextPosition
-  return nextPosition
-}
-
-function placeTwitchWidget() {
-  if (typeof window === 'undefined') return
-  const size = getTwitchWidgetDimensions()
-  const margin = 16
-  clampTwitchWidgetPosition({
-    x: window.innerWidth - size.width - margin,
-    y: window.innerHeight - size.height - margin
-  })
-}
-
-function handleTwitchResize() {
-  clampTwitchWidgetPosition()
-}
-
-function startTwitchDrag(event) {
-  if (event.button !== undefined && event.button !== 0) return
-  twitchDragState.value = {
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startY: event.clientY,
-    baseX: twitchWidgetPosition.value.x,
-    baseY: twitchWidgetPosition.value.y
-  }
-  try {
-    event.currentTarget.setPointerCapture?.(event.pointerId)
-  } catch {
-    // Pointer capture can fail for synthetic events; dragging still works through window listeners.
-  }
-  window.addEventListener('pointermove', dragTwitchWidget)
-  window.addEventListener('pointerup', stopTwitchDrag, { once: true })
-}
-
-function dragTwitchWidget(event) {
-  const drag = twitchDragState.value
-  if (!drag || drag.pointerId !== event.pointerId) return
-  const dx = event.clientX - drag.startX
-  const dy = event.clientY - drag.startY
-  if (Math.abs(dx) + Math.abs(dy) > 5) {
-    twitchWasDragged.value = true
-  }
-  clampTwitchWidgetPosition({ x: drag.baseX + dx, y: drag.baseY + dy })
-}
-
-function stopTwitchDrag() {
-  twitchDragState.value = null
-  window.removeEventListener('pointermove', dragTwitchWidget)
-}
-
-function openTwitchFromWidget() {
-  if (twitchWasDragged.value) {
-    twitchWasDragged.value = false
-    return
-  }
-  openTwitchViewer()
-}
-
-function toggleTwitchCollapsed(event) {
-  event?.stopPropagation()
-  isTwitchCollapsed.value = !isTwitchCollapsed.value
-  localStorage.setItem('twitchWidgetCollapsed', isTwitchCollapsed.value ? 'true' : 'false')
-  requestAnimationFrame(() => clampTwitchWidgetPosition())
-}
-
-onMounted(() => {
-  window.addEventListener('keydown', handleNewsKeydown)
-  window.addEventListener('resize', handleTwitchResize)
-  placeTwitchWidget()
-  loadTwitchStatus()
-  loadMainData()
-})
-
-watch(racePage, async () => {
-  try {
-    await loadRaces()
-  } catch {
-    racesError.value = true
-  }
-})
-
-watch([raceGameFilter, raceStatusFilter, myGamesOnly, raceTypeFilters], async () => {
-  try {
-    await resetRacePageAndLoad()
-  } catch {
-    racesError.value = true
-  }
-})
-
-onBeforeUnmount(() => {
-  clearNewsAutoplay()
-  if (newsAutoplayPauseTimer !== null) window.clearTimeout(newsAutoplayPauseTimer)
-  if (newsScrollResetTimer !== null) window.clearTimeout(newsScrollResetTimer)
-  window.removeEventListener('keydown', handleNewsKeydown)
-  window.removeEventListener('resize', handleTwitchResize)
-  window.removeEventListener('pointermove', dragTwitchWidget)
-})
+onMounted(loadHome)
 </script>
 
 <template>
-  <div class="main-menu">
-    <a v-if="banner('top')" class="banner main-menu-top-banner" :class="{ 'is-video': isVideoUrl(banner('top').image_url) }" :href="banner('top').link_url" target="_blank" rel="noopener noreferrer">
-      <video v-if="isVideoUrl(banner('top').image_url)" :src="banner('top').image_url" autoplay muted loop playsinline preload="metadata"></video>
-      <img v-else :src="banner('top').image_url" alt="" decoding="sync" fetchpriority="high" />
-    </a>
+  <div class="home">
+    <HomeHero :stats="stats" />
 
-    <div class="main-menu-layout">
-      <a v-if="banner('left')" class="banner side main-menu-side-banner left" :href="banner('left').link_url" target="_blank" rel="noopener noreferrer">
-        <video v-if="isVideoUrl(banner('left').image_url)" :src="banner('left').image_url" autoplay muted loop playsinline preload="metadata"></video>
-        <img v-else :src="banner('left').image_url" alt="" />
-      </a>
+    <div class="home__body ui-shell ui-shell--wide">
+      <p v-if="loadFailed" class="ui-alert home__alert" role="alert">
+        <span>{{ t('main.dataLoadError') }}</span>
+        <button class="ui-btn ui-btn--outline ui-btn--sm" type="button" :disabled="loading" @click="loadHome">
+          <RefreshCw :size="15" />{{ loading ? t('common.loading') : t('common.reload') }}
+        </button>
+      </p>
 
-      <div class="main-menu-content">
-        <section v-if="news.length" class="section news-strip main-news-strip">
-          <div ref="newsTrack" class="news-track" @scroll="syncNewsIndex">
-            <article
-              v-for="(item, index) in news"
-              :key="item.id"
-              class="news-card"
-              role="button"
-              tabindex="0"
-              :aria-label="t('news.openFullscreen')"
-              @click="openNews(index)"
-              @keydown.enter.prevent="openNews(index)"
-              @keydown.space.prevent="openNews(index)"
-            >
-              <video v-if="isVideoUrl(item.image_url)" :src="item.image_url" autoplay muted loop playsinline preload="metadata"></video>
-              <img v-else :src="item.image_url" alt="" />
-              <div class="news-card-topline">
-                <span>{{ t('news.title') }}</span>
-                <span>{{ index + 1 }} / {{ news.length }}</span>
-              </div>
-              <span class="news-card-open"><Maximize2 :size="16" /></span>
-              <div class="news-card-content">
-                <h3>{{ item.title }}</h3>
-                <p>{{ item.body }}</p>
-              </div>
-            </article>
-          </div>
-          <button v-if="news.length > 1" class="icon-button news-strip-nav prev" type="button" :title="t('news.scrollLeft')" @click.stop="scrollNews(-1)">
-            <ChevronLeft :size="22" />
-          </button>
-          <button v-if="news.length > 1" class="icon-button news-strip-nav next" type="button" :title="t('news.scrollRight')" @click.stop="scrollNews(1)">
-            <ChevronRight :size="22" />
-          </button>
-          <div v-if="news.length > 1" class="news-dots" :aria-label="t('news.indicators')">
-            <button
-              v-for="(_, index) in news"
-              :key="index"
-              class="news-dot"
-              :class="{ 'is-active': index === activeNewsIndex }"
-              type="button"
-              :title="t('news.goTo', { number: index + 1 })"
-              @click="goToNews(index, 'smooth', true)"
-            >
-              <span class="visually-hidden">{{ t('news.goTo', { number: index + 1 }) }}</span>
-            </button>
-          </div>
-        </section>
-
-        <section class="section main-overview-section">
-          <div class="grid cols-4 main-stat-grid">
-            <div class="card stat main-stat-card main-stat-card--pilots">
-              <span class="main-stat-icon"><Users :size="22" /></span>
-              <span class="muted">{{ t('main.pilots') }}</span>
-              <strong>{{ stats?.pilots ?? '—' }}</strong>
-            </div>
-            <div class="card stat main-stat-card main-stat-card--completed">
-              <span class="main-stat-icon"><Flag :size="22" /></span>
-              <span class="muted">{{ t('main.completed') }}</span>
-              <strong>{{ stats?.completed_races ?? '—' }}</strong>
-            </div>
-            <div class="card stat main-stat-card main-stat-card--open">
-              <span class="main-stat-icon"><ClipboardCheck :size="22" /></span>
-              <span class="muted">{{ t('main.open') }}</span>
-              <strong>{{ stats?.open_races ?? '—' }}</strong>
-            </div>
-            <div class="card stat main-stat-card main-stat-card--staff">
-              <span class="main-stat-icon"><ShieldCheck :size="22" /></span>
-              <span class="muted">{{ t('main.staff') }}</span>
-              <strong>{{ stats?.staff ?? '—' }}</strong>
-            </div>
-          </div>
-        </section>
-
-        <div v-if="error" class="error main-load-error" role="alert">
-          <span>{{ error }}</span>
-          <button class="button small" type="button" :disabled="mainLoading" @click="loadMainData">
-            {{ mainLoading ? t('common.loading') : t('common.reload') }}
-          </button>
-        </div>
-
-        <RouterLink v-if="featuredChampionship" class="card main-championship-callout" to="/championships">
-          <span class="main-championship-icon"><Flag :size="20" /></span>
-          <span>
-            <small>{{ t('main.championshipOpen') }}</small>
-            <strong>{{ featuredChampionship.name }}</strong>
-          </span>
-          <span class="main-championship-meta">
-            <span class="pill">{{ featuredChampionship.game }}</span>
-            <span class="pill">{{ featuredChampionshipStageText }}</span>
-            <span v-if="featuredChampionshipRegistered" class="pill is-registered">{{ t('championships.requestApproved') }}</span>
-          </span>
-        </RouterLink>
-
-        <section class="section main-races-section">
-          <div class="section-header main-races-header">
-            <h2>{{ t('main.races') }}</h2>
-            <RouterLink v-if="['admin', 'moder'].includes(state.user?.role)" class="button primary" to="/races/new"><Plus :size="16" />{{ t('common.create') }}</RouterLink>
-          </div>
-          <div class="race-filter-bar main-race-filter-bar card">
-            <div class="race-status-toggle" role="group" :aria-label="t('raceFilters.statusGroup')">
-              <button type="button" :class="{ active: raceStatusFilter === 'not_finished' }" @click="raceStatusFilter = 'not_finished'">
-                {{ t('raceFilters.notFinished') }}
-              </button>
-              <button type="button" :class="{ active: raceStatusFilter === 'finished' }" @click="raceStatusFilter = 'finished'">
-                {{ t('raceFilters.finished') }}
-              </button>
-            </div>
-            <label class="field race-game-filter">
-              <span class="visually-hidden">{{ t('fields.game') }}</span>
-              <select v-model="raceGameFilter" :aria-label="t('fields.game')">
-                <option v-for="option in raceGameOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-              </select>
-            </label>
-            <label class="toggle-field">
-              <input v-model="myGamesOnly" type="checkbox" :disabled="!canFilterMyGames" />
-              <span>{{ t('raceFilters.myGamesOnly') }}</span>
-            </label>
-            <details class="main-race-type-dropdown">
-              <summary>
-                <span>{{ t('raceFilters.moreFilters') }}</span>
-                <ChevronDown :size="16" />
-              </summary>
-              <div class="main-race-type-dropdown-panel">
-                <RaceTypeFilters v-model="raceTypeFilters" class-name="main-race-type-filters" />
-              </div>
-            </details>
-          </div>
-          <div class="main-race-grid">
-            <article
-              v-for="race in races"
-              :key="race.id"
-              class="card main-race-card"
-              role="link"
-              tabindex="0"
-              @click="openRace(race, $event)"
-              @keydown.enter.prevent="openRace(race, $event)"
-              @keydown.space.prevent="openRace(race, $event)"
-            >
-              <div class="main-race-date-tile">
-                <strong>{{ formatRaceDay(race.datetime_start) }}</strong>
-                <span>{{ formatRaceMonth(race.datetime_start) }}</span>
-                <small>{{ formatRaceTime(race.datetime_start) }}</small>
-              </div>
-
-              <div class="main-race-card-main">
-                <div class="main-race-card-head">
-                  <div class="main-race-title">
-                    <div class="main-race-name-row">
-                      <a v-if="isExternalRace(race)" :href="raceOpenHref(race)" target="_blank" rel="noopener noreferrer">{{ race.name }}</a>
-                      <RouterLink v-else :to="raceOpenHref(race)">{{ race.name }}</RouterLink>
-                      <img
-                        v-if="weatherImageUrl(race)"
-                        class="main-race-weather-indicator"
-                        :src="weatherImageUrl(race)"
-                        :alt="weatherLabel(dominantWeatherKey(race))"
-                        :title="weatherTooltip(race)"
-                      />
-                    </div>
-                    <div class="muted main-race-subtitle">
-                      <div class="main-race-subtitle-top">
-                        <span>{{ gameLabel(t, race.game) }}</span>
-                        <span v-if="race.car_class">{{ race.car_class }}</span>
-                      </div>
-                      <span v-if="race.track" class="main-race-track">{{ race.track }}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="main-race-meta">
-                  <span>
-                    <small>{{ t('fields.registrationEnd') }}</small>
-                    <strong>{{ formatRaceDate(race.datetime_end) }}</strong>
-                  </span>
-                  <span v-if="race.game !== 'LMU'">
-                    <small>{{ t('fields.participants') }}</small>
-                    <strong>{{ registeredCount(race) }} / {{ race.max_pilots }}</strong>
-                  </span>
-                </div>
-
-                <span v-if="race.game !== 'LMU'" class="race-registration-meter">
-                  <span :style="{ width: `${fillPercent(race)}%` }"></span>
-                </span>
-              </div>
-
-              <div class="main-race-action-panel">
-                <span v-if="isRaceRegistered(race)" class="status-badge main-registered-badge">{{ t('main.registeredForRace') }}</span>
-                <span class="status-badge race-status-badge" :class="`race-status-${race.status}`">{{ statusLabel(t, race.status) }}</span>
-                <span class="main-race-registration-start">
-                  <small>{{ t('main.registrationFrom') }}</small>
-                  <strong>{{ formatRaceDate(race.registration_start) }}</strong>
-                </span>
-                <a v-if="isExternalRace(race)" class="button main-race-open" :href="raceOpenHref(race)" target="_blank" rel="noopener noreferrer">
-                  <Eye :size="16" />
-                  {{ t('common.open') }}
-                </a>
-                <RouterLink v-else class="button main-race-open" :to="raceOpenHref(race)">
-                  <Eye :size="16" />
-                  {{ t('common.open') }}
-                </RouterLink>
-              </div>
-            </article>
-          </div>
-          <PaginationControls v-model:page="racePage" :page-size="racePageSize" :loaded-count="races.length" :has-next="racesHasNextPage" />
-        </section>
-
-        <section v-if="showSetupsSection" class="section main-setups-section">
-          <div class="section-header"><h2>{{ t('main.setups') }}</h2></div>
-          <div v-if="setups.length" class="grid cols-2 main-setup-grid">
-            <article v-for="setup in setups" :key="setup.id" class="card main-setup-card">
-              <strong>{{ setup.car_model }}</strong>
-              <p class="muted">{{ setup.description || setup.setup_data }}</p>
-            </article>
-          </div>
-        </section>
-
+      <div class="home__lead">
+        <NextRaceCard v-reveal="{ y: 28 }" :weather-settings="weatherSettings" />
+        <PilotSnapshot v-reveal="{ delay: 120, y: 28 }" />
       </div>
 
-      <a v-if="banner('right')" class="banner side main-menu-side-banner right" :href="banner('right').link_url" target="_blank" rel="noopener noreferrer">
-        <video v-if="isVideoUrl(banner('right').image_url)" :src="banner('right').image_url" autoplay muted loop playsinline preload="metadata"></video>
-        <img v-else :src="banner('right').image_url" alt="" />
-      </a>
+      <ChampionshipCallout v-for="item in featuredChampionships" :key="item.id" v-reveal :championship="item" />
+
+      <div class="home__pair">
+        <TopPilots v-reveal />
+        <LatestRace v-reveal="{ delay: 100 }" />
+      </div>
+
+      <!-- League news: a full-width banner right under the latest results, as on the original site. -->
+      <NewsCarousel v-if="homeLoaded" :news="news" :settings="newsSettings" />
+
+      <div class="home__rail" :class="{ 'has-left': banner('left'), 'has-right': banner('right') }">
+        <SponsorBanner v-if="banner('left')" class="home__side" :banner="banner('left')" variant="side" />
+        <HomeRaceList class="home__races" :weather-settings="weatherSettings" />
+        <SponsorBanner v-if="banner('right')" class="home__side" :banner="banner('right')" variant="side" />
+      </div>
+
+      <SetupsSection v-if="showSetupsSection" v-reveal :setups="setups" />
+
+      <SponsorBanner v-if="banner('bottom')" v-reveal :banner="banner('bottom')" />
     </div>
 
-    <a v-if="banner('bottom')" class="banner main-menu-bottom-banner" :href="banner('bottom').link_url" target="_blank" rel="noopener noreferrer">
-      <video v-if="isVideoUrl(banner('bottom').image_url)" :src="banner('bottom').image_url" autoplay muted loop playsinline preload="metadata"></video>
-      <img v-else :src="banner('bottom').image_url" alt="" />
-    </a>
-
-    <section class="section main-menu-floor">
-      <div class="main-menu-floor-inner">
-        <div class="main-menu-floor-main">
-          <div class="main-footer-column main-footer-column-primary">
-            <strong class="main-footer-title">{{ t('main.contacts') }}</strong>
-            <p>{{ t('main.contactSubtitle') }}</p>
-            <div class="main-footer-list">
-              <div v-for="item in directContactItems" :key="item.key" class="main-footer-contact-group">
-                <span class="main-footer-label"><component :is="item.icon" :size="15" />{{ item.label }}</span>
-                <span v-if="item.links" class="main-footer-link-stack">
-                  <a v-for="link in item.links" :key="link.href" :href="link.href" target="_blank" rel="noopener noreferrer">{{ link.text }}</a>
-                </span>
-                <span v-else class="main-footer-value">{{ item.value }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="main-footer-column">
-            <strong class="main-footer-column-title">{{ t('main.community') }}</strong>
-            <div class="main-social-list">
-              <a v-for="item in socialItems" :key="item.key" class="main-social-link" :href="item.href" target="_blank" rel="noreferrer">
-                <span><component :is="item.icon" :size="16" /></span>
-                <span>
-                  <b>{{ item.label }}</b>
-                  <em>{{ item.text }}</em>
-                </span>
-              </a>
-            </div>
-            <RouterLink class="main-footer-legal-button" to="/legal?from=main">
-              <FileText :size="16" />
-              <span>Правовая информация</span>
-              <ChevronRight :size="16" />
-            </RouterLink>
-          </div>
-        </div>
-
-        <aside class="main-menu-support" :aria-label="t('main.supportProject')">
-          <div class="main-support-copy">
-            <strong>{{ t('main.supportProject') }}</strong>
-            <span>{{ t('main.supportHint') }}</span>
-          </div>
-          <a v-if="donationSettings.donation_url" class="button primary main-support-button" :href="donationSettings.donation_url" target="_blank" rel="noreferrer">
-            <HeartHandshake :size="16" />
-            {{ t('main.supportProject') }}
-          </a>
-          <div class="main-donations-card">
-            <span class="main-donations-title">{{ t('main.topDonations') }}</span>
-            <div class="main-donations-top">
-              <span v-if="!topDonations.length" class="muted">{{ t('main.noTopDonations') }}</span>
-              <span v-for="donation in topDonations" :key="`${donation.name}-${donation.amount}`" class="main-donation-chip">
-                <span class="main-donation-copy">
-                  <b>{{ donation.name }}</b>
-                  <small>{{ donation.message || t('main.donationCommentSpace') }}</small>
-                </span>
-                <em>{{ donation.amount }}</em>
-              </span>
-            </div>
-          </div>
-        </aside>
-      </div>
-    </section>
+    <TwitchWidget />
   </div>
-
-  <Teleport to="body">
-    <div
-      class="twitch-floating-widget"
-      :class="{ 'is-collapsed': isTwitchCollapsed }"
-      role="button"
-      tabindex="0"
-      :style="twitchWidgetStyle"
-      :title="t('twitch.dragHint')"
-      @click="openTwitchFromWidget"
-      @keydown.enter.prevent="openTwitchViewer"
-      @keydown.space.prevent="openTwitchViewer"
-      @pointerdown="startTwitchDrag"
-    >
-      <span class="twitch-floating-head">
-        <Radio :size="14" />
-        <span class="status-badge twitch-status" :class="{ 'is-live': twitchStatus.is_live, 'is-vod': twitchStatus.status === 'vod' }">{{ twitchStatusText }}</span>
-        <button
-          class="icon-button twitch-collapse-button"
-          type="button"
-          :title="isTwitchCollapsed ? t('twitch.expandWidget') : t('twitch.collapseWidget')"
-          :aria-label="isTwitchCollapsed ? t('twitch.expandWidget') : t('twitch.collapseWidget')"
-          @click.stop="toggleTwitchCollapsed"
-          @pointerdown.stop
-        >
-          <Maximize2 v-if="isTwitchCollapsed" :size="14" />
-          <Minimize2 v-else :size="14" />
-        </button>
-      </span>
-      <span v-if="!isTwitchCollapsed" class="twitch-floating-preview">
-        <iframe
-          v-if="canEmbedTwitchPreview"
-          class="twitch-preview-player"
-          :src="twitchPreviewSrc"
-          title="BMRL Twitch preview"
-          allow="autoplay; fullscreen; picture-in-picture"
-          scrolling="no"
-        ></iframe>
-        <img v-else-if="twitchStatus.thumbnail_url" :src="twitchStatus.thumbnail_url" alt="" />
-        <PlayCircle :size="34" />
-      </span>
-      <strong v-if="!isTwitchCollapsed">{{ twitchDisplayTitle }}</strong>
-    </div>
-
-    <div v-if="isTwitchViewerOpen" class="twitch-viewer" role="dialog" aria-modal="true" @click="closeTwitchViewer">
-      <div class="twitch-viewer-dialog" @click.stop>
-        <div class="twitch-viewer-header">
-          <div>
-            <span class="twitch-window-kicker"><Radio :size="16" />Twitch</span>
-            <h2>{{ twitchDisplayTitle }}</h2>
-          </div>
-          <button class="icon-button" type="button" :title="t('twitch.closePlayer')" @click="closeTwitchViewer">
-            <X :size="20" />
-          </button>
-        </div>
-        <div v-if="canEmbedTwitch" class="twitch-player-shell twitch-viewer-player">
-          <iframe
-            class="twitch-player"
-            :src="twitchEmbedSrc"
-            title="BMRL Twitch"
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowfullscreen
-            scrolling="no"
-          ></iframe>
-        </div>
-        <div v-else class="twitch-player-empty">
-          <Radio :size="34" />
-          <strong>{{ t('twitch.unavailable') }}</strong>
-          <p class="muted">{{ t('twitch.playerUnavailable') }}</p>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="isNewsViewerOpen && currentNews" class="news-viewer" :class="{ 'is-video': isVideoUrl(currentNews.image_url) }" role="dialog" aria-modal="true" @click="closeNewsViewer">
-      <video v-if="isVideoUrl(currentNews.image_url)" class="news-viewer-image" :src="currentNews.image_url" controls autoplay playsinline @click.stop></video>
-      <img v-else class="news-viewer-image" :src="currentNews.image_url" alt="" />
-      <button class="icon-button news-viewer-close" type="button" :title="t('news.closeFullscreen')" @click.stop="closeNewsViewer">
-        <X :size="20" />
-      </button>
-      <button v-if="news.length > 1" class="icon-button news-viewer-nav prev" type="button" :title="t('news.scrollLeft')" @click.stop="moveNewsFromViewer(-1)">
-        <ChevronLeft :size="24" />
-      </button>
-      <button v-if="news.length > 1" class="icon-button news-viewer-nav next" type="button" :title="t('news.scrollRight')" @click.stop="moveNewsFromViewer(1)">
-        <ChevronRight :size="24" />
-      </button>
-      <button class="button small news-viewer-text-toggle" type="button" @click.stop="isNewsTextHidden = !isNewsTextHidden">
-        {{ isNewsTextHidden ? t('news.showText') : t('news.hideText') }}
-      </button>
-      <div v-if="!isNewsTextHidden" class="news-viewer-content" @click.stop>
-        <span class="pill news-viewer-count">{{ activeNewsIndex + 1 }} / {{ news.length }}</span>
-        <h2>{{ currentNews.title }}</h2>
-        <p>{{ currentNews.body }}</p>
-      </div>
-      <div v-if="news.length > 1" class="news-dots news-viewer-dots" :aria-label="t('news.indicators')">
-        <button
-          v-for="(_, index) in news"
-          :key="index"
-          class="news-dot"
-          :class="{ 'is-active': index === activeNewsIndex }"
-          type="button"
-          :title="t('news.goTo', { number: index + 1 })"
-          @click.stop="goToNews(index, 'smooth', true)"
-        >
-          <span class="visually-hidden">{{ t('news.goTo', { number: index + 1 }) }}</span>
-        </button>
-      </div>
-    </div>
-  </Teleport>
 </template>
+
+<style scoped>
+.home {
+  padding-bottom: clamp(32px, 5vw, 64px);
+}
+
+.home__body {
+  display: grid;
+  gap: clamp(18px, 2.4vw, 28px);
+}
+
+.home__alert {
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* The profile card is wide enough to carry a licence at about the size it has
+   on the registration page. */
+.home__lead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 460px);
+  gap: clamp(14px, 1.6vw, 20px);
+  align-items: stretch;
+}
+
+/* Mirrors the lead row: the narrow card sits on the left here. */
+.home__pair {
+  display: grid;
+  grid-template-columns: minmax(320px, 460px) minmax(0, 1fr);
+  gap: clamp(14px, 1.6vw, 20px);
+  align-items: start;
+}
+
+.home__rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(14px, 1.6vw, 20px);
+  align-items: start;
+  padding-top: clamp(8px, 2vw, 24px);
+}
+
+.home__rail.has-left {
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+}
+
+.home__rail.has-right {
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+}
+
+.home__rail.has-left.has-right {
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr) minmax(160px, 220px);
+}
+
+.home__side {
+  position: sticky;
+  top: calc(var(--header-h) + 16px);
+}
+
+@media (max-width: 1180px) {
+  .home__lead,
+  .home__pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home__rail.has-left,
+  .home__rail.has-right,
+  .home__rail.has-left.has-right {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Relative, not static: the sponsor label is positioned against the banner. */
+  .home__side {
+    position: relative;
+    top: auto;
+    max-width: 420px;
+  }
+
+  .home__races {
+    order: -1;
+  }
+}
+</style>

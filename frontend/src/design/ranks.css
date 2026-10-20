@@ -1,0 +1,279 @@
+/* ---------- Rank materials ----------
+   One palette per licence tier position (src/ranks.js): rookie keeps the
+   brand blue, then bronze, brushed silver, gold, pearl platinum, prismatic
+   diamond and a violet-gold champion. Every rank effect reads these. */
+
+@property --rank-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+[data-rank] {
+  --rank-1: #9db8ff;
+  --rank-2: #3c74f6;
+  --rank-3: #0d2f8f;
+  --rank-glow: color-mix(in srgb, var(--bm-blue) 30%, transparent);
+  --rank-ink: #ffffff;
+  --rank-metal: linear-gradient(135deg, var(--rank-1), var(--rank-2) 45%, var(--rank-3) 78%, var(--rank-2));
+}
+
+[data-rank='bronze'] {
+  --rank-1: #f8c896;
+  --rank-2: #c56a20;
+  --rank-3: #4a2306;
+  --rank-glow: rgba(217, 119, 6, 0.36);
+  --rank-ink: #1d0d02;
+}
+
+[data-rank='silver'] {
+  --rank-1: #ffffff;
+  --rank-2: #a9b6c8;
+  --rank-3: #3b4656;
+  --rank-glow: rgba(203, 213, 225, 0.34);
+  --rank-ink: #0e141f;
+}
+
+[data-rank='gold'] {
+  --rank-1: #fff3b8;
+  --rank-2: #e2aa12;
+  --rank-3: #5c3d02;
+  --rank-glow: rgba(234, 179, 8, 0.44);
+  --rank-ink: #1b1300;
+}
+
+[data-rank='platinum'] {
+  --rank-1: #eafeff;
+  --rank-2: #37d3e6;
+  --rank-3: #0b4f5c;
+  --rank-glow: rgba(34, 211, 238, 0.44);
+  --rank-ink: #02262c;
+  --rank-metal: linear-gradient(135deg, #eafeff, #a5f3fc 30%, #37d3e6 50%, #c4b5fd 72%, #eafeff);
+}
+
+[data-rank='diamond'] {
+  --rank-1: #e0e5ff;
+  --rank-2: #6d7bff;
+  --rank-3: #1e1b4b;
+  --rank-glow: rgba(109, 123, 255, 0.5);
+  --rank-ink: #0b0a2a;
+  --rank-metal: linear-gradient(135deg, #e0e5ff, #93c5fd 25%, #6d7bff 50%, #c084fc 75%, #e0e5ff);
+}
+
+[data-rank='champ'] {
+  --rank-1: #ffe08a;
+  --rank-2: #b05cff;
+  --rank-3: #2e0a57;
+  --rank-glow: rgba(176, 92, 255, 0.55);
+  --rank-ink: #1a0433;
+  --rank-metal: linear-gradient(135deg, #ffe08a, #ff9ad5 28%, #b05cff 55%, #4fd8ea 80%, #ffe08a);
+}
+
+/* Not a rank: the finish of the season champion (seasonChampion.js), who is
+   shown in the title's black and gold wherever a rank finish would go. */
+[data-rank='season'] {
+  --rank-1: #fff3c4;
+  --rank-2: #f5c84c;
+  --rank-3: #8a6614;
+  --rank-glow: rgba(245, 200, 76, 0.5);
+  --rank-ink: #1a1304;
+  --rank-metal: linear-gradient(135deg, #fff3c4, #f5c84c 45%, #b88a1e 78%, #f5c84c);
+}
+
+/* Rank name written in the rank's metal. */
+.rank-text {
+  background: var(--rank-metal);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------- Ranked surfaces ----------
+   From bronze up a pilot's row or card is finished like a banner: a backdrop
+   tinted in the rank's colours here, the rim, glow and sheen from <RankAura>. */
+[data-rank] {
+  --rank-tint: linear-gradient(100deg, color-mix(in srgb, var(--rank-2) 24%, transparent), color-mix(in srgb, var(--rank-2) 9%, transparent) 55%, color-mix(in srgb, var(--rank-2) 3%, transparent));
+}
+
+[data-rank='platinum'] {
+  --rank-tint: linear-gradient(100deg, rgba(55, 211, 230, 0.22), rgba(196, 181, 253, 0.11) 55%, rgba(55, 211, 230, 0.03));
+}
+
+[data-rank='diamond'] {
+  --rank-tint: linear-gradient(100deg, rgba(109, 123, 255, 0.27), rgba(192, 132, 252, 0.13) 55%, rgba(109, 123, 255, 0.04));
+}
+
+[data-rank='champ'] {
+  --rank-tint: linear-gradient(100deg, rgba(176, 92, 255, 0.3), rgba(255, 122, 217, 0.15) 50%, rgba(255, 224, 138, 0.08));
+}
+
+/* Doubled class: it must beat the hover and podium backgrounds of list rows. */
+.rank-surface.rank-surface[data-rank]:not([data-rank='rookie']) {
+  background-image: var(--rank-tint);
+}
+
+/* Table rows cannot stretch one gradient across their cells: every cell takes
+   a flat tint and the aura, placed in the first cell, spans the whole row. */
+tr.rank-surface.rank-surface[data-rank]:not([data-rank='rookie']) {
+  --aura-radius: 12px;
+  position: relative;
+  background-image: none;
+}
+
+tr.rank-surface.rank-surface[data-rank]:not([data-rank='rookie']) > td {
+  background: color-mix(in srgb, var(--rank-2) 12%, transparent);
+}
+
+/* ---------- Season champion ----------
+   The champion's row or card is a plate of its own, dark in both themes (the
+   dark tokens come with it, see tokens.css); the drifting title and the rim
+   are laid over it by <RankAura>. .season-plate is the same plate for cards
+   that are not rank surfaces (podium steps). The classes are tripled to
+   outrank the tint every ranked surface gets above and the cards' own scoped
+   backgrounds, which load later. */
+.rank-surface.rank-surface.rank-surface[data-rank='season'],
+.season-plate.season-plate.season-plate {
+  border-color: transparent;
+  background-color: #07080b;
+  background-image:
+    radial-gradient(70% 160% at 0% 50%, rgba(245, 200, 76, 0.17), transparent 70%),
+    linear-gradient(135deg, #111217 0%, #06070a 55%, #0b0b0e 100%);
+  color: var(--c-text);
+}
+
+tr.rank-surface.rank-surface.rank-surface[data-rank='season'] {
+  background-image: none;
+}
+
+tr.rank-surface.rank-surface.rank-surface[data-rank='season'] > td {
+  background: #08090c;
+}
+
+/* The gold rim of the champion's plates: a gradient clipped to a thin ring. */
+.season-rim {
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: linear-gradient(120deg, #8a6614, #f5c84c 22%, #fff3c4 34%, #b88a1e 50%, #5f470f 70%, #f5c84c 88%, #8a6614);
+  background-size: 300% 300%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: season-rim 10s linear infinite;
+}
+
+@keyframes season-rim {
+  to {
+    background-position: 300% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .season-rim {
+    animation: none;
+  }
+}
+
+/* ---------- Pilot identity in lists ----------
+   Rows (standings, results, the pilot list) keep their own place colours, so
+   the rank shows on the pilot instead, as games colour a player's name.
+   Avatar: a ring in the rank's metal, shimmering from diamond up.
+   Name: a passing glint from gold up, flowing metal from diamond up. */
+.rank-avatar[data-rank]:not([data-rank='rookie']) {
+  outline: 2px solid var(--rank-2);
+  outline-offset: 2px;
+  filter: drop-shadow(0 0 6px var(--rank-glow));
+}
+
+.rank-avatar[data-rank='diamond'],
+.rank-avatar[data-rank='champ'],
+.rank-avatar[data-rank='season'] {
+  animation: rank-ring 4s linear infinite;
+}
+
+.rank-avatar[data-rank='champ'] {
+  animation-name: rank-ring-champ;
+}
+
+@keyframes rank-ring {
+  0%,
+  100% {
+    outline-color: var(--rank-1);
+  }
+  50% {
+    outline-color: var(--rank-2);
+  }
+}
+
+@keyframes rank-ring-champ {
+  0%,
+  100% {
+    outline-color: #ffe08a;
+  }
+  33% {
+    outline-color: #ff7ad9;
+  }
+  66% {
+    outline-color: #4fd8ea;
+  }
+}
+
+/* Doubled class: list components colour their names with equally specific
+   scoped rules that load later. */
+.rank-name.rank-name[data-rank='gold'],
+.rank-name.rank-name[data-rank='platinum'] {
+  background: linear-gradient(100deg, var(--c-text) 0 38%, var(--rank-1) 46%, var(--rank-2) 50%, var(--rank-1) 54%, var(--c-text) 62% 100%) 100% 0 / 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: rank-glint 7s ease-in-out infinite;
+}
+
+.rank-name.rank-name[data-rank='diamond'],
+.rank-name.rank-name[data-rank='champ'],
+.rank-name.rank-name[data-rank='season'] {
+  background: var(--rank-metal) 0 0 / 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: rank-flow 5s ease-in-out infinite alternate;
+}
+
+/* Light pages: the bright ends of the metals lose contrast on white, so names
+   and adaptive rank text use the deep end of the palette. Licences stay dark
+   and keep the bright metal, and so does anything inside a .ui-dark block. */
+:root[data-theme='light'] .rank-name.rank-name[data-rank='gold']:not(.ui-dark *),
+:root[data-theme='light'] .rank-name.rank-name[data-rank='platinum']:not(.ui-dark *) {
+  background-image: linear-gradient(100deg, var(--c-text) 0 38%, var(--rank-2) 46%, var(--rank-3) 50%, var(--rank-2) 54%, var(--c-text) 62% 100%);
+}
+
+:root[data-theme='light'] .rank-name.rank-name[data-rank='diamond']:not(.ui-dark *),
+:root[data-theme='light'] .rank-name.rank-name[data-rank='champ']:not(.ui-dark *),
+:root[data-theme='light'] .rank-text--adaptive:not(.ui-dark *) {
+  background-image: linear-gradient(100deg, var(--rank-3), var(--rank-2) 45%, var(--rank-3) 70%, var(--rank-2));
+}
+
+@keyframes rank-glint {
+  0%,
+  55% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+/* Back and forth, so the gradient never jumps when the loop restarts. */
+@keyframes rank-flow {
+  to {
+    background-position: 100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rank-avatar[data-rank],
+  .rank-name[data-rank] {
+    animation: none;
+  }
+}

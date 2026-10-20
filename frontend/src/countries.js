@@ -53,3 +53,16 @@ export function countryOptionsWithCurrent(locale, currentValue) {
   }
   return options
 }
+
+/**
+ * Two-letter ISO code for a stored country value (English or localised name).
+ * @param {string} value
+ * @returns {string}
+ */
+export function countryCode(value) {
+  const needle = String(value || '').trim().toLocaleLowerCase()
+  if (!needle) return ''
+  const en = displayNames('en')
+  const ru = displayNames('ru')
+  return COUNTRY_CODES.find((code) => [en?.of(code), ru?.of(code), code].some((name) => String(name || '').toLocaleLowerCase() === needle)) || ''
+}

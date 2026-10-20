@@ -1,0 +1,170 @@
+/*
+ * BMRL design tokens.
+ * Dark "pit lane at night" is the default; light "paddock" mirrors it.
+ * The brand blue (#1652d8) is the original BMRL colour and must stay unchanged.
+ */
+:root {
+  --bm-blue: #1652d8;
+  --bm-blue-deep: #0d2f8f;
+  --bm-blue-bright: #3c74f6;
+  --bm-cyan: #4fd8ea;
+  --bm-green: #22c55e;
+  --bm-red: #ff3b4e;
+  --bm-amber: #ffb020;
+  --bm-gold: #f2c14e;
+  --bm-silver: #c4cfdf;
+  --bm-bronze: #d08a52;
+
+  --font-display: 'Unbounded', 'Onest', system-ui, sans-serif;
+  --font-body: 'Onest', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 30px;
+  --r-pill: 999px;
+
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --dur-1: 160ms;
+  --dur-2: 280ms;
+  --dur-3: 480ms;
+  --dur-4: 820ms;
+
+  --shell-max: 1320px;
+  --shell-wide: 1680px;
+  --gutter: clamp(16px, 3.2vw, 36px);
+  --header-h: 76px;
+  --tabbar-h: 0px;
+
+  --fs-eyebrow: 11px;
+  --fs-small: 13px;
+  --fs-body: 15px;
+  --fs-lead: 17px;
+  --fs-h3: 18px;
+  --fs-h2: clamp(22px, 2.1vw, 28px);
+  --fs-h1: clamp(30px, 4vw, 52px);
+  --fs-hero: clamp(40px, 7.4vw, 104px);
+}
+
+/* .ui-dark is a local dark scope: a block that stays dark in both themes (the
+   season champion's banner) and wants every token inside it to follow. The
+   champion's rows and cards in lists are such blocks too. */
+:root,
+:root[data-theme='dark'],
+.ui-dark,
+.rank-surface[data-rank='season'] {
+  color-scheme: dark;
+  --c-bg: #04060b;
+  --c-bg-2: #070b14;
+  --c-surface: rgba(14, 20, 34, 0.66);
+  --c-surface-2: rgba(22, 30, 50, 0.7);
+  --c-surface-solid: #0b111d;
+  --c-elevated: #101827;
+  --c-sunken: rgba(2, 4, 9, 0.55);
+  --c-line: rgba(150, 178, 255, 0.1);
+  --c-line-strong: rgba(150, 178, 255, 0.2);
+  --c-text: #f3f6fc;
+  --c-text-2: #a8b3c7;
+  --c-text-3: #6c7a93;
+  --c-accent-text: #8db1ff;
+  --c-blue-soft: rgba(22, 82, 216, 0.16);
+  --c-blue-line: rgba(60, 116, 246, 0.42);
+  --c-glow: rgba(22, 82, 216, 0.55);
+  --c-highlight: rgba(255, 255, 255, 0.07);
+  --c-overlay: rgba(2, 4, 9, 0.62);
+  --c-carbon-a: rgba(255, 255, 255, 0.025);
+  --c-carbon-b: rgba(0, 0, 0, 0.32);
+  --shadow-1: inset 0 1px 0 var(--c-highlight), 0 10px 30px rgba(0, 0, 0, 0.32);
+  --shadow-2: inset 0 1px 0 var(--c-highlight), 0 30px 80px rgba(0, 0, 0, 0.5);
+  --shadow-blue: 0 12px 34px rgba(22, 82, 216, 0.38);
+  --glass-filter: saturate(170%) blur(22px);
+
+  /* Bridge for the legacy layer so admin screens follow the new palette. */
+  --brand-blue: var(--bm-blue);
+  --brand-blue-deep: var(--bm-blue-deep);
+  --bg: var(--c-bg);
+  --bg-top: var(--c-bg);
+  --bg-bottom: var(--c-bg-2);
+  --panel: var(--c-surface-solid);
+  --panel-muted: #0f1726;
+  --panel-shine: #121b2c;
+  --text: var(--c-text);
+  --muted: var(--c-text-2);
+  --border: rgba(150, 178, 255, 0.14);
+  --primary: var(--bm-blue);
+  --primary-strong: var(--c-accent-text);
+  --accent: var(--bm-blue);
+  --danger: var(--bm-red);
+  --success: var(--bm-green);
+  --glass: rgba(6, 9, 16, 0.86);
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+  --race-surface: var(--c-surface-solid);
+  --race-surface-strong: #0d1730;
+  --race-line: rgba(22, 82, 216, 0.28);
+  --card-radius: var(--r-lg);
+  --control-radius: var(--r-sm);
+  --track-line: transparent;
+  --track-mark: transparent;
+  --logo-preview-dark: #04060b;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --c-bg: #eef1f7;
+  --c-bg-2: #e3e9f4;
+  --c-surface: rgba(255, 255, 255, 0.72);
+  --c-surface-2: rgba(255, 255, 255, 0.86);
+  --c-surface-solid: #ffffff;
+  --c-elevated: #ffffff;
+  --c-sunken: rgba(220, 228, 242, 0.6);
+  --c-line: rgba(16, 36, 84, 0.09);
+  --c-line-strong: rgba(16, 36, 84, 0.16);
+  --c-text: #070c18;
+  --c-text-2: #47536a;
+  --c-text-3: #7b879c;
+  --c-accent-text: #1652d8;
+  --c-blue-soft: rgba(22, 82, 216, 0.09);
+  --c-blue-line: rgba(22, 82, 216, 0.32);
+  --c-glow: rgba(22, 82, 216, 0.28);
+  --c-highlight: rgba(255, 255, 255, 0.9);
+  --c-overlay: rgba(10, 16, 30, 0.38);
+  --c-carbon-a: rgba(16, 36, 84, 0.025);
+  --c-carbon-b: rgba(16, 36, 84, 0.05);
+  --shadow-1: inset 0 1px 0 var(--c-highlight), 0 1px 2px rgba(16, 36, 84, 0.06), 0 12px 32px rgba(16, 36, 84, 0.08);
+  --shadow-2: inset 0 1px 0 var(--c-highlight), 0 30px 70px rgba(16, 36, 84, 0.16);
+  --shadow-blue: 0 12px 30px rgba(22, 82, 216, 0.3);
+  --glass-filter: saturate(180%) blur(24px);
+
+  --bg: var(--c-bg);
+  --bg-top: #f6f8fc;
+  --bg-bottom: var(--c-bg-2);
+  --panel: #ffffff;
+  --panel-muted: #f4f6fb;
+  --panel-shine: #ffffff;
+  --text: var(--c-text);
+  --muted: var(--c-text-2);
+  --border: rgba(16, 36, 84, 0.13);
+  --primary: var(--bm-blue);
+  --primary-strong: var(--bm-blue-deep);
+  --accent: var(--bm-blue);
+  --danger: #e11d48;
+  --success: #15803d;
+  --glass: rgba(255, 255, 255, 0.9);
+  --shadow: 0 12px 30px rgba(16, 36, 84, 0.08);
+  --race-surface: #ffffff;
+  --race-surface-strong: #f1f5ff;
+  --race-line: rgba(22, 82, 216, 0.18);
+  --logo-preview-dark: #04060b;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --header-h: 64px;
+    --tabbar-h: 72px;
+    --fs-body: 15px;
+  }
+}

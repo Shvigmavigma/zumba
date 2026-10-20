@@ -1,0 +1,156 @@
+/* Pointer-driven effects attached by the directives in src/ui/motion/pointer.js. */
+[data-spotlight] {
+  --spot: 0;
+  position: relative;
+  isolation: isolate;
+}
+
+[data-spotlight]::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(520px circle at var(--mx, 50%) var(--my, -30%), color-mix(in srgb, var(--bm-blue) 15%, transparent), transparent 62%);
+  content: '';
+  opacity: var(--spot);
+  pointer-events: none;
+  transition: opacity 500ms var(--ease-out);
+}
+
+/* Lit border that follows the cursor (masked to the 1px ring). */
+[data-spotlight]::after {
+  position: absolute;
+  inset: -1px;
+  z-index: 2;
+  padding: 1px;
+  border-radius: inherit;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, -30%), color-mix(in srgb, var(--bm-blue-bright) 90%, #fff 10%), transparent 70%);
+  content: '';
+  opacity: var(--spot);
+  pointer-events: none;
+  transition: opacity 500ms var(--ease-out);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+
+/* Kept flat on purpose: nothing inside a tilted card has depth of its own, and
+   in a preserve-3d context Firefox hit-tests the tilted wrapper instead of its
+   children, so hover switches on and off every frame (flicker, no glow) and
+   clicks miss the card. */
+[data-tilt] {
+  will-change: transform;
+}
+
+.ui-glare {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  background: radial-gradient(farthest-corner circle at var(--gx, 50%) var(--gy, 50%), rgba(255, 255, 255, 0.22), transparent 55%);
+  mix-blend-mode: overlay;
+  opacity: var(--glare, 0);
+  pointer-events: none;
+  transition: opacity 400ms var(--ease-out);
+}
+
+.ui-spark-layer {
+  position: fixed;
+  z-index: 9999;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.ui-spark-layer i {
+  position: absolute;
+  top: -5px;
+  left: -1px;
+  width: 2px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* Animated border beam for featured surfaces (Magic UI's BorderBeam idea). */
+.ui-beam {
+  position: relative;
+  isolation: isolate;
+}
+
+.ui-beam::before {
+  position: absolute;
+  inset: -1px;
+  z-index: 1;
+  padding: 1px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--beam-angle, 0deg), transparent 0deg, transparent 280deg, var(--bm-cyan) 320deg, var(--bm-blue-bright) 345deg, transparent 360deg);
+  content: '';
+  pointer-events: none;
+  animation: ui-beam-spin 6s linear infinite;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+
+@property --beam-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes ui-beam-spin {
+  to {
+    --beam-angle: 360deg;
+  }
+}
+
+/* Shimmering text for loading copy (React Bits' ShinyText). */
+.ui-shiny {
+  background: linear-gradient(110deg, var(--c-text-3) 35%, var(--c-text) 50%, var(--c-text-3) 65%) 0 0 / 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: ui-shiny 2.4s linear infinite;
+}
+
+@keyframes ui-shiny {
+  from {
+    background-position: 125% 0;
+  }
+  to {
+    background-position: -125% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-beam::before,
+  .ui-shiny {
+    animation: none;
+  }
+}
+
+/* Track diagrams (dark lines on a light sheet, detected by v-track-art) are
+   shown as glowing white lines in the dark theme; photos stay untouched. */
+:root:not([data-theme='light']) img[data-tone='diagram'] {
+  filter: invert(1) hue-rotate(180deg) contrast(1.15);
+  mix-blend-mode: screen;
+}
+
+/* The same diagrams as ink with real transparency (.ui-ink on the image), for
+   places where a blend mode cannot be relied on: an animated image, a card
+   with backdrop blur, a light surface. SVG filters (ui/fx/InkFilters.vue,
+   mounted once in App.vue) turn brightness into opacity, so the sheet is
+   gone and only the lines stay, light in the dark theme and dark in the
+   light one. */
+:root:not([data-theme='light']) img.ui-ink[data-tone='diagram'] {
+  filter: invert(1) hue-rotate(180deg) contrast(1.15) url(#ui-ink-dark);
+  mix-blend-mode: normal;
+}
+
+:root[data-theme='light'] img.ui-ink[data-tone='diagram'] {
+  filter: url(#ui-ink-light);
+}

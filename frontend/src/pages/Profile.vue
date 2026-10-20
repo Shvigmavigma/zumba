@@ -1,34 +1,23 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { Edit3, RefreshCw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
+import { Clock3, PencilLine, RefreshCw } from 'lucide-vue-next'
 import { api } from '../api'
-import AvatarViewer from '../components/AvatarViewer.vue'
 import AccountModerationNotice from '../components/AccountModerationNotice.vue'
-import LicenseBadge from '../components/LicenseBadge.vue'
-import ProfileAnalytics from '../components/ProfileAnalytics.vue'
-import PilotLiveryPanel from '../components/PilotLiveryPanel.vue'
-import PilotRoles from '../components/PilotRoles.vue'
-import UserAvatar from '../components/UserAvatar.vue'
+import EmptyState from '../ui/EmptyState.vue'
+import PilotProfileView from './profile/PilotProfileView.vue'
 import { countryLabel, gameLabel, roleLabel, statusLabel } from '../i18nLabels'
-import { DEFAULT_LICENSE_TIERS, RATING_GAMES, formatPilotNumber, formatRating, normalizeLicenseTiers, pilotName, ratingForGame, ratingLicenseTier, ratingRaceCountForGame, teamShortName } from '../pilotDisplay'
+import { DEFAULT_LICENSE_TIERS, formatPilotNumber, formatRating, normalizeLicenseTiers, ratingForGame, ratingLicenseTier, ratingRaceCountForGame } from '../pilotDisplay'
 import { setSession, state } from '../store'
 import { formatDateTime as formatDateTimeInZone } from '../timezone'
 
 const { t } = useI18n()
 const error = ref('')
 const loading = ref(false)
-const avatarViewerOpen = ref(false)
 const user = computed(() => state.user)
 const licenseTiers = ref(DEFAULT_LICENSE_TIERS)
-const displayName = computed(() => pilotName(user.value, user.value?.login))
-const gameList = computed(() => user.value?.games?.length ? user.value.games.map((game) => gameLabel(t, game)).join(' / ') : t('common.none'))
-const ratingRows = computed(() => RATING_GAMES.map((game) => ({
-  game,
-  rating: ratingForGame(user.value, game),
-  races: ratingRaceCountForGame(user.value, game),
-  license: ratingLicenseTier(ratingForGame(user.value, game), licenseTiers.value)
-})))
+const gameList = computed(() => (user.value?.games?.length ? user.value.games.map((game) => gameLabel(t, game)).join(' / ') : t('common.none')))
+const profileLicense = computed(() => ratingLicenseTier(ratingForGame(user.value, 'ACC'), licenseTiers.value))
 const pendingChanges = computed(() => {
   const changes = user.value?.pending_profile_changes
   if (!changes || typeof changes !== 'object') return []
@@ -65,11 +54,6 @@ const profileFields = computed(() => {
     { label: t('profile.timeoutEnd'), value: formatDateTime(user.value.timeout_end) }
   ]
 })
-const profileLicense = computed(() => ratingLicenseTier(ratingForGame(user.value, 'ACC'), licenseTiers.value))
-
-function rerValue(target, game) {
-  return formatRating(ratingForGame(target, game))
-}
 
 function formatDateTime(value) {
   if (!value) return t('common.none')
@@ -126,91 +110,72 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="section pilot-profile-page profile-overview-page">
-    <div class="section-header profile-overview-header">
-      <div>
-        <h1>{{ t('nav.profile') }}</h1>
-        <p v-if="user" class="muted">{{ displayName }} - {{ user.email }}</p>
-      </div>
-      <div class="toolbar">
-        <button class="icon-button" type="button" :title="t('common.reload')" :disabled="loading" @click="refreshProfile">
-          <RefreshCw :size="18" />
+  <div class="ui-page ui-shell ui-shell--wide">
+    <PilotProfileView v-if="user" :pilot="user" :tiers="licenseTiers" own>
+      <template #actions>
+        <RouterLink class="ui-btn ui-btn--primary ui-btn--sm" to="/profile/edit"><PencilLine :size="15" />{{ t('profilePage.actions.edit') }}</RouterLink>
+        <button class="ui-btn ui-btn--outline ui-btn--sm" type="button" :disabled="loading" @click="refreshProfile">
+          <RefreshCw :size="15" :class="{ 'own__spin': loading }" />{{ t('profilePage.actions.refresh') }}
         </button>
-        <RouterLink v-if="user" class="button primary" to="/profile/edit">
-          <Edit3 :size="16" />
-          {{ t('common.edit') }}
-        </RouterLink>
-      </div>
-    </div>
+      </template>
 
-    <p v-if="error" class="error">{{ error }}</p>
+      <template #alerts>
+        <p v-if="error" class="ui-alert">{{ error }}</p>
+        <AccountModerationNotice scope="profile" />
+        <p v-if="pendingChanges.length" class="ui-alert ui-alert--info"><Clock3 :size="17" />{{ t('profile.pendingChanges') }}</p>
+      </template>
 
-    <AccountModerationNotice scope="profile" />
+      <template #account>
+        <section class="ui-card">
+          <header class="ui-card__title">
+            <p class="ui-eyebrow ui-eyebrow--accent">{{ t('profilePage.tabs.account') }}</p>
+            <h2>{{ t('profilePage.account.title') }}</h2>
+            <p class="own__hint">{{ t('profilePage.account.hint') }}</p>
+          </header>
+          <dl class="ui-kv">
+            <div v-for="field in profileFields" :key="field.label">
+              <dt>{{ field.label }}</dt>
+              <dd :title="String(field.value || t('common.none'))">{{ field.value || t('common.none') }}</dd>
+            </div>
+          </dl>
+        </section>
 
-    <article v-if="user" class="card pilot-profile-card profile-overview-card">
-      <button class="avatar-open-button pilot-profile-avatar-button" type="button" :title="t('avatar.open')" @click="avatarViewerOpen = true">
-        <UserAvatar class="pilot-profile-avatar" :src="user.avatar_url" :color="user.avatar_color" :label="displayName" />
-      </button>
-      <div class="pilot-profile-main">
-        <div class="pilot-profile-head">
-          <h1>{{ displayName }} <PilotRoles :roles="user.pilot_roles" /></h1>
-          <p class="muted">@{{ user.login }} - ID {{ user.id }}</p>
-        </div>
+        <section v-if="pendingChanges.length" class="ui-card">
+          <header class="ui-card__title">
+            <p class="ui-eyebrow ui-eyebrow--accent">{{ t('profile.pendingChangesTitle') }}</p>
+            <h2>{{ t('profilePage.account.pendingTitle') }}</h2>
+            <p class="own__hint">{{ t('profilePage.account.pendingHint') }}</p>
+          </header>
+          <dl class="ui-kv">
+            <div v-for="change in pendingChanges" :key="change.key">
+              <dt>{{ change.label }}</dt>
+              <dd>{{ change.value }}</dd>
+            </div>
+          </dl>
+        </section>
+      </template>
+    </PilotProfileView>
 
-        <div class="pilot-profile-badges">
-          <span class="pill">ACC RER {{ rerValue(user, 'ACC') }}</span>
-          <LicenseBadge :user="user" game="ACC" />
-          <span class="pill">SR {{ Number(user.sr).toFixed(1) }}</span>
-          <span class="pill">#{{ formatPilotNumber(user.pilot_number) }}</span>
-          <span class="team-mini-chip" :title="user.team_name || t('common.none')">{{ teamShortName(user.team_name, user.team_abbreviation) }}</span>
-          <span class="status-badge" :class="`status-${user.status}`">{{ statusLabel(t, user.status) }}</span>
-          <span class="pill">{{ roleLabel(t, user.role) }}</span>
-        </div>
-
-        <div class="profile-alerts">
-          <p v-if="user.status === 'unapproved'" class="pill">{{ t('profile.waitingApproval') }}</p>
-          <p v-if="pendingChanges.length" class="pill">{{ t('profile.pendingChanges') }}</p>
-        </div>
-
-        <div class="pilot-games profile-rating-games">
-          <span>RER</span>
-          <div>
-            <span v-for="row in ratingRows" :key="row.game" class="pill">
-              {{ row.game }} {{ rerValue(user, row.game) }} · {{ row.license.name }} · {{ row.races }}
-            </span>
-          </div>
-        </div>
-
-        <dl class="pilot-public-grid profile-info-grid">
-          <div v-for="field in profileFields" :key="field.label">
-            <dt>{{ field.label }}</dt>
-            <dd :title="String(field.value || t('common.none'))">{{ field.value || t('common.none') }}</dd>
-          </div>
-        </dl>
-
-        <div v-if="pendingChanges.length" class="pilot-games profile-pending-changes">
-          <span>{{ t('profile.pendingChangesTitle') }}</span>
-          <div>
-            <span v-for="change in pendingChanges" :key="change.key" class="pill">{{ change.label }}: {{ change.value }}</span>
-          </div>
-        </div>
-      </div>
-    </article>
-
-    <PilotLiveryPanel
-      v-if="user"
-      :user-id="user.id"
-      :can-manage="user.status === 'active' && ['admin', 'moder', 'marshall', 'smm', 'pilot'].includes(user.role)"
-    />
-    <ProfileAnalytics v-if="user" :user-id="user.id" :favorite-car="user.favorite_car" :user="user" />
-
-    <RouterLink v-else class="button" to="/login">{{ t('nav.login') }}</RouterLink>
-    <AvatarViewer
-      :open="avatarViewerOpen"
-      :src="user?.avatar_url"
-      :label="displayName"
-      :fallback-color="user?.avatar_color"
-      @close="avatarViewerOpen = false"
-    />
-  </section>
+    <EmptyState v-else :title="t('nav.login')">
+      <RouterLink class="ui-btn ui-btn--primary ui-btn--sm" to="/login">{{ t('nav.login') }}</RouterLink>
+    </EmptyState>
+  </div>
 </template>
+
+<style scoped>
+.own__hint {
+  margin: 0;
+  color: var(--c-text-3);
+  font-size: 13px;
+}
+
+.own__spin {
+  animation: own-spin 900ms linear infinite;
+}
+
+@keyframes own-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>

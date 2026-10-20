@@ -47,6 +47,15 @@ const props = defineProps({
   triggerAriaLabel: {
     type: String,
     default: ''
+  },
+  // Lets a surrounding <label for> and field hint point at the trigger button.
+  triggerId: {
+    type: String,
+    default: ''
+  },
+  describedBy: {
+    type: String,
+    default: ''
   }
 })
 
@@ -240,8 +249,10 @@ onBeforeUnmount(removeListeners)
 <template>
   <div ref="root" class="country-combobox" :class="{ 'is-open': isOpen }" @keydown="handleKeydown">
     <button
+      :id="triggerId || undefined"
       class="country-combobox-trigger"
       type="button"
+      :aria-describedby="describedBy || undefined"
       :aria-label="triggerAriaLabel || selectedLabel"
       aria-haspopup="dialog"
       :aria-expanded="isOpen"
@@ -308,3 +319,189 @@ onBeforeUnmount(removeListeners)
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.country-combobox {
+  position: relative;
+  min-width: 0;
+}
+
+.country-combobox-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-md);
+  background: var(--c-sunken);
+  color: var(--c-text);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 15px;
+  text-align: left;
+  transition: border-color var(--dur-2), box-shadow var(--dur-2);
+}
+
+.country-combobox-trigger:hover {
+  border-color: color-mix(in srgb, var(--bm-blue) 30%, var(--c-line-strong));
+}
+
+.country-combobox.is-open .country-combobox-trigger,
+.country-combobox-trigger:focus-visible {
+  border-color: var(--bm-blue-bright);
+  outline: none;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bm-blue) 22%, transparent);
+}
+
+.country-combobox-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.country-combobox-value.is-placeholder {
+  color: var(--c-text-3);
+}
+
+.country-combobox-chevron {
+  flex: 0 0 auto;
+  color: var(--c-text-3);
+  transition: transform var(--dur-3) var(--ease-ios);
+}
+
+.country-combobox.is-open .country-combobox-chevron {
+  transform: rotate(180deg);
+}
+
+.country-combobox-panel {
+  position: fixed;
+  z-index: 130;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 6px;
+  min-width: 240px;
+  padding: 8px;
+  overflow: hidden;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-lg);
+  background: var(--c-surface-2);
+  box-shadow: var(--shadow-2);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  animation: country-pop 280ms var(--ease-ios);
+}
+
+@keyframes country-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+.country-combobox-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+  background: var(--c-sunken);
+  color: var(--c-text-3);
+}
+
+/* The legacy sheet pins the icon absolutely over the input; here it is a flex item. */
+.country-combobox-search svg {
+  position: static;
+  flex: none;
+}
+
+.country-combobox-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--c-text);
+  font-size: 14px;
+  outline: none;
+}
+
+.country-combobox-search input:focus {
+  box-shadow: none;
+}
+
+.country-combobox-clear {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-accent-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.country-combobox-clear:hover {
+  background: var(--c-blue-soft);
+}
+
+.country-combobox-list {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.country-combobox-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-text);
+  cursor: pointer;
+  font-size: 14px;
+  text-align: left;
+}
+
+.country-combobox-option.is-active {
+  background: var(--c-blue-soft);
+}
+
+.country-combobox-option.is-selected {
+  color: var(--c-accent-text);
+  font-weight: 600;
+}
+
+.country-combobox-option-code {
+  color: var(--c-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.country-combobox-leading {
+  flex: none;
+  color: var(--c-text-3);
+}
+
+.country-combobox-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 10px;
+  color: var(--c-text-3);
+  font-size: 13px;
+}
+</style>

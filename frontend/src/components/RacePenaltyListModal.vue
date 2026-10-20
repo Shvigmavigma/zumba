@@ -1,9 +1,11 @@
 <script setup>
 import { nextTick, ref, watch } from 'vue'
-import { Trash2, X } from 'lucide-vue-next'
+import { Gavel, Link2, Scale, Send, Trash2, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import LicenseBadge from './LicenseBadge.vue'
 import UserAvatar from './UserAvatar.vue'
+import EmptyState from '../ui/EmptyState.vue'
+import FormField from '../ui/FormField.vue'
 import { statusLabel } from '../i18nLabels'
 import { formatPilotNumber, formatRating, ratingForGame, teamShortName } from '../pilotDisplay'
 import { state } from '../store'
@@ -136,6 +138,11 @@ function penaltyEffectLabel(penalty) {
   return effects.join(' / ')
 }
 
+/** Chip tone for penalty and appeal statuses. */
+function statusTone(status) {
+  return { active: 'red', rejected: 'red', appealed: 'amber', pending: 'amber', approved: 'green' }[status] || ''
+}
+
 function isOwnPenalty(penalty) {
   return penalty.target_id === state.user?.id
 }
@@ -198,116 +205,407 @@ watch(() => [props.open, props.focusPenaltyId, props.penalties.length], focusPen
 </script>
 
 <template>
-  <div v-if="open" class="penalty-modal-backdrop" @click.self="$emit('close')">
-    <article ref="modalRoot" class="card penalty-modal race-penalties-modal">
-      <div class="section-header penalty-modal-head">
-        <div>
-          <h2>{{ t('raceDetails.penalties') }}</h2>
-          <p class="muted">{{ t('raceDetails.penaltiesCount', { count: penalties.length }) }}</p>
-        </div>
-        <div class="toolbar">
-          <button v-if="canCreate" class="button primary" type="button" :disabled="!participants.length" @click="toggleCreateForm">
-            {{ createOpen ? t('common.close') : t('raceDetails.issuePenalty') }}
-          </button>
-          <button class="icon-button" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="$emit('close')">
-            <X :size="18" />
-          </button>
-        </div>
-      </div>
-
-      <form v-if="canCreate && createOpen" class="form race-penalty-create-form" @submit.prevent="submitPenalty">
-        <div class="race-penalty-create-grid">
-          <label class="field">
-            <span>{{ t('roles.pilot') }}</span>
-            <select v-model="penaltyDraft.target_id" required>
-              <option value="" disabled>{{ t('raceDetails.selectPenaltyPilot') }}</option>
-              <option v-for="item in participants" :key="item.user_id" :value="item.user_id">
-                {{ participantName(item) }} #{{ item.pilot_number !== null && item.pilot_number !== undefined ? formatPilotNumber(item.pilot_number) : item.user_id }}
-              </option>
-            </select>
-          </label>
-          <label class="field">
-            <span>{{ t('raceDetails.timePenaltySeconds') }}</span>
-            <input v-model.number="penaltyDraft.time_seconds" type="number" min="0.1" step="0.1" required />
-          </label>
-          <label class="field">
-            <span>{{ t('raceDetails.srPenaltyValue') }}</span>
-            <input v-model.number="penaltyDraft.sr_penalty_value" type="number" min="0.1" step="0.1" required />
-          </label>
-        </div>
-        <label class="field">
-          <span>{{ t('fields.description') }}</span>
-          <textarea v-model="penaltyDraft.description" required :placeholder="t('raceDetails.penaltyDescriptionPlaceholder')"></textarea>
-        </label>
-        <button class="button primary" type="submit" :disabled="busy || !participants.length">
-          {{ t('raceDetails.issuePenalty') }}
-        </button>
-      </form>
-
-      <div v-if="penalties.length" class="race-penalty-list">
-        <article
-          v-for="penalty in penalties"
-          :key="penalty.id"
-          class="card race-penalty-card"
-          :class="{ 'is-own': isOwnPenalty(penalty), 'is-focused': Number(focusPenaltyId) === Number(penalty.id) }"
-          :data-penalty-id="penalty.id"
-        >
-          <div class="race-penalty-head">
-            <div class="user-list-cell">
-              <UserAvatar mini :src="penaltyTargetAvatar(penalty)" :color="penaltyTargetColor(penalty)" :label="penaltyTargetName(penalty)" />
-              <div class="user-list-main">
-                <span class="user-name-line">
-                  <strong>{{ penaltyTargetName(penalty) }}</strong>
-                  <LicenseBadge :user="participantById(penalty.target_id)" :game="game" />
-                </span>
-                <span>{{ penaltyTargetSubtitle(penalty) }}</span>
-              </div>
+  <Teleport to="body">
+    <Transition name="pm">
+      <div v-if="open" class="ui-modal-backdrop pm-backdrop" @click.self="$emit('close')">
+        <article ref="modalRoot" class="ui-modal ui-modal--wide pm" role="dialog" aria-modal="true" aria-labelledby="race-penalties-title">
+          <header class="ui-modal__head pm__head">
+            <div class="pm__title">
+              <p class="ui-eyebrow ui-eyebrow--accent"><Scale :size="13" />{{ t('racePage.penalties.eyebrow') }}</p>
+              <h2 id="race-penalties-title">{{ t('raceDetails.penalties') }}</h2>
+              <p class="pm__count">{{ t('raceDetails.penaltiesCount', { count: penalties.length }) }}</p>
             </div>
-            <div class="race-penalty-badges">
-              <span v-if="isOwnPenalty(penalty)" class="pill">{{ t('raceDetails.yourPenalty') }}</span>
-              <span class="status-badge" :class="`status-${penalty.status}`">{{ statusLabel(t, penalty.status) }}</span>
+            <div class="pm__tools">
               <button
-                v-if="canDelete"
-                class="icon-button danger-icon"
+                v-if="canCreate"
+                class="ui-btn ui-btn--sm"
+                :class="createOpen ? 'ui-btn--outline' : 'ui-btn--danger'"
                 type="button"
-                :title="t('common.delete')"
-                :aria-label="t('common.delete')"
-                @click="$emit('delete-penalty', penalty)"
+                :disabled="!participants.length"
+                @click="toggleCreateForm"
               >
-                <Trash2 :size="16" />
+                <Gavel v-if="!createOpen" :size="15" />
+                {{ createOpen ? t('common.close') : t('raceDetails.issuePenalty') }}
+              </button>
+              <button class="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" type="button" :title="t('common.close')" :aria-label="t('common.close')" @click="$emit('close')">
+                <X :size="18" />
               </button>
             </div>
+          </header>
+
+          <Transition name="pm-drop">
+            <form v-if="canCreate && createOpen" class="pm__create" @submit.prevent="submitPenalty">
+              <div class="pm__create-grid">
+                <FormField v-slot="{ id }" :label="t('roles.pilot')" required>
+                  <select :id="id" v-model="penaltyDraft.target_id" class="ui-select" required>
+                    <option value="" disabled>{{ t('raceDetails.selectPenaltyPilot') }}</option>
+                    <option v-for="item in participants" :key="item.user_id" :value="item.user_id">
+                      {{ participantName(item) }} #{{ item.pilot_number !== null && item.pilot_number !== undefined ? formatPilotNumber(item.pilot_number) : item.user_id }}
+                    </option>
+                  </select>
+                </FormField>
+                <FormField v-slot="{ id }" :label="t('raceDetails.timePenaltySeconds')" required>
+                  <input :id="id" v-model.number="penaltyDraft.time_seconds" class="ui-input ui-num" type="number" min="0.1" step="0.1" required />
+                </FormField>
+                <FormField v-slot="{ id }" :label="t('raceDetails.srPenaltyValue')" required>
+                  <input :id="id" v-model.number="penaltyDraft.sr_penalty_value" class="ui-input ui-num" type="number" min="0.1" step="0.1" required />
+                </FormField>
+              </div>
+              <FormField v-slot="{ id }" :label="t('fields.description')" required>
+                <textarea :id="id" v-model="penaltyDraft.description" class="ui-textarea" required :placeholder="t('raceDetails.penaltyDescriptionPlaceholder')"></textarea>
+              </FormField>
+              <div class="pm__create-actions">
+                <button class="ui-btn ui-btn--danger" type="submit" :disabled="busy || !participants.length">
+                  <Gavel :size="16" />{{ t('raceDetails.issuePenalty') }}
+                </button>
+              </div>
+            </form>
+          </Transition>
+
+          <div v-if="penalties.length" class="pm__list">
+            <article
+              v-for="penalty in penalties"
+              :key="penalty.id"
+              class="pm__card"
+              :class="{ 'is-own': isOwnPenalty(penalty), 'is-focused': Number(focusPenaltyId) === Number(penalty.id) }"
+              :data-penalty-id="penalty.id"
+            >
+              <header class="pm__card-head">
+                <div class="pm__who">
+                  <UserAvatar mini :src="penaltyTargetAvatar(penalty)" :color="penaltyTargetColor(penalty)" :label="penaltyTargetName(penalty)" />
+                  <div class="pm__who-main">
+                    <span class="pm__name">
+                      <strong>{{ penaltyTargetName(penalty) }}</strong>
+                      <LicenseBadge :user="participantById(penalty.target_id)" :game="game" />
+                    </span>
+                    <span class="pm__sub">{{ penaltyTargetSubtitle(penalty) }}</span>
+                  </div>
+                </div>
+                <div class="pm__badges">
+                  <span v-if="isOwnPenalty(penalty)" class="ui-chip ui-chip--blue">{{ t('raceDetails.yourPenalty') }}</span>
+                  <span class="ui-chip" :class="statusTone(penalty.status) ? `ui-chip--${statusTone(penalty.status)}` : ''">{{ statusLabel(t, penalty.status) }}</span>
+                  <button
+                    v-if="canDelete"
+                    class="ui-btn ui-btn--danger ui-btn--icon ui-btn--sm"
+                    type="button"
+                    :title="t('common.delete')"
+                    :aria-label="t('common.delete')"
+                    @click="$emit('delete-penalty', penalty)"
+                  >
+                    <Trash2 :size="15" />
+                  </button>
+                </div>
+              </header>
+
+              <div class="pm__impact">
+                <span class="pm__value ui-num">{{ penaltyValueLabel(penalty) }}</span>
+                <div class="pm__impact-text">
+                  <strong>{{ penaltyTypeLabel(penalty) }}</strong>
+                  <span>{{ penaltyEffectLabel(penalty) }}</span>
+                </div>
+                <time class="pm__date ui-num">{{ formatDate(penalty.created_at) }}</time>
+              </div>
+              <p class="pm__desc">{{ penalty.description }}</p>
+
+              <div v-if="appealForPenalty(penalty.id)" class="pm__appeal">
+                <span class="ui-chip" :class="statusTone(appealForPenalty(penalty.id).status) ? `ui-chip--${statusTone(appealForPenalty(penalty.id).status)}` : ''">
+                  {{ t('raceDetails.appeal') }}: {{ statusLabel(t, appealForPenalty(penalty.id).status) }}
+                </span>
+                <p v-if="appealForPenalty(penalty.id)?.rejection_reason" class="pm__reason">{{ appealForPenalty(penalty.id).rejection_reason }}</p>
+              </div>
+
+              <form v-if="canAppealPenalty(penalty)" class="pm__appeal-form" @submit.prevent="submitAppeal(penalty)">
+                <p class="pm__appeal-lead">{{ t('racePage.penalties.appealLead') }}</p>
+                <FormField v-slot="{ id, describedBy }" :label="t('fields.proofLink')" :hint="t('racePage.penalties.proofHint')" :icon="Link2" required>
+                  <input
+                    :id="id"
+                    class="ui-input"
+                    :value="appealDraft(penalty).proof_link"
+                    type="url"
+                    required
+                    placeholder="https://"
+                    :aria-describedby="describedBy"
+                    @input="setAppealField(penalty, 'proof_link', $event.target.value)"
+                  />
+                </FormField>
+                <FormField v-slot="{ id }" :label="t('fields.description')" required>
+                  <textarea :id="id" class="ui-textarea" :value="appealDraft(penalty).description" required @input="setAppealField(penalty, 'description', $event.target.value)"></textarea>
+                </FormField>
+                <div class="pm__create-actions">
+                  <button class="ui-btn ui-btn--primary" type="submit"><Send :size="16" />{{ t('raceDetails.appeal') }}</button>
+                </div>
+              </form>
+            </article>
           </div>
 
-          <div class="race-penalty-summary">
-            <div class="race-penalty-impact">
-              <strong>{{ penaltyTypeLabel(penalty) }} - {{ penaltyValueLabel(penalty) }}</strong>
-              <span>{{ penaltyEffectLabel(penalty) }}</span>
-            </div>
-            <span class="race-penalty-date">{{ formatDate(penalty.created_at) }}</span>
-          </div>
-          <p>{{ penalty.description }}</p>
-
-          <div v-if="appealForPenalty(penalty.id)" class="race-appeal-state">
-            <span class="pill">{{ t('raceDetails.appeal') }}: {{ statusLabel(t, appealForPenalty(penalty.id).status) }}</span>
-            <p v-if="appealForPenalty(penalty.id)?.rejection_reason" class="muted">{{ appealForPenalty(penalty.id).rejection_reason }}</p>
-          </div>
-
-          <form v-if="canAppealPenalty(penalty)" class="form race-appeal-form" @submit.prevent="submitAppeal(penalty)">
-            <label class="field">
-              <span>{{ t('fields.proofLink') }}</span>
-              <input :value="appealDraft(penalty).proof_link" type="url" required @input="setAppealField(penalty, 'proof_link', $event.target.value)" />
-            </label>
-            <label class="field">
-              <span>{{ t('fields.description') }}</span>
-              <textarea :value="appealDraft(penalty).description" required @input="setAppealField(penalty, 'description', $event.target.value)"></textarea>
-            </label>
-            <button class="button primary" type="submit">{{ t('raceDetails.appeal') }}</button>
-          </form>
+          <EmptyState v-else :icon="Scale" compact :title="t('raceDetails.noPenalties')" :text="t('racePage.penalties.emptyText')" />
         </article>
       </div>
-
-      <div v-else class="empty-row">{{ t('raceDetails.noPenalties') }}</div>
-    </article>
-  </div>
+    </Transition>
+  </Teleport>
 </template>
+
+<style scoped>
+.pm {
+  gap: 18px;
+}
+
+.pm__title {
+  display: grid;
+  gap: 6px;
+}
+
+.pm__title h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(18px, 2vw, 24px);
+  text-transform: uppercase;
+}
+
+.pm__count {
+  margin: 0;
+  color: var(--c-text-3);
+  font-size: 13px;
+}
+
+.pm__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pm__create {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--bm-red) 30%, var(--c-line));
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--bm-red) 6%, var(--c-sunken));
+}
+
+.pm__create-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.pm__create-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pm__list {
+  display: grid;
+  gap: 10px;
+}
+
+.pm__card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  background: var(--c-surface-solid);
+  scroll-margin: 20px;
+  transition: border-color var(--dur-2), box-shadow var(--dur-3);
+}
+
+.pm__card.is-own {
+  border-color: var(--c-blue-line);
+}
+
+.pm__card.is-focused {
+  border-color: var(--bm-red);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bm-red) 18%, transparent);
+  animation: pm-focus 1.4s var(--ease-out) 2;
+}
+
+@keyframes pm-focus {
+  50% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--bm-red) 10%, transparent);
+  }
+}
+
+.pm__card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pm__who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pm__who-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pm__name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 14.5px;
+}
+
+.pm__sub {
+  color: var(--c-text-3);
+  font-size: 12.5px;
+}
+
+.pm__badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.pm__impact {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--c-sunken);
+}
+
+.pm__value {
+  padding: 6px 10px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--bm-red) 14%, transparent);
+  color: color-mix(in srgb, var(--bm-red) 85%, var(--c-text));
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.pm__impact-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pm__impact-text strong {
+  font-size: 13.5px;
+}
+
+.pm__impact-text span,
+.pm__date {
+  color: var(--c-text-3);
+  font-size: 12px;
+}
+
+.pm__desc {
+  margin: 0;
+  color: var(--c-text-2);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-line;
+}
+
+.pm__appeal {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+}
+
+.pm__reason {
+  margin: 0;
+  color: var(--c-text-2);
+  font-size: 13px;
+}
+
+.pm__appeal-form {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--c-blue-line);
+  border-radius: var(--r-md);
+  background: var(--c-blue-soft);
+}
+
+.pm__appeal-lead {
+  margin: 0;
+  color: var(--c-text-2);
+  font-size: 13px;
+}
+
+.pm-enter-active,
+.pm-leave-active {
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+
+.pm-enter-active .pm,
+.pm-leave-active .pm {
+  transition: transform var(--dur-3) var(--ease-ios), filter var(--dur-2) var(--ease-out);
+}
+
+.pm-enter-from,
+.pm-leave-to {
+  opacity: 0;
+}
+
+.pm-enter-from .pm,
+.pm-leave-to .pm {
+  filter: blur(6px);
+  transform: translateY(18px) scale(0.97);
+}
+
+.pm-drop-enter-active,
+.pm-drop-leave-active {
+  transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-3) var(--ease-ios);
+}
+
+.pm-drop-enter-from,
+.pm-drop-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.98);
+}
+
+@media (max-width: 640px) {
+  .pm-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .pm {
+    max-height: 92dvh;
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+  }
+
+  .pm__create-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pm__impact {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .pm__date {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-enter-active,
+  .pm-leave-active,
+  .pm-enter-active .pm,
+  .pm-leave-active .pm,
+  .pm-drop-enter-active,
+  .pm-drop-leave-active {
+    transition: none;
+  }
+
+  .pm__card.is-focused {
+    animation: none;
+  }
+}
+</style>

@@ -21,7 +21,7 @@ from app.race_videos import remove_race_video_file, save_race_video_file
 from app.pilot_roles import pilot_roles_payload
 from app.rate_limit import limiter
 from app.schemas import FanVoteCast, FanVoteConfigRead, FanVoteConfigUpdate, FanVoteRead, FanVoteSetup
-from app.schemas import AccResultsUpload, ManualResultsUpload, RaceCreate, RaceManageRead, RaceRead, RaceRegisterRequest, RaceUpdate, ResultsUpload, TeamRaceRegisterRequest
+from app.schemas import AccResultsUpload, ManualResultRow, ManualResultsUpload, RaceCreate, RaceManageRead, RaceRead, RaceRegisterRequest, RaceUpdate, ResultsUpload, TeamRaceRegisterRequest
 from app.services import apply_sr_penalties, recalculate_all_ratings, recalculate_race_results, restore_race_sr_bonus, restore_sr_penalty, result_rows
 
 
@@ -1040,6 +1040,14 @@ def storable_results(results: dict) -> dict:
     return jsonable_encoder(results)
 
 
+MANUAL_ROW_TIMING_FIELDS = ("best_sectors_ms", "valid_laps", "qualification_best_sectors_ms", "qualification_valid_laps", "laps_annulled")
+
+
+def manual_row_timing(row: ManualResultRow) -> dict:
+    """Sector times and the stewards' annulment that came with a manual row; rows entered without them stay as they were."""
+    return {field: getattr(row, field) for field in MANUAL_ROW_TIMING_FIELDS if getattr(row, field) is not None}
+
+
 def build_manual_results_payload(race: Race, payload: ManualResultsUpload, registered: list[dict], manual_pilots: dict[int, dict] | None = None) -> dict:
     registered_by_id = {int(item["user_id"]): item for item in registered if item.get("user_id") is not None}
     pilots_by_id = manual_pilots if race.game == "LMU" else registered_by_id
@@ -1054,6 +1062,14 @@ def build_manual_results_payload(race: Race, payload: ManualResultsUpload, regis
             raise HTTPException(status_code=400, detail="Qualification results are required for this race")
         for position, (_, user_id, best_lap_ms) in enumerate(sorted(qualification_values, key=lambda item: (item[2], item[0])), start=1):
             qualification_by_user[user_id] = {"position": position, "best_lap_ms": best_lap_ms}
+    elif race.game != "LMU" and race.has_qualification:
+        # No result file to rank the grid from: the best laps that come with the rows are kept
+        # as they are, for the track records, and nobody is given a grid position.
+        qualification_by_user = {
+            row.user_id: {"position": None, "best_lap_ms": row.qualification_best_lap_ms}
+            for row in payload.rows
+            if row.qualification_best_lap_ms is not None
+        }
     rows: list[dict] = []
     seen: set[int] = set()
     for row in payload.rows:
@@ -1093,6 +1109,7 @@ def build_manual_results_payload(race: Race, payload: ManualResultsUpload, regis
                 "qualification_position": qualification.get("position"),
                 "qualification_best_lap_ms": qualification.get("best_lap_ms"),
                 "source": "lmu_manual" if race.game == "LMU" else ("acc_manual" if race.game == "ACC" else "manual"),
+                **manual_row_timing(row),
             }
         )
     if race.game == "LMU":

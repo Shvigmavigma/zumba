@@ -1,201 +1,27 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { Calculator, Fuel, Gauge, Search, TimerReset } from 'lucide-vue-next'
+import { useI18n } from 'vue-i18n'
+import { useIntersectionObserver, useMediaQuery } from '@vueuse/core'
+import { ArrowDown, CarFront, Droplets, Flag, Lightbulb, Timer } from 'lucide-vue-next'
 import { api } from '../api'
 import { state } from '../store'
+import FormField from '../ui/FormField.vue'
+import PageHeader from '../ui/PageHeader.vue'
+import SegmentedControl from '../ui/SegmentedControl.vue'
+import SwitchToggle from '../ui/SwitchToggle.vue'
+import RollingNumber from '../ui/fx/RollingNumber.vue'
+import { prefersReducedMotion } from '../ui/motion/env'
+import CarPicker from './fuel/CarPicker.vue'
+import FuelResults from './fuel/FuelResults.vue'
+import NumberField from './fuel/NumberField.vue'
+import { fuelCars, presets } from './fuel/fuelData'
+import { fuelFixed } from './fuel/fuelFormat'
 
-const presets = {
-  ACC: [
-    { label: 'GT3', tank: 120, fuel: 3.2, hintRu: 'Проверь расход в MFD после серии боевых кругов.', hintEn: 'Check consumption in the MFD after a race-pace run.' },
-    { label: 'GT2', tank: 120, fuel: 3.5, hintRu: 'GT2 мощнее GT3, поэтому стартовый расход выше.', hintEn: 'GT2 is more powerful than GT3, so the default burn is higher.' },
-    { label: 'GT4', tank: 100, fuel: 2.6, hintRu: 'Для GT4 расход обычно ниже, но трасса сильно влияет.', hintEn: 'GT4 usually burns less fuel, but track layout matters.' },
-    { label: 'TCX', tank: 65, fuel: 2.1, hintRu: 'Для TCX используй данные после нескольких кругов в боевом темпе.', hintEn: 'For TCX, use race-pace data after a few laps.' },
-    { label: 'Ferrari Challenge', tank: 110, fuel: 3.0, hintRu: 'Для Challenge лучше брать запас не меньше одного круга.', hintEn: 'For Challenge races, keep at least one lap of reserve.' },
-    { label: 'Lamborghini Super Trofeo', tank: 120, fuel: 3.2, hintRu: 'Super Trofeo близок по расходу к GT3/GTC, уточняй по MFD.', hintEn: 'Super Trofeo is close to GT3/GTC burn; verify in MFD.' },
-    { label: 'Porsche CUP', tank: 100, fuel: 3.0, hintRu: 'Для Cup лучше брать запас не меньше одного круга.', hintEn: 'For Cup races, keep at least one lap of reserve.' }
-  ],
-  AC: [
-    { label: 'GT', tank: 100, fuel: 3.1, hintRu: 'Для AC и модов проверь бак в настройках машины.', hintEn: 'For AC and mods, verify tank capacity in the car setup.' },
-    { label: 'Touring', tank: 70, fuel: 2.4, hintRu: 'Для туринговых машин чаще хватает меньшего бака.', hintEn: 'Touring cars often need a smaller tank.' }
-  ],
-  iRacing: [
-    { label: 'GT3', tank: 110, fuel: 3.1, hintRu: 'Бак и расход смотри в Garage -> Fuel.', hintEn: 'Check tank and consumption in Garage -> Fuel.' },
-    { label: 'Prototype', tank: 75, fuel: 4.4, hintRu: 'Для прототипов расход выше, проверь race control calculator.', hintEn: 'Prototypes burn more fuel; cross-check race control calculator.' },
-    { label: 'GT4', tank: 100, fuel: 2.6, hintRu: 'Для GT4 используй данные с гоночного темпа.', hintEn: 'For GT4, use race-pace fuel data.' },
-    { label: 'Touring', tank: 65, fuel: 2.2, hintRu: 'Для туринга расход сильнее зависит от трассы.', hintEn: 'Touring fuel burn depends heavily on the track.' },
-    { label: 'Cup', tank: 100, fuel: 3.0, hintRu: 'Для кубковых машин оставляй запас хотя бы на круг.', hintEn: 'For cup cars, keep at least one lap of reserve.' }
-  ],
-  LMU: [
-    { label: 'Hypercar', tank: 70, fuel: 4.6, hintRu: 'Здесь считается обычное топливо, не Virtual Energy.', hintEn: 'This calculates fuel, not Virtual Energy.' },
-    { label: 'LMP2', tank: 75, fuel: 3.9, hintRu: 'Для LMP2 проверяй расход на длинном отрезке.', hintEn: 'For LMP2, verify fuel burn over a longer run.' },
-    { label: 'LMP3', tank: 70, fuel: 3.4, hintRu: 'Для LMP3 держи запас из-за трафика.', hintEn: 'For LMP3, keep reserve for traffic.' },
-    { label: 'LMGT3', tank: 100, fuel: 3.4, hintRu: 'Для LMGT3 бери расход с боевого темпа.', hintEn: 'For LMGT3, use race-pace consumption.' },
-    { label: 'GTE', tank: 100, fuel: 3.6, hintRu: 'Для GTE используй расход из нескольких боевых кругов.', hintEn: 'For GTE, use fuel burn from several race-pace laps.' }
-  ]
-}
-
-const fuelCars = {
-  ACC: [
-    { label: 'Aston Martin V12 Vantage GT3 2013', class: 'GT3', tank: 132, fuel: 3.25 },
-    { label: 'Aston Martin V8 Vantage GT3 2019', class: 'GT3', tank: 120, fuel: 3.15 },
-    { label: 'Audi R8 LMS GT3 2015', class: 'GT3', tank: 120, fuel: 3.2 },
-    { label: 'Audi R8 LMS Evo GT3 2019', class: 'GT3', tank: 120, fuel: 3.15 },
-    { label: 'Audi R8 LMS Evo II GT3 2022', class: 'GT3', tank: 120, fuel: 3.15 },
-    { label: 'Bentley Continental GT3 2015', class: 'GT3', tank: 132, fuel: 3.35 },
-    { label: 'Bentley Continental GT3 2018', class: 'GT3', tank: 132, fuel: 3.35 },
-    { label: 'BMW M6 GT3 2017', class: 'GT3', tank: 125, fuel: 3.25 },
-    { label: 'BMW M4 GT3 2021', class: 'GT3', tank: 120, fuel: 3.15 },
-    { label: 'Emil Frey Jaguar GT3 2012', class: 'GT3', tank: 119, fuel: 3.3 },
-    { label: 'Ferrari 296 GT3 2023', class: 'GT3', tank: 110, fuel: 3.1 },
-    { label: 'Ferrari 488 GT3 2018', class: 'GT3', tank: 110, fuel: 3.15 },
-    { label: 'Ferrari 488 EVO GT3 2020', class: 'GT3', tank: 110, fuel: 3.1 },
-    { label: 'Ford Mustang GT3 2024', class: 'GT3', tank: 120, fuel: 3.2 },
-    { label: 'Honda NSX GT3 2017', class: 'GT3', tank: 120, fuel: 3.2 },
-    { label: 'Honda NSX Evo GT3 2019', class: 'GT3', tank: 120, fuel: 3.15 },
-    { label: 'Lamborghini Huracan EVO2 GT3 2023', class: 'GT3', tank: 120, fuel: 3.2 },
-    { label: 'Lamborghini Huracan GT3 2015', class: 'GT3', tank: 120, fuel: 3.25 },
-    { label: 'Lamborghini Huracan Evo GT3 2019', class: 'GT3', tank: 120, fuel: 3.2 },
-    { label: 'Lexus RC F GT3 2016', class: 'GT3', tank: 120, fuel: 3.2 },
-    { label: 'McLaren 650S GT3 2015', class: 'GT3', tank: 125, fuel: 3.2 },
-    { label: 'McLaren 720S GT3 2019', class: 'GT3', tank: 125, fuel: 3.15 },
-    { label: 'McLaren 720S Evo GT3 2023', class: 'GT3', tank: 125, fuel: 3.15 },
-    { label: 'Mercedes AMG GT3 2015', class: 'GT3', tank: 120, fuel: 3.25 },
-    { label: 'Mercedes AMG Evo GT3 2020', class: 'GT3', tank: 120, fuel: 3.2 },
-    { label: 'Nissan GTR Nismo GT3 2015', class: 'GT3', tank: 132, fuel: 3.35 },
-    { label: 'Nissan GTR Nismo GT3 2018', class: 'GT3', tank: 132, fuel: 3.35 },
-    { label: 'Porsche 911 GT3 R 2018', class: 'GT3', tank: 120, fuel: 3.15 },
-    { label: 'Porsche 911 II GT3R 2019', class: 'GT3', tank: 120, fuel: 3.15 },
-    { label: 'Porsche 992 GT3R 2023', class: 'GT3', tank: 120, fuel: 3.15 },
-    { label: 'Reiter Engineering R-EX GT3 2017', class: 'GT3', tank: 130, fuel: 3.35 },
-    { label: 'Audi R8 LMS GT2', class: 'GT2', tank: 120, fuel: 3.5 },
-    { label: 'KTM X-Bow GT2', class: 'GT2', tank: 120, fuel: 3.45 },
-    { label: 'Maserati MC20 GT2', class: 'GT2', tank: 120, fuel: 3.5 },
-    { label: 'Mercedes-AMG GT2', class: 'GT2', tank: 120, fuel: 3.55 },
-    { label: 'Porsche 935 (2019)', class: 'GT2', tank: 120, fuel: 3.5 },
-    { label: 'Porsche 911 GT2 RS CS EVO Kit', class: 'GT2', tank: 120, fuel: 3.5 },
-    { label: 'Alpine A110 2018', class: 'GT4', tank: 80, fuel: 2.35 },
-    { label: 'AMR V8 Vantage 2018', class: 'GT4', tank: 100, fuel: 2.65 },
-    { label: 'Audi R8 LMS 2018', class: 'GT4', tank: 100, fuel: 2.65 },
-    { label: 'BMW M4 2018', class: 'GT4', tank: 100, fuel: 2.65 },
-    { label: 'Chevrolet Camaro R 2017', class: 'GT4', tank: 100, fuel: 2.8 },
-    { label: 'Ginetta G55 2012', class: 'GT4', tank: 80, fuel: 2.4 },
-    { label: 'KTM X-Bow 2016', class: 'GT4', tank: 100, fuel: 2.5 },
-    { label: 'Maserati Granturismo MC 2016', class: 'GT4', tank: 100, fuel: 2.75 },
-    { label: 'McLaren 570S 2016', class: 'GT4', tank: 100, fuel: 2.6 },
-    { label: 'Mercedes AMG 2016', class: 'GT4', tank: 100, fuel: 2.7 },
-    { label: 'Porsche 718 Cayman GT4 Clubsport 2019', class: 'GT4', tank: 100, fuel: 2.55 },
-    { label: 'BMW M2 CS 2020', class: 'TCX', tank: 65, fuel: 2.1 },
-    { label: 'Ferrari 488 Challenge Evo 2020', class: 'Ferrari Challenge', tank: 110, fuel: 3.0 },
-    { label: 'Lamborghini Huracan Super Trofeo 2015', class: 'Lamborghini Super Trofeo', tank: 120, fuel: 3.2 },
-    { label: 'Lamborghini Huracan Super Trofeo Evo 2 2021', class: 'Lamborghini Super Trofeo', tank: 120, fuel: 3.2 },
-    { label: 'Porsche 911 II GT3 Cup 2017', class: 'Porsche CUP', tank: 100, fuel: 3.0 },
-    { label: 'Porsche 911 GT3 Cup (992) 2021', class: 'Porsche CUP', tank: 100, fuel: 3.0 }
-  ],
-  AC: [
-    { label: 'BMW M3 GT2', class: 'GT', tank: 100, fuel: 3.3 },
-    { label: 'BMW Z4 GT3', class: 'GT', tank: 100, fuel: 3.1 },
-    { label: 'Chevrolet Corvette C7.R', class: 'GT', tank: 100, fuel: 3.4 },
-    { label: 'Ferrari 458 GT2', class: 'GT', tank: 100, fuel: 3.3 },
-    { label: 'Ferrari 488 GT3', class: 'GT', tank: 110, fuel: 3.1 },
-    { label: 'Lamborghini Huracan GT3', class: 'GT', tank: 120, fuel: 3.2 },
-    { label: 'Maserati Granturismo MC GT4', class: 'GT', tank: 100, fuel: 2.7 },
-    { label: 'McLaren 650S GT3', class: 'GT', tank: 125, fuel: 3.2 },
-    { label: 'McLaren MP4-12C GT3', class: 'GT', tank: 100, fuel: 3.1 },
-    { label: 'Mercedes-Benz AMG GT3', class: 'GT', tank: 120, fuel: 3.2 },
-    { label: 'Nissan GT-R Nismo GT3', class: 'GT', tank: 120, fuel: 3.3 },
-    { label: 'Porsche 911 GT3 Cup 2017', class: 'GT', tank: 100, fuel: 3.0 },
-    { label: 'Porsche 911 GT3 R 2016', class: 'GT', tank: 120, fuel: 3.1 },
-    { label: 'Porsche 911 RSR 2017', class: 'GT', tank: 100, fuel: 3.5 },
-    { label: 'Porsche Cayman GT4 Clubsport', class: 'GT', tank: 100, fuel: 2.6 },
-    { label: 'Audi TT Cup 2016', class: 'Touring', tank: 70, fuel: 2.3 },
-    { label: 'BMW M235i Racing', class: 'Touring', tank: 65, fuel: 2.2 },
-    { label: 'Mazda MX-5 Cup', class: 'Touring', tank: 50, fuel: 1.8 },
-    { label: 'Audi R18 e-tron quattro', class: 'Prototype', tank: 90, fuel: 4.0 },
-    { label: 'Ferrari 312T', class: 'Formula', tank: 180, fuel: 3.6 },
-    { label: 'Ferrari F138', class: 'Formula', tank: 100, fuel: 2.5 },
-    { label: 'Ferrari SF15-T', class: 'Formula', tank: 100, fuel: 2.5 },
-    { label: 'Lotus Exos T125', class: 'Formula', tank: 100, fuel: 2.8 },
-    { label: 'Lotus 98T', class: 'Formula', tank: 195, fuel: 4.0 },
-    { label: 'Porsche 919 Hybrid 2015', class: 'Prototype', tank: 90, fuel: 4.0 },
-    { label: 'Porsche 919 Hybrid 2016', class: 'Prototype', tank: 90, fuel: 4.0 }
-  ],
-  iRacing: [
-    { label: 'Aston Martin GT3 EVO', class: 'GT3', tank: 120, fuel: 3.1 },
-    { label: 'Acura NSX GT3 EVO 22', class: 'GT3', tank: 120, fuel: 3.1 },
-    { label: 'Audi R8 LMS EVO II GT3', class: 'GT3', tank: 120, fuel: 3.1 },
-    { label: 'BMW M4 GT3 EVO', class: 'GT3', tank: 120, fuel: 3.1 },
-    { label: 'Chevrolet Corvette Z06 GT3.R', class: 'GT3', tank: 120, fuel: 3.1 },
-    { label: 'Ferrari 296 GT3', class: 'GT3', tank: 110, fuel: 3.1 },
-    { label: 'Ford Mustang GT3', class: 'GT3', tank: 120, fuel: 3.2 },
-    { label: 'Lamborghini Huracan GT3 EVO', class: 'GT3', tank: 120, fuel: 3.2 },
-    { label: 'McLaren 720S GT3 EVO', class: 'GT3', tank: 125, fuel: 3.1 },
-    { label: 'Mercedes-AMG GT3 2020', class: 'GT3', tank: 120, fuel: 3.2 },
-    { label: 'Porsche 911 GT3 R (992)', class: 'GT3', tank: 120, fuel: 3.1 },
-    { label: 'Acura ARX-06 GTP', class: 'Prototype', tank: 75, fuel: 4.4 },
-    { label: 'BMW M Hybrid V8', class: 'Prototype', tank: 75, fuel: 4.4 },
-    { label: 'Cadillac V-Series.R GTP', class: 'Prototype', tank: 75, fuel: 4.4 },
-    { label: 'Ferrari 499P', class: 'Prototype', tank: 75, fuel: 4.4 },
-    { label: 'Porsche 963 GTP', class: 'Prototype', tank: 75, fuel: 4.4 },
-    { label: 'Dallara P217', class: 'Prototype', tank: 75, fuel: 4.1 },
-    { label: 'Ligier JS P320', class: 'Prototype', tank: 75, fuel: 3.8 },
-    { label: 'Aston Martin Vantage GT4', class: 'GT4', tank: 100, fuel: 2.6 },
-    { label: 'BMW M4 G82 GT4 Evo', class: 'GT4', tank: 100, fuel: 2.6 },
-    { label: 'Ford Mustang GT4', class: 'GT4', tank: 100, fuel: 2.7 },
-    { label: 'Porsche 718 Cayman GT4 Clubsport MR', class: 'GT4', tank: 100, fuel: 2.55 },
-    { label: 'McLaren 570S GT4', class: 'GT4', tank: 100, fuel: 2.6 },
-    { label: 'Mercedes-AMG GT4', class: 'GT4', tank: 100, fuel: 2.65 },
-    { label: 'BMW M2 Racing (G87)', class: 'Touring', tank: 65, fuel: 2.2 },
-    { label: 'BMW M2 CS Racing', class: 'Touring', tank: 65, fuel: 2.2 },
-    { label: 'Toyota GR86', class: 'Touring', tank: 50, fuel: 1.8 },
-    { label: 'Mazda MX-5 Cup', class: 'Touring', tank: 50, fuel: 1.7 },
-    { label: 'Ferrari 296 Challenge', class: 'Cup', tank: 110, fuel: 3.0 },
-    { label: 'Porsche 911 Cup (992.2)', class: 'Cup', tank: 100, fuel: 3.0 }
-  ],
-  LMU: [
-    { label: 'Alpine A424', class: 'Hypercar', tank: 90, fuel: 4.6 },
-    { label: 'Aston Martin Valkyrie AMR-LMH', class: 'Hypercar', tank: 90, fuel: 4.6 },
-    { label: 'BMW M Hybrid V8', class: 'Hypercar', tank: 90, fuel: 4.6 },
-    { label: 'Cadillac V-Series.R', class: 'Hypercar', tank: 90, fuel: 4.7 },
-    { label: 'Ferrari 499P', class: 'Hypercar', tank: 90, fuel: 4.6 },
-    { label: 'Genesis GMR-001', class: 'Hypercar', tank: 90, fuel: 4.6 },
-    { label: 'Glickenhaus SCG 007', class: 'Hypercar', tank: 90, fuel: 4.7 },
-    { label: 'Isotta Fraschini Tipo 6', class: 'Hypercar', tank: 90, fuel: 4.6 },
-    { label: 'Lamborghini SC63', class: 'Hypercar', tank: 90, fuel: 4.6 },
-    { label: 'Peugeot 9X8', class: 'Hypercar', tank: 90, fuel: 4.7 },
-    { label: 'Peugeot 9X8 2024', class: 'Hypercar', tank: 90, fuel: 4.7 },
-    { label: 'Porsche 963', class: 'Hypercar', tank: 90, fuel: 4.6 },
-    { label: 'Toyota GR010-Hybrid', class: 'Hypercar', tank: 90, fuel: 4.6 },
-    { label: 'Vanwall Vandervell 680', class: 'Hypercar', tank: 90, fuel: 4.8 },
-    { label: 'ORECA 07 Gibson 2023', class: 'LMP2', tank: 75, fuel: 3.9 },
-    { label: 'ORECA 07 Gibson 2024', class: 'LMP2', tank: 75, fuel: 3.9 },
-    { label: 'ADESS-03', class: 'LMP3', tank: 70, fuel: 3.4 },
-    { label: 'Duqueine D09', class: 'LMP3', tank: 70, fuel: 3.4 },
-    { label: 'Ginetta G61-LT-P325-Evo', class: 'LMP3', tank: 70, fuel: 3.4 },
-    { label: 'Ligier JS P325', class: 'LMP3', tank: 70, fuel: 3.4 },
-    { label: 'Aston Martin Vantage AMR LMGT3 Evo', class: 'LMGT3', tank: 120, fuel: 3.4 },
-    { label: 'BMW M4 LMGT3', class: 'LMGT3', tank: 120, fuel: 3.4 },
-    { label: 'BMW M4 LMGT3 Evo', class: 'LMGT3', tank: 120, fuel: 3.4 },
-    { label: 'Chevrolet Corvette Z06 LMGT3.R', class: 'LMGT3', tank: 120, fuel: 3.4 },
-    { label: 'Ferrari 296 LMGT3', class: 'LMGT3', tank: 120, fuel: 3.35 },
-    { label: 'Ferrari 296 LMGT3 Evo', class: 'LMGT3', tank: 120, fuel: 3.35 },
-    { label: 'Ford Mustang LMGT3', class: 'LMGT3', tank: 120, fuel: 3.5 },
-    { label: 'Ford Mustang LMGT3 Evo', class: 'LMGT3', tank: 120, fuel: 3.5 },
-    { label: 'Lamborghini Huracan LMGT3 Evo 2', class: 'LMGT3', tank: 120, fuel: 3.45 },
-    { label: 'Lexus RC F LMGT3', class: 'LMGT3', tank: 120, fuel: 3.45 },
-    { label: 'Mercedes-AMG LMGT3', class: 'LMGT3', tank: 120, fuel: 3.45 },
-    { label: 'McLaren 720S LMGT3 Evo', class: 'LMGT3', tank: 120, fuel: 3.35 },
-    { label: 'Porsche 911 GT3 R LMGT3', class: 'LMGT3', tank: 120, fuel: 3.35 },
-    { label: 'Aston Martin Vantage AMR GTE', class: 'GTE', tank: 100, fuel: 3.6 },
-    { label: 'Chevrolet Corvette C8.R', class: 'GTE', tank: 100, fuel: 3.6 },
-    { label: 'Ferrari 488 GTE Evo', class: 'GTE', tank: 100, fuel: 3.55 },
-    { label: 'Porsche 911 RSR-19', class: 'GTE', tank: 100, fuel: 3.55 }
-  ]
-}
+const { t } = useI18n()
 
 const sim = ref('ACC')
 const car = ref('Ferrari 296 GT3 2023')
 const carSearch = ref(car.value)
-const carSearchOpen = ref(false)
 const assetFuelCars = ref({})
 const presetIndex = ref(0)
 const mode = ref('time')
@@ -210,79 +36,6 @@ const tank = ref(110)
 const reserveLaps = ref(1)
 const currentFuel = ref('')
 const formationLap = ref(false)
-
-const copy = computed(() => state.locale === 'en' ? {
-  title: 'Fuel calculator',
-  subtitle: 'Choose a simulator and car; adjust fuel per lap after a race-pace stint.',
-
-  sim: 'Simulator',
-  car: 'Car',
-  carSearch: 'Search car by name or class',
-  noCars: 'No matching cars',
-  preset: 'Class / preset',
-  unit: 'Units',
-  timeRace: 'Timed race',
-  lapRace: 'Fixed laps',
-  hours: 'Duration, hours',
-  minutes: 'Duration, minutes',
-  laps: 'Race laps',
-  lapMin: 'Average lap, minutes',
-  lapSec: 'Average lap, seconds',
-  fuelLap: 'Fuel per lap',
-  tank: 'Tank capacity',
-  reserve: 'Reserve, laps',
-  current: 'Fuel now',
-  formation: 'Add formation lap',
-  result: 'Result',
-  recommended: 'Recommended',
-  expected: 'Race laps',
-  minimum: 'Minimum',
-  stops: 'Pit stops',
-  start: 'Start fuel',
-  add: 'Add',
-  ready: 'Calculation ready. Use race pace, not your best qualifying lap.',
-  fill: 'Fill average lap and fuel per lap.',
-  stopNeeded: 'Fuel does not fit in one tank; plan a pit stop.',
-  formula: 'Formula: fuel = laps x fuel per lap + reserve.',
-  check: 'Check consumption after 3-5 race-pace laps in the selected car.',
-  fullTank: 'Full tank',
-  stint: 'Stint'
-} : {
-  title: 'Калькулятор топлива',
-  subtitle: 'Выбери симулятор и машину; расход за круг уточняй после боевого отрезка.',
-  sim: 'Симулятор',
-  car: 'Машина',
-  carSearch: 'Найди машину по названию или классу',
-  noCars: 'Машины не найдены',
-  preset: 'Класс / пресет',
-  unit: 'Единицы',
-  timeRace: 'Гонка по времени',
-  lapRace: 'Гонка по кругам',
-  hours: 'Длительность, часы',
-  minutes: 'Длительность, минуты',
-  laps: 'Кругов в гонке',
-  lapMin: 'Средний круг, минуты',
-  lapSec: 'Средний круг, секунды',
-  fuelLap: 'Расход за круг',
-  tank: 'Объем бака',
-  reserve: 'Запас, круги',
-  current: 'Топливо сейчас',
-  formation: 'Добавить прогревочный круг',
-  result: 'Результат',
-  recommended: 'Рекомендовано',
-  expected: 'Гоночные круги',
-  minimum: 'Минимум',
-  stops: 'Пит-стопы',
-  start: 'Стартовая заправка',
-  add: 'Долить',
-  ready: 'Расчет готов. Используй боевой темп, а не лучший квалификационный круг.',
-  fill: 'Заполни средний круг и расход.',
-  stopNeeded: 'На старт весь объем не помещается: нужен пит-стоп.',
-  formula: 'Формула: топливо = круги x расход за круг + запас.',
-  check: 'Проверь расход после 3-5 боевых кругов в выбранной машине.',
-  fullTank: 'Полный бак',
-  stint: 'Стинт'
-})
 
 const simPresets = computed(() => presets[sim.value] || [])
 const carOptions = computed(() => mergeCarLists(fuelCars[sim.value] || [], assetFuelCars.value[sim.value] || []))
@@ -311,16 +64,49 @@ const stintLaps = computed(() => Math.ceil((expectedLaps.value + totalReserveLap
 const startFuel = computed(() => Math.min(recommendedFuel.value, Number(tank.value) || recommendedFuel.value))
 const fuelToAdd = computed(() => currentFuel.value === '' ? null : Math.max(0, recommendedFuel.value - (Number(currentFuel.value) || 0)))
 const presetHint = computed(() => state.locale === 'en' ? selectedPreset.value?.hintEn : selectedPreset.value?.hintRu)
-const warning = computed(() => {
-  if (!lapSecondsTotal.value || !Number(fuelPerLap.value)) return copy.value.fill
-  if (Number(tank.value) > 0 && recommendedFuel.value > Number(tank.value)) return copy.value.stopNeeded
-  return copy.value.ready
+const warningKey = computed(() => {
+  if (!lapSecondsTotal.value || !Number(fuelPerLap.value)) return 'fill'
+  if (Number(tank.value) > 0 && recommendedFuel.value > Number(tank.value)) return 'stopNeeded'
+  return 'ready'
 })
 
-function formatFuel(value) {
-  if (!Number.isFinite(value)) return `0 ${unit.value}`
-  const fixed = value >= 100 ? value.toFixed(0) : value.toFixed(1)
-  return `${fixed} ${unit.value}`
+// View-only helpers for the redesigned layout.
+const simOptions = computed(() => Object.keys(presets).map((name) => ({ value: name, label: name })))
+const unitOptions = computed(() => [
+  { value: 'L', label: `L · ${t('fuelPage.units.liters')}` },
+  { value: 'gal', label: `gal · ${t('fuelPage.units.gallons')}` }
+])
+const modeOptions = computed(() => [
+  { value: 'time', label: t('fuelPage.timeRace'), icon: Timer },
+  { value: 'laps', label: t('fuelPage.lapRace'), icon: Flag }
+])
+const lapPreview = computed(() => {
+  const total = lapSecondsTotal.value
+  if (!total) return '—'
+  const minutes = Math.floor(total / 60)
+  return `${minutes}:${(total - minutes * 60).toFixed(3).padStart(6, '0')}`
+})
+
+// On one-column layouts the result sits below the form: a small dock keeps
+// the main number in sight until the result panel scrolls into view.
+const results = ref(null)
+const resultsAhead = ref(false)
+const isSingleColumn = useMediaQuery('(max-width: 1180px)')
+const showDock = computed(() => isSingleColumn.value && resultsAhead.value)
+
+useIntersectionObserver(results, ([entry]) => {
+  if (!entry) return
+  resultsAhead.value = !entry.isIntersecting && entry.boundingClientRect.top > 0
+}, { threshold: 0.08 })
+
+function scrollToResults() {
+  results.value?.$el?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' })
+}
+
+function selectSim(value) {
+  if (value === sim.value) return
+  sim.value = value
+  handleSimChange()
 }
 
 function handleSimChange() {
@@ -330,21 +116,9 @@ function handleSimChange() {
   if (!applyCarPreset()) applyPreset()
 }
 
-function openCarSearch(event) {
-  carSearchOpen.value = true
-  event?.target?.select?.()
-}
-
-function closeCarSearch() {
-  window.setTimeout(() => {
-    carSearchOpen.value = false
-  }, 120)
-}
-
 function selectCar(item) {
   car.value = item.label
   carSearch.value = item.label
-  carSearchOpen.value = false
 }
 
 function mergeCarLists(...lists) {
@@ -417,149 +191,453 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="section fuel-page">
-    <div class="section-header">
-      <div>
-        <h1>{{ copy.title }}</h1>
-        <p class="muted">{{ copy.subtitle }}</p>
-      </div>
-    </div>
+  <div class="ui-page ui-shell ui-shell--wide fuel">
+    <PageHeader :eyebrow="t('fuelPage.eyebrow')" :title="t('fuelPage.title')" :lead="t('fuelPage.subtitle')" />
 
-    <div class="fuel-layout">
-      <form class="card form fuel-form" @submit.prevent>
-        <div class="form-row">
-          <label class="field">
-            <span>{{ copy.sim }}</span>
-            <select v-model="sim" @change="handleSimChange">
-              <option v-for="name in Object.keys(presets)" :key="name" :value="name">{{ name }}</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>{{ copy.car }}</span>
-            <div class="fuel-car-search">
-              <div class="input-with-icon">
-                <Search :size="16" aria-hidden="true" />
-                <input
-                  v-model="carSearch"
-                  type="search"
-                  maxlength="120"
-                  autocomplete="off"
-                  :placeholder="copy.carSearch"
-                  @focus="openCarSearch"
-                  @blur="closeCarSearch"
-                  @keydown.esc="carSearchOpen = false"
-                />
-              </div>
-              <div v-if="carSearchOpen" class="fuel-car-results" role="listbox">
-                <button
-                  v-for="item in filteredCarOptions"
-                  :key="item.label"
-                  class="fuel-car-option"
-                  type="button"
-                  role="option"
-                  :aria-selected="item.label === car"
-                  @mousedown.prevent="selectCar(item)"
-                >
-                  <span>{{ item.label }}</span>
-                  <small>{{ item.class }}</small>
-                </button>
-                <span v-if="!filteredCarOptions.length" class="fuel-car-empty">{{ copy.noCars }}</span>
-              </div>
+    <div class="fuel__layout">
+      <form class="fuel__form" novalidate @submit.prevent>
+        <!-- 01 · Car -->
+        <section v-reveal="{ y: 24 }" class="fuel__card fuel__card--car ui-card" aria-labelledby="fuel-car-title">
+          <header class="fuel__card-head">
+            <span class="fuel__step ui-num" aria-hidden="true">01</span>
+            <div class="fuel__card-title">
+              <h2 id="fuel-car-title">{{ t('fuelPage.sections.car') }}</h2>
+              <p>{{ t('fuelPage.sections.carText') }}</p>
             </div>
-          </label>
-        </div>
+            <CarFront class="fuel__card-icon" :size="20" aria-hidden="true" />
+          </header>
 
-        <div class="form-row">
-          <label class="field">
-            <span>{{ copy.preset }}</span>
-            <select v-model="presetIndex" @change="applyPreset">
-              <option v-for="(item, index) in simPresets" :key="item.label" :value="index">{{ item.label }}</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>{{ copy.unit }}</span>
-            <select v-model="unit">
-              <option value="L">L</option>
-              <option value="gal">gal</option>
-            </select>
-          </label>
-        </div>
+          <div class="fuel__group" role="group" :aria-label="t('fuelPage.sim')">
+            <span class="fuel__label">{{ t('fuelPage.sim') }}</span>
+            <SegmentedControl block :model-value="sim" :options="simOptions" :aria-label="t('fuelPage.sim')" @update:model-value="selectSim" />
+          </div>
 
-        <div class="fuel-mode-switch">
-          <label class="toggle-field"><input v-model="mode" type="radio" value="time" />{{ copy.timeRace }}</label>
-          <label class="toggle-field"><input v-model="mode" type="radio" value="laps" />{{ copy.lapRace }}</label>
-        </div>
+          <FormField v-slot="{ id, describedBy }" :label="t('fuelPage.car')" :hint="t('fuelPage.hints.car')">
+            <CarPicker
+              v-model="carSearch"
+              :input-id="id"
+              :described-by="describedBy"
+              :options="filteredCarOptions"
+              :selected="car"
+              :placeholder="t('fuelPage.carSearch')"
+              :empty-text="t('fuelPage.noCars')"
+              @select="selectCar"
+            />
+          </FormField>
 
-        <div v-if="mode === 'time'" class="form-row">
-          <label class="field"><span>{{ copy.hours }}</span><input v-model.number="raceHours" type="number" min="0" step="1" /></label>
-          <label class="field"><span>{{ copy.minutes }}</span><input v-model.number="raceMinutes" type="number" min="0" step="1" /></label>
-        </div>
-        <div v-else class="form-row">
-          <label class="field"><span>{{ copy.laps }}</span><input v-model.number="raceLaps" type="number" min="1" step="1" /></label>
-        </div>
+          <div class="fuel__row">
+            <FormField v-slot="{ id, describedBy }" :label="t('fuelPage.preset')" :hint="t('fuelPage.hints.preset')">
+              <select :id="id" v-model="presetIndex" class="ui-select" :aria-describedby="describedBy" @change="applyPreset">
+                <option v-for="(item, index) in simPresets" :key="item.label" :value="index">{{ item.label }}</option>
+              </select>
+            </FormField>
+            <div class="fuel__group" role="group" :aria-label="t('fuelPage.unit')">
+              <span class="fuel__label">{{ t('fuelPage.unit') }}</span>
+              <SegmentedControl v-model="unit" block :options="unitOptions" :aria-label="t('fuelPage.unit')" />
+              <p class="fuel__hint">{{ t('fuelPage.hints.unit') }}</p>
+            </div>
+          </div>
+        </section>
 
-        <div class="form-row">
-          <label class="field"><span>{{ copy.lapMin }}</span><input v-model.number="lapMinutes" type="number" min="0" step="1" /></label>
-          <label class="field"><span>{{ copy.lapSec }}</span><input v-model.number="lapSeconds" type="number" min="0" max="59.999" step="0.001" /></label>
-        </div>
+        <!-- 02 · Race -->
+        <section v-reveal="{ delay: 90, y: 24 }" class="fuel__card ui-card" aria-labelledby="fuel-race-title">
+          <header class="fuel__card-head">
+            <span class="fuel__step ui-num" aria-hidden="true">02</span>
+            <div class="fuel__card-title">
+              <h2 id="fuel-race-title">{{ t('fuelPage.sections.race') }}</h2>
+              <p>{{ t('fuelPage.sections.raceText') }}</p>
+            </div>
+            <Flag class="fuel__card-icon" :size="20" aria-hidden="true" />
+          </header>
 
-        <div class="form-row">
-          <label class="field"><span>{{ copy.fuelLap }}</span><input v-model.number="fuelPerLap" type="number" min="0" step="0.01" /></label>
-          <label class="field"><span>{{ copy.tank }}</span><input v-model.number="tank" type="number" min="0" step="0.1" /></label>
-        </div>
+          <SegmentedControl v-model="mode" block :options="modeOptions" :aria-label="t('fuelPage.sections.race')" />
 
-        <div class="form-row">
-          <label class="field"><span>{{ copy.reserve }}</span><input v-model.number="reserveLaps" type="number" min="0" step="0.25" /></label>
-          <label class="field"><span>{{ copy.current }}</span><input v-model="currentFuel" type="number" min="0" step="0.1" /></label>
-        </div>
+          <Transition name="fuel-swap" mode="out-in">
+            <div v-if="mode === 'time'" key="time" class="fuel__row">
+              <NumberField v-model="raceHours" :label="t('fuelPage.hours')" :unit="t('fuelPage.units.hours')" min="0" step="1" inputmode="numeric" />
+              <NumberField v-model="raceMinutes" :label="t('fuelPage.minutes')" :unit="t('fuelPage.units.minutes')" min="0" step="1" :nudge="5" inputmode="numeric" />
+            </div>
+            <div v-else key="laps" class="fuel__row">
+              <NumberField v-model="raceLaps" :label="t('fuelPage.laps')" :unit="t('fuelPage.units.laps')" min="1" step="1" inputmode="numeric" />
+            </div>
+          </Transition>
 
-        <label class="toggle-field fuel-wide-toggle"><input v-model="formationLap" type="checkbox" />{{ copy.formation }}</label>
-        <p class="fuel-note">{{ presetHint }}</p>
+          <div class="fuel__row">
+            <NumberField v-model="lapMinutes" :label="t('fuelPage.lapMin')" :unit="t('fuelPage.units.minutes')" min="0" step="1" inputmode="numeric" />
+            <NumberField v-model="lapSeconds" :label="t('fuelPage.lapSec')" :unit="t('fuelPage.units.seconds')" min="0" max="59.999" step="0.001" :nudge="0.1" />
+          </div>
+          <p class="fuel__lap">
+            <span class="fuel__lap-label">{{ t('fuelPage.lap') }}</span>
+            <strong class="ui-num">{{ lapPreview }}</strong>
+            <span class="fuel__lap-hint">{{ t('fuelPage.hints.lapTime') }}</span>
+          </p>
+
+          <SwitchToggle v-model="formationLap" :label="t('fuelPage.formation')" :hint="t('fuelPage.hints.formation')" />
+        </section>
+
+        <!-- 03 · Fuel -->
+        <section v-reveal="{ delay: 180, y: 24 }" class="fuel__card ui-card" aria-labelledby="fuel-burn-title">
+          <header class="fuel__card-head">
+            <span class="fuel__step ui-num" aria-hidden="true">03</span>
+            <div class="fuel__card-title">
+              <h2 id="fuel-burn-title">{{ t('fuelPage.sections.fuel') }}</h2>
+              <p>{{ t('fuelPage.sections.fuelText') }}</p>
+            </div>
+            <Droplets class="fuel__card-icon" :size="20" aria-hidden="true" />
+          </header>
+
+          <div class="fuel__row">
+            <NumberField v-model="fuelPerLap" :label="t('fuelPage.fuelLap')" :hint="t('fuelPage.hints.fuelLap')" :unit="unit" min="0" step="0.01" :nudge="0.05" />
+            <NumberField v-model="tank" :label="t('fuelPage.tank')" :hint="t('fuelPage.hints.tank')" :unit="unit" min="0" step="0.1" />
+          </div>
+          <div class="fuel__row">
+            <NumberField v-model="reserveLaps" :label="t('fuelPage.reserve')" :hint="t('fuelPage.hints.reserve')" :unit="t('fuelPage.units.laps')" min="0" step="0.25" :nudge="0.25" />
+            <NumberField v-model="currentFuel" :label="t('fuelPage.current')" :hint="t('fuelPage.hints.current')" :unit="unit" min="0" step="0.1" placeholder="—" />
+          </div>
+
+          <Transition name="ui-fade" mode="out-in">
+            <p v-if="presetHint" :key="presetHint" class="fuel__tip"><Lightbulb :size="17" aria-hidden="true" /><span>{{ presetHint }}</span></p>
+          </Transition>
+        </section>
       </form>
 
-      <aside class="card fuel-results">
-        <div class="fuel-results-head">
-          <h2>{{ copy.result }}</h2>
-          <span>{{ sim }}<template v-if="car"> / {{ car }}</template></span>
-        </div>
-
-        <div class="fuel-metric is-primary">
-          <Fuel :size="22" />
-          <span>{{ copy.recommended }}</span>
-          <strong>{{ formatFuel(recommendedFuel) }}</strong>
-        </div>
-
-        <div class="fuel-metrics-grid">
-          <div class="fuel-metric">
-            <TimerReset :size="20" />
-            <span>{{ copy.expected }}</span>
-            <strong>{{ expectedLaps }}</strong>
-          </div>
-          <div class="fuel-metric">
-            <Calculator :size="20" />
-            <span>{{ copy.minimum }}</span>
-            <strong>{{ formatFuel(minimumFuel) }}</strong>
-          </div>
-          <div class="fuel-metric">
-            <Gauge :size="20" />
-            <span>{{ copy.stops }}</span>
-            <strong>{{ pitStops }}</strong>
-          </div>
-          <div class="fuel-metric">
-            <Fuel :size="20" />
-            <span>{{ copy.start }}</span>
-            <strong>{{ formatFuel(startFuel) }}</strong>
-          </div>
-        </div>
-
-        <div class="fuel-summary">
-          <p>{{ warning }}</p>
-          <p>{{ copy.formula }}</p>
-          <p>{{ copy.check }}</p>
-          <p>{{ copy.add }}: <strong>{{ fuelToAdd === null ? '-' : formatFuel(fuelToAdd) }}</strong></p>
-          <p>{{ copy.fullTank }}: <strong>{{ fullTankLaps }}</strong>. {{ copy.stint }}: <strong>{{ stintLaps }}</strong>.</p>
-        </div>
-      </aside>
+      <FuelResults
+        ref="results"
+        v-reveal="{ delay: 140, y: 28 }"
+        class="fuel__results"
+        :sim="sim"
+        :car="car"
+        :unit="unit"
+        :recommended="recommendedFuel"
+        :minimum="minimumFuel"
+        :expected="expectedLaps"
+        :stops="pitStops"
+        :start="startFuel"
+        :add="fuelToAdd"
+        :full-tank="fullTankLaps"
+        :stint="stintLaps"
+        :tank="Number(tank) || 0"
+        :warning-key="warningKey"
+      />
     </div>
-  </section>
+
+    <Transition name="fuel-dock">
+      <div v-if="showDock" class="fuel__dock ui-glass ui-glass--strong">
+        <span class="fuel__dock-text">
+          <span class="fuel__dock-label">{{ t('fuelPage.recommended') }}</span>
+          <strong class="fuel__dock-value"><RollingNumber :value="fuelFixed(recommendedFuel)" /> <small>{{ unit }}</small></strong>
+        </span>
+        <span class="fuel__dock-stops ui-num">{{ t('fuelPage.stops') }}: {{ pitStops }}</span>
+        <button class="ui-btn ui-btn--primary ui-btn--sm" type="button" @click="scrollToResults"><ArrowDown :size="15" aria-hidden="true" />{{ t('fuelPage.dock') }}</button>
+      </div>
+    </Transition>
+  </div>
 </template>
+
+<style scoped>
+.fuel__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(400px, 0.95fr);
+  align-items: start;
+  gap: clamp(16px, 2vw, 24px);
+}
+
+.fuel__form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(14px, 1.6vw, 20px);
+}
+
+/* ---------- Input cards ---------- */
+.fuel__card {
+  gap: 18px;
+}
+
+/* The car list opens over the cards below it. */
+.fuel__card--car {
+  z-index: 3;
+}
+
+.fuel__card-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px;
+}
+
+.fuel__step {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--c-blue-line);
+  border-radius: var(--r-sm);
+  background: var(--c-blue-soft);
+  color: var(--c-accent-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.fuel__card-title {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fuel__card-title h2 {
+  margin: 0;
+  color: var(--c-text);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.fuel__card-title p {
+  margin: 0;
+  color: var(--c-text-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.fuel__card-icon {
+  margin-top: 2px;
+  color: var(--c-text-3);
+}
+
+.fuel__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.fuel__group {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fuel__label {
+  color: var(--c-text);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.fuel__hint {
+  margin: 0;
+  color: var(--c-text-3);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.fuel__group :deep(.segmented) {
+  min-height: 48px;
+}
+
+.fuel__group :deep(.segmented__option) {
+  min-height: 38px;
+}
+
+.fuel__lap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: -4px 0 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--c-line-strong);
+  border-radius: var(--r-md);
+}
+
+.fuel__lap-label {
+  color: var(--c-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.fuel__lap strong {
+  color: var(--bm-cyan);
+  font-size: 18px;
+  font-weight: 700;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--bm-cyan) 40%, transparent);
+}
+
+:root[data-theme='light'] .fuel__lap strong {
+  color: var(--bm-blue);
+  text-shadow: none;
+}
+
+.fuel__lap-hint {
+  flex: 1 1 220px;
+  color: var(--c-text-3);
+  font-size: 12.5px;
+}
+
+.fuel__tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--bm-amber) 30%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--bm-amber) 8%, transparent);
+  color: var(--c-text-2);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.fuel__tip svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--bm-amber);
+}
+
+/* Field swap between timed and fixed-lap races. */
+.fuel-swap-enter-active,
+.fuel-swap-leave-active {
+  transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-3) var(--ease-ios), filter var(--dur-2);
+}
+
+.fuel-swap-enter-from {
+  opacity: 0;
+  filter: blur(4px);
+  transform: translateY(8px);
+}
+
+.fuel-swap-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* ---------- Mobile dock with the main number ---------- */
+.fuel__dock {
+  position: fixed;
+  right: max(12px, var(--gutter));
+  bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom, 0px));
+  left: max(12px, var(--gutter));
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 10px 10px 10px 18px;
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-2);
+}
+
+.fuel__dock-text {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fuel__dock-label {
+  color: var(--c-text-3);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.fuel__dock-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--c-text);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.fuel__dock-value small {
+  color: var(--c-accent-text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.fuel__dock-stops {
+  color: var(--c-text-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.fuel-dock-enter-active,
+.fuel-dock-leave-active {
+  transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-3) var(--ease-ios);
+}
+
+.fuel-dock-enter-from,
+.fuel-dock-leave-to {
+  opacity: 0;
+  transform: translateY(24px) scale(0.96);
+}
+
+/* ---------- Responsive ---------- */
+@media (min-width: 1500px) {
+  .fuel__form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fuel__card--car {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1181px) and (min-height: 980px) {
+  .fuel__results {
+    position: sticky;
+    top: calc(var(--header-h) + 16px);
+  }
+}
+
+@media (max-width: 1180px) {
+  .fuel__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fuel {
+    padding-bottom: calc(96px + var(--tabbar-h));
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  .fuel__form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fuel__card--car {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .fuel__dock-stops {
+    display: none;
+  }
+
+  .fuel__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fuel-swap-enter-active,
+  .fuel-swap-leave-active,
+  .fuel-dock-enter-active,
+  .fuel-dock-leave-active {
+    transition: none;
+  }
+}
+</style>
