@@ -117,6 +117,7 @@ const teamLiveryArchivesDownloaded = ref(false)
 const collapsedAdminZones = ref({})
 const dangerDialog = ref(null)
 const dangerForm = ref({ confirmation: '', confirmation_repeat: '', password: '' })
+const databaseDumpFile = ref(null)
 const dangerSaving = ref(false)
 const dangerResult = ref('')
 const auditLogPanel = ref(null)
@@ -195,6 +196,14 @@ const dangerActions = {
     descriptionKey: 'adminUsers.downloadDatabaseBackupHint',
     kind: 'download'
   },
+  restore: {
+    endpoint: '/users/admin/restore-database',
+    code: 'RESTORE DATABASE',
+    titleKey: 'adminUsers.restoreDatabase',
+    descriptionKey: 'adminUsers.restoreDatabaseHint',
+    kind: 'restore',
+    submitKey: 'adminUsers.restoreDatabase'
+  },
   audit: {
     endpoint: '/audit/clear',
     code: 'CLEAR AUDIT LOGS',
@@ -212,7 +221,8 @@ const dangerFormValid = computed(() => {
   return (
     dangerForm.value.confirmation.trim() === action.code &&
     dangerForm.value.confirmation_repeat.trim() === action.code &&
-    dangerForm.value.password.length > 0
+    dangerForm.value.password.length > 0 &&
+    (action.kind !== 'restore' || Boolean(databaseDumpFile.value))
   )
 })
 
@@ -772,6 +782,7 @@ function closeDefaultAvatarCropper() {
 function openDangerDialog(type) {
   dangerDialog.value = type
   dangerForm.value = { confirmation: '', confirmation_repeat: '', password: '' }
+  databaseDumpFile.value = null
   dangerResult.value = ''
 }
 
@@ -779,6 +790,11 @@ function closeDangerDialog() {
   if (dangerSaving.value) return
   dangerDialog.value = null
   dangerForm.value = { confirmation: '', confirmation_repeat: '', password: '' }
+  databaseDumpFile.value = null
+}
+
+function setDatabaseDumpFile(event) {
+  databaseDumpFile.value = event.target.files?.[0] || null
 }
 
 async function runDangerAction() {
@@ -788,16 +804,13 @@ async function runDangerAction() {
   error.value = ''
   dangerResult.value = ''
   try {
-    const requestOptions = {
-      method: 'POST',
-      body: {
-        confirmation: dangerForm.value.confirmation,
-        confirmation_repeat: dangerForm.value.confirmation_repeat,
-        password: dangerForm.value.password
-      }
+    const confirmation = {
+      confirmation: dangerForm.value.confirmation,
+      confirmation_repeat: dangerForm.value.confirmation_repeat,
+      password: dangerForm.value.password
     }
     if (action.kind === 'download') {
-      const blob = await apiDownload(action.endpoint, requestOptions)
+      const blob = await apiDownload(action.endpoint, { method: 'POST', body: confirmation })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
@@ -807,16 +820,27 @@ async function runDangerAction() {
       link.remove()
       URL.revokeObjectURL(url)
       dangerResult.value = t('adminUsers.backupDownloaded')
+    } else if (action.kind === 'restore') {
+      const body = new FormData()
+      body.append('confirmation', confirmation.confirmation)
+      body.append('confirmation_repeat', confirmation.confirmation_repeat)
+      body.append('password', confirmation.password)
+      body.append('file', databaseDumpFile.value)
+      await api(action.endpoint, { method: 'POST', body })
+      dangerResult.value = t('adminUsers.restoreDatabaseSuccess')
     } else {
-      const result = await api(action.endpoint, requestOptions)
+      const result = await api(action.endpoint, { method: 'POST', body: confirmation })
       dangerResult.value = action.resultKey
         ? t(action.resultKey, { count: result?.deleted ?? 0 })
         : t('adminUsers.deletedCount', { count: result?.deleted ?? 0 })
     }
     dangerDialog.value = null
     dangerForm.value = { confirmation: '', confirmation_repeat: '', password: '' }
+    databaseDumpFile.value = null
     if (action.kind === 'audit') {
       await auditLogPanel.value?.load()
+    } else if (action.kind === 'restore') {
+      window.setTimeout(() => window.location.reload(), 1200)
     } else if (action.kind !== 'download') {
       await load()
     }
@@ -2061,6 +2085,10 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
           <Download :size="16" />
           {{ t('adminUsers.downloadDatabaseBackup') }}
         </button>
+        <button class="button danger" type="button" @click="openDangerDialog('restore')">
+          <Upload :size="16" />
+          {{ t('adminUsers.restoreDatabase') }}
+        </button>
       </div>
     </section>
 
@@ -2444,6 +2472,12 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
           </button>
         </div>
         <p class="admin-danger-warning">{{ t('adminUsers.dangerModalHint', { phrase: activeDangerAction.code }) }}</p>
+        <label v-if="activeDangerAction.kind === 'restore'" class="field">
+          <span>{{ t('adminUsers.databaseDumpFile') }}</span>
+          <input type="file" accept=".dump,.backup,application/octet-stream" required @change="setDatabaseDumpFile" />
+          <small class="muted">{{ t('adminUsers.databaseDumpLimit') }}</small>
+          <small v-if="databaseDumpFile" class="muted">{{ databaseDumpFile.name }} · {{ (databaseDumpFile.size / 1048576).toFixed(1) }} MB</small>
+        </label>
         <label class="field">
           <span>{{ t('adminUsers.confirmationOne') }}</span>
           <input v-model="dangerForm.confirmation" autocomplete="off" :placeholder="activeDangerAction.code" required />
@@ -2462,8 +2496,9 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
             {{ t('common.close') }}
           </button>
           <button class="button danger" type="submit" :disabled="dangerSaving || !dangerFormValid">
-            <Trash2 :size="16" />
-            {{ t(activeDangerAction.submitKey || 'common.delete') }}
+            <Upload v-if="activeDangerAction.kind === 'restore'" :size="16" />
+            <Trash2 v-else :size="16" />
+            {{ dangerSaving && activeDangerAction.kind === 'restore' ? t('adminUsers.databaseRestoring') : t(activeDangerAction.submitKey || 'common.delete') }}
           </button>
         </div>
       </form>

@@ -19,13 +19,15 @@ from sqlalchemy.orm import selectinload
 
 from app.avatar_uploads import ensure_avatar_upload_allowed, mark_avatar_uploaded, remove_avatar_file, save_avatar_file
 from app.config import get_settings
-from app.database_backup import create_database_backup
-from app.db import get_session
+from app.database_backup import create_database_backup, restore_database_backup
+from app.db import SessionLocal, db_initialization_lock, engine, get_session, init_db
 from app.deps import as_utc, clear_expired_timeout, ensure_not_system_admin, ensure_user_role_change_allowed, get_current_user, is_system_admin, require_admin, require_moder_plus, require_pilot_plus, require_system_admin
 from app.models import RACE_GAMES, Appeal, Banner, Championship, ModerationHistory, Penalty, PilotRoleBadge, Race, RaceFanVote, RaceRegistration, RaceStatus, Role, Setup, SteamBlacklistEntry, Team, TeamApplication, TeamCreationRequest, TeamLiveryArchive, TeamLiveryImage, TeamRaceRegistration, User, UserConsent, UserLivery, UserLiveryImage, UserStatus, default_game_ratings, utc_now
 from app.privacy import record_consent
+from app.routers.app_settings import load_runtime_settings
 from app.race_videos import remove_race_video_file
 from app.rate_limit import limiter
+from app.seed import seed_defaults
 from app.schemas import AdminDangerDeleteRequest, ModerationHistoryRead, ModerationRejectRequest, PilotRoleAssignmentUpdate, PilotRoleCreate, PilotRoleRead, PilotRoleUpdate, ProfileAnalyticsRead, RoleUpdate, SteamBlacklistEntryCreate, SteamBlacklistEntryRead, SteamBlacklistEntryUpdate, TimeoutRequest, UserAdminRead, UserAdminUpdate, UserLiveryCatalogRead, UserLiveryRead, UserModerationRead, UserPrivate, UserPublic, UserUpdate
 from app.security import hash_password, verify_password
 from app.services import record_rating_adjustments, recalculate_all_ratings, result_rows, user_game_rating_state
@@ -880,6 +882,39 @@ async def download_database_backup(
 ):
     ensure_danger_request(payload, admin, "DOWNLOAD DATABASE BACKUP")
     return await create_database_backup()
+
+
+@router.post("/admin/restore-database")
+@limiter.limit("1/minute")
+async def restore_database(
+    request: Request,
+    confirmation: str = Form(...),
+    confirmation_repeat: str = Form(...),
+    password: str = Form(...),
+    file: UploadFile = File(...),
+    admin: User = Depends(require_system_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    ensure_danger_request(
+        AdminDangerDeleteRequest(
+            confirmation=confirmation,
+            confirmation_repeat=confirmation_repeat,
+            password=password,
+        ),
+        admin,
+        "RESTORE DATABASE",
+    )
+    await session.commit()
+    await session.close()
+    async with db_initialization_lock():
+        await restore_database_backup(file)
+        await engine.dispose()
+        if settings.auto_create_tables:
+            await init_db()
+            async with SessionLocal() as setup_session:
+                await seed_defaults(setup_session)
+                await load_runtime_settings(setup_session)
+    return {"restored": True}
 
 
 @router.get("/admin/team-livery-archives")
