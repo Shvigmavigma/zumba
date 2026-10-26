@@ -68,8 +68,8 @@ services:
       - backend
     volumes:
       - backend_uploads:/app/uploads:ro
-    ports:
-      - "${WEB_PORT:-8080}:8080"
+    expose:
+      - "8080"
 
 volumes:
   postgres_data:
