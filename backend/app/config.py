@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -30,6 +31,7 @@ class Settings(BaseSettings):
     rate_limit_storage_uri: str | None = None
     steam_openid_url: str = "https://steamcommunity.com/openid/login"
     upload_dir: str = "/app/uploads"
+    branding_dir: str = str(Path(__file__).resolve().parents[2] / "branding")
     max_banner_upload_mb: int = 20
     max_logo_upload_mb: int = 5
     max_user_avatar_upload_mb: int = 5

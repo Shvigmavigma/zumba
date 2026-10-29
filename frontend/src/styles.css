@@ -4055,6 +4055,11 @@ textarea {
   min-width: 0;
 }
 
+.admin-browser-description-field {
+  grid-column: 2 / -1;
+  min-width: 0;
+}
+
 .admin-browser-icon-preview {
   display: grid;
   width: 76px;
@@ -14260,6 +14265,10 @@ body,
 
   .admin-license-row {
     grid-template-columns: 1fr;
+  }
+
+  .admin-browser-description-field {
+    grid-column: 1 / -1;
   }
 
   .admin-logo-config-card,

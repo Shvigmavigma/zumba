@@ -1,8 +1,13 @@
+import json
+import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 from uuid import uuid4
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -24,14 +29,18 @@ SYSTEM_SETTINGS_KEY = "system_settings"
 NEWS_SETTINGS_KEY = "news_settings"
 WEATHER_SETTINGS_KEY = "weather_settings"
 LOGO_UPLOAD_DIR = Path(settings.upload_dir) / "logos"
+BRANDING_DIR = Path(settings.branding_dir)
+BRANDING_METADATA_FILE = BRANDING_DIR / "site.env"
+BROWSER_LOGO_UPLOAD_DIR = BRANDING_DIR / "browser-logos"
 WEATHER_UPLOAD_DIR = Path(settings.upload_dir) / "weather"
 DEFAULT_LOGOS = {
     "light_logo_url": "/assets/bmrl-logo-light-cutout.png",
     "dark_logo_url": "/assets/bmrl-logo-dark-cutout.png",
 }
 DEFAULT_AVATAR_URL = "/assets/avatar-template.jpg"
-DEFAULT_BROWSER_TITLE = "BMRL Race Control"
-DEFAULT_BROWSER_ICON_URL = DEFAULT_LOGOS["light_logo_url"]
+DEFAULT_BROWSER_TITLE = "BMRL - BeamMP Racing League"
+DEFAULT_BROWSER_DESCRIPTION = "BMRL is a BeamMP racing league featuring championships, race results, drivers and teams."
+DEFAULT_BROWSER_ICON_URL = "/api/app-settings/branding/browser-icon"
 DEFAULT_REQUESTS_PER_USER_PER_MINUTE = 1200
 DEFAULT_REQUESTS_PER_IP_PER_MINUTE = 1200
 DEFAULT_SR_PER_RACE = 0.3
@@ -45,6 +54,81 @@ ALLOWED_LOGO_MEDIA_TYPES = {
     "image/png": ".png",
     "image/webp": ".webp",
 }
+
+
+def site_metadata_from_file() -> dict[str, str]:
+    metadata = {
+        "browser_title": DEFAULT_BROWSER_TITLE,
+        "browser_description": DEFAULT_BROWSER_DESCRIPTION,
+    }
+    try:
+        lines = BRANDING_METADATA_FILE.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return metadata
+
+    for line in lines:
+        key, separator, raw_value = line.partition("=")
+        if not separator or key.strip() not in {"SITE_TITLE", "SITE_DESCRIPTION"}:
+            continue
+        raw_value = raw_value.strip()
+        if raw_value.startswith('"'):
+            try:
+                parsed = json.loads(raw_value)
+                if isinstance(parsed, str):
+                    raw_value = parsed
+            except json.JSONDecodeError:
+                pass
+        elif len(raw_value) >= 2 and raw_value[0] == raw_value[-1] == "'":
+            raw_value = raw_value[1:-1]
+        field = "browser_title" if key.strip() == "SITE_TITLE" else "browser_description"
+        limit = 120 if field == "browser_title" else 320
+        metadata[field] = raw_value.strip()[:limit]
+
+    metadata["browser_title"] = metadata["browser_title"] or DEFAULT_BROWSER_TITLE
+    return metadata
+
+
+def write_site_metadata(browser_title: str, browser_description: str) -> None:
+    BRANDING_DIR.mkdir(parents=True, exist_ok=True)
+    temporary = BRANDING_METADATA_FILE.with_name(f".site-{uuid4().hex}.tmp")
+    temporary.write_text(
+        f"SITE_TITLE={json.dumps(browser_title, ensure_ascii=False)}\n"
+        f"SITE_DESCRIPTION={json.dumps(browser_description, ensure_ascii=False)}\n",
+        encoding="utf-8",
+    )
+    temporary.replace(BRANDING_METADATA_FILE)
+
+
+def browser_icon_file_url(path: Path) -> str:
+    return f"{DEFAULT_BROWSER_ICON_URL}?v={path.name}"
+
+
+def latest_browser_icon_path() -> Path | None:
+    candidates = (
+        path for path in BROWSER_LOGO_UPLOAD_DIR.glob("browser-icon-*")
+        if path.is_file() and path.suffix.lower() in ALLOWED_LOGO_MEDIA_TYPES.values()
+    )
+    return max(candidates, key=lambda path: path.name, default=None)
+
+
+def migrate_legacy_browser_icon(value: dict) -> None:
+    legacy_url = str(value.get("browser_icon_url") or "")
+    legacy_path = urlsplit(legacy_url).path
+    prefix = "/api/uploads/logos/"
+    if not legacy_path.startswith(prefix):
+        return
+    filename = Path(legacy_path).name
+    if not filename.startswith("browser-icon-") or Path(filename).suffix.lower() not in ALLOWED_LOGO_MEDIA_TYPES.values():
+        return
+    source = LOGO_UPLOAD_DIR / filename
+    if not source.is_file():
+        return
+    BROWSER_LOGO_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    destination = BROWSER_LOGO_UPLOAD_DIR / f"browser-icon-00000000000000000001-legacy-{filename}"
+    if not destination.exists():
+        shutil.copy2(source, destination)
+
+
 WEATHER_CONDITIONS = ("clear", "partly_cloudy", "overcast", "light_rain", "heavy_rain", "storm")
 DEFAULT_LICENSE_TIERS = [
     {"min_rating": 0, "max_rating": 1499, "name": "Rookie", "color": "#64748b"},
@@ -107,18 +191,27 @@ async def get_donation_settings_value(session: AsyncSession) -> DonationSettings
 
 def branding_settings_from_value(value: dict | None) -> BrandingSettingsRead:
     value = value if isinstance(value, dict) else {}
+    metadata = site_metadata_from_file()
     return BrandingSettingsRead(
         light_logo_url=str(value.get("light_logo_url") or DEFAULT_LOGOS["light_logo_url"]),
         dark_logo_url=str(value.get("dark_logo_url") or DEFAULT_LOGOS["dark_logo_url"]),
         default_avatar_url=str(value.get("default_avatar_url") or DEFAULT_AVATAR_URL),
-        browser_title=str(value.get("browser_title") or DEFAULT_BROWSER_TITLE).strip()[:120],
-        browser_icon_url=str(value.get("browser_icon_url") or DEFAULT_BROWSER_ICON_URL),
+        browser_title=metadata["browser_title"],
+        browser_description=metadata["browser_description"],
+        browser_icon_url=DEFAULT_BROWSER_ICON_URL,
     )
 
 
 async def get_branding_settings_value(session: AsyncSession) -> BrandingSettingsRead:
     setting = await session.get(AppSetting, BRANDING_SETTINGS_KEY)
-    return branding_settings_from_value(setting.value if setting is not None else None)
+    value = setting.value if setting is not None and isinstance(setting.value, dict) else {}
+    migrate_legacy_browser_icon(value)
+    branding = branding_settings_from_value(value)
+    icon_path = latest_browser_icon_path()
+    if icon_path is not None:
+        return branding.model_copy(update={"browser_icon_url": browser_icon_file_url(icon_path)})
+    legacy_url = str(value.get("browser_icon_url") or DEFAULT_BROWSER_ICON_URL)
+    return branding.model_copy(update={"browser_icon_url": legacy_url})
 
 
 def system_settings_from_value(value: dict | None) -> SystemSettingsRead:
@@ -268,16 +361,28 @@ async def update_branding_settings(
     _: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
-    current = await get_branding_settings_value(session)
-    value = current.model_dump()
-    value["browser_title"] = payload.browser_title.strip()[:120] or DEFAULT_BROWSER_TITLE
-    setting = await session.get(AppSetting, BRANDING_SETTINGS_KEY)
-    if setting is None:
-        session.add(AppSetting(key=BRANDING_SETTINGS_KEY, value=value))
-    else:
-        setting.value = value
-    await session.commit()
-    return branding_settings_from_value(value)
+    current = site_metadata_from_file()
+    browser_title = payload.browser_title.strip()[:120] or current["browser_title"]
+    browser_description = (
+        current["browser_description"]
+        if payload.browser_description is None
+        else payload.browser_description.strip()[:320]
+    )
+    write_site_metadata(browser_title, browser_description)
+    return await get_branding_settings_value(session)
+
+
+@router.get("/branding/browser-icon")
+@limiter.limit("600/minute")
+async def get_browser_icon(request: Request, session: AsyncSession = Depends(get_session)):
+    await get_branding_settings_value(session)
+    icon_path = latest_browser_icon_path()
+    if icon_path is None:
+        raise HTTPException(status_code=404, detail="Browser icon is not configured")
+    return FileResponse(
+        icon_path,
+        headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
+    )
 
 
 @router.get("/weather", response_model=WeatherSettingsRead)
@@ -339,8 +444,13 @@ async def upload_branding_logo(
     if len(data) > settings.max_logo_upload_mb * 1024 * 1024:
         raise HTTPException(status_code=413, detail=f"File is larger than {settings.max_logo_upload_mb} MB")
 
-    LOGO_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    path = LOGO_UPLOAD_DIR / f"{theme}-{uuid4().hex}{extension}"
+    if theme == "browser-icon":
+        BROWSER_LOGO_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        uploaded_at = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        path = BROWSER_LOGO_UPLOAD_DIR / f"browser-icon-{uploaded_at}-{uuid4().hex}{extension}"
+    else:
+        LOGO_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        path = LOGO_UPLOAD_DIR / f"{theme}-{uuid4().hex}{extension}"
     path.write_bytes(data)
 
     current = await get_branding_settings_value(session)
@@ -349,14 +459,14 @@ async def upload_branding_logo(
         "default-avatar": "default_avatar_url",
         "browser-icon": "browser_icon_url",
     }.get(theme, f"{theme}_logo_url")
-    value[setting_key] = f"/api/uploads/logos/{path.name}"
+    value[setting_key] = browser_icon_file_url(path) if theme == "browser-icon" else f"/api/uploads/logos/{path.name}"
     setting = await session.get(AppSetting, BRANDING_SETTINGS_KEY)
     if setting is None:
         session.add(AppSetting(key=BRANDING_SETTINGS_KEY, value=value))
     else:
         setting.value = value
     await session.commit()
-    return branding_settings_from_value(value)
+    return await get_branding_settings_value(session)
 
 
 @router.get("/system", response_model=SystemSettingsRead)

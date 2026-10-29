@@ -68,7 +68,8 @@ const logoFiles = ref({ light: null, dark: null })
 const logoSaving = ref({ light: false, dark: false })
 const logoSaved = ref({ light: false, dark: false })
 const logoCropper = ref(null)
-const browserTitle = ref('BMRL Race Control')
+const browserTitle = ref('BMRL - BeamMP Racing League')
+const browserDescription = ref('')
 const browserTitleSaving = ref(false)
 const browserTitleSaved = ref(false)
 const browserIconFile = ref(null)
@@ -309,6 +310,7 @@ async function load() {
     licenseTiers.value = normalizeLicenseTiers(loadedLicenseSettings)
     setBrandingSettings(loadedBrandingSettings)
     browserTitle.value = brandingSettings.browser_title
+    browserDescription.value = brandingSettings.browser_description
     systemSettings.value = {
       requests_per_user_per_minute: loadedSystemSettings.requests_per_user_per_minute,
       requests_per_ip_per_minute: loadedSystemSettings.requests_per_ip_per_minute ?? loadedSystemSettings.requests_per_user_per_minute,
@@ -630,10 +632,14 @@ async function saveBrowserTitle() {
   try {
     const saved = await api('/app-settings/branding', {
       method: 'PATCH',
-      body: { browser_title: String(browserTitle.value || '').trim() }
+      body: {
+        browser_title: String(browserTitle.value || '').trim(),
+        browser_description: String(browserDescription.value || '').trim()
+      }
     })
     setBrandingSettings(saved)
     browserTitle.value = brandingSettings.browser_title
+    browserDescription.value = brandingSettings.browser_description
     browserTitleSaved.value = true
   } catch (err) {
     error.value = err.message
@@ -1630,6 +1636,10 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
         {{ t('common.upload') }}
       </button>
       <span v-if="browserTitleSaved || browserIconSaved" class="pill">{{ t('common.saved') }}</span>
+      <label class="field admin-browser-description-field">
+        <span>{{ t('adminUsers.browserDescriptionField') }}</span>
+        <textarea v-model="browserDescription" maxlength="320" rows="3" />
+      </label>
     </form>
 
     <ImageCropper

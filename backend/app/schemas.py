@@ -1381,11 +1381,13 @@ class BrandingSettingsRead(BaseModel):
     dark_logo_url: str
     default_avatar_url: str
     browser_title: str
+    browser_description: str
     browser_icon_url: str
 
 
 class BrandingSettingsUpdate(BaseModel):
     browser_title: str = Field(default="", max_length=120)
+    browser_description: str | None = Field(default=None, max_length=320)
 
 
 class WeatherSettingsRead(BaseModel):

@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from app.routers.app_settings import DEFAULT_AVATAR_URL, DEFAULT_BROWSER_ICON_URL, DEFAULT_BROWSER_TITLE, DEFAULT_LOGOS, DEFAULT_RATING_CHANGE_COEFFICIENT, DEFAULT_REQUESTS_PER_IP_PER_MINUTE, DEFAULT_REQUESTS_PER_USER_PER_MINUTE, DEFAULT_SR_PER_RACE, branding_settings_from_value, system_settings_from_value
+from app.routers.app_settings import DEFAULT_AVATAR_URL, DEFAULT_BROWSER_DESCRIPTION, DEFAULT_BROWSER_ICON_URL, DEFAULT_BROWSER_TITLE, DEFAULT_LOGOS, DEFAULT_RATING_CHANGE_COEFFICIENT, DEFAULT_REQUESTS_PER_IP_PER_MINUTE, DEFAULT_REQUESTS_PER_USER_PER_MINUTE, DEFAULT_SR_PER_RACE, branding_settings_from_value, system_settings_from_value
 from app.services import get_rating_change_coefficient, get_sr_per_race
 
 
@@ -13,6 +13,7 @@ class BrandingSettingsTest(unittest.TestCase):
                 **DEFAULT_LOGOS,
                 "default_avatar_url": DEFAULT_AVATAR_URL,
                 "browser_title": DEFAULT_BROWSER_TITLE,
+                "browser_description": DEFAULT_BROWSER_DESCRIPTION,
                 "browser_icon_url": DEFAULT_BROWSER_ICON_URL,
             },
         )
@@ -23,6 +24,7 @@ class BrandingSettingsTest(unittest.TestCase):
                 "dark_logo_url": DEFAULT_LOGOS["dark_logo_url"],
                 "default_avatar_url": DEFAULT_AVATAR_URL,
                 "browser_title": DEFAULT_BROWSER_TITLE,
+                "browser_description": DEFAULT_BROWSER_DESCRIPTION,
                 "browser_icon_url": DEFAULT_BROWSER_ICON_URL,
             },
         )
