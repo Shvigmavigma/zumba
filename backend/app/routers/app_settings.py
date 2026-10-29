@@ -379,8 +379,13 @@ async def get_browser_icon(request: Request, session: AsyncSession = Depends(get
     icon_path = latest_browser_icon_path()
     if icon_path is None:
         raise HTTPException(status_code=404, detail="Browser icon is not configured")
+    media_type = next(
+        (content_type for content_type, extension in ALLOWED_LOGO_MEDIA_TYPES.items() if extension == icon_path.suffix.lower()),
+        "application/octet-stream",
+    )
     return FileResponse(
         icon_path,
+        media_type=media_type,
         headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
     )
 

@@ -690,7 +690,7 @@ async function uploadBrowserIcon() {
 }
 
 async function uploadCroppedBrowserIcon(blob) {
-  if (await saveBrowserIcon(new File([blob], 'browser-icon.webp', { type: 'image/webp' }))) {
+  if (await saveBrowserIcon(new File([blob], 'browser-icon.png', { type: 'image/png' }))) {
     closeBrowserIconCropper()
   }
 }
@@ -1649,6 +1649,7 @@ watch(() => pilotRoleEditForm.value.display_mode, (mode) => {
       :hint="t('adminUsers.browserIconCropHint')"
       :target-width="256"
       :target-height="256"
+      output-type="image/png"
       :saving="browserIconSaving"
       :error="browserIconCropper.error"
       @close="closeBrowserIconCropper"

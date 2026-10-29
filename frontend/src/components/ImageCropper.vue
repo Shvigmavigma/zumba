@@ -10,6 +10,7 @@ const props = defineProps({
   hint: { type: String, default: '' },
   targetWidth: { type: Number, required: true },
   targetHeight: { type: Number, required: true },
+  outputType: { type: String, default: 'image/webp' },
   viewMode: { type: Boolean, default: false },
   initialView: { type: Object, default: () => ({}) },
   saving: { type: Boolean, default: false },
@@ -119,8 +120,8 @@ function moveWithKeyboard(event) {
 function canvasBlob(canvas) {
   return new Promise((resolve, reject) => canvas.toBlob(
     (blob) => blob ? resolve(blob) : reject(new Error(t('banners.cropSaveError'))),
-    'image/webp',
-    0.92
+    props.outputType,
+    props.outputType === 'image/webp' ? 0.92 : undefined
   ))
 }
 
