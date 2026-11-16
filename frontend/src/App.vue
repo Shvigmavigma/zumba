@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { Moon, Sun } from 'lucide-vue-next'
 import { api } from './api'
+import { useTimingPolling } from './liveTiming'
 import { brandingSettings, ensureBrandingSettings } from './brandingSettings'
 import AccountModerationNotice from './components/AccountModerationNotice.vue'
 import { setSession, state } from './store'
@@ -18,6 +19,7 @@ import ThemePilot from './shell/ThemePilot.vue'
 
 const { t, locale } = useI18n()
 const route = useRoute()
+useTimingPolling(route)
 
 const isStandaloneCompetition = computed(() => route.name === 'competition-bracket' || (route.name === 'competition-view' && Boolean(route.query.match)))
 // Mirrors what AccountModerationNotice shows site-wide, so its padded wrapper

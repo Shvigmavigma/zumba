@@ -20,7 +20,8 @@ export function useNavigation() {
     { key: 'pilots', to: '/pilots', label: t('nav.pilots'), icon: Users },
     { key: 'teams', to: '/teams', label: t('nav.teams'), icon: Trophy },
     { key: 'hallOfFame', to: '/hall-of-fame', label: t('nav.hallOfFame'), icon: Medal },
-    { key: 'fuel', to: '/fuel-calculator', label: t('nav.fuel'), icon: Calculator }
+    { key: 'fuel', to: '/fuel-calculator', label: t('nav.fuel'), icon: Calculator },
+    { key: 'liveTiming', to: '/live/ac', label: 'Live Timing', icon: Flag }
   ])
 
   const staffItems = computed(() => [

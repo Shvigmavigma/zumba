@@ -48,6 +48,7 @@ export default defineConfig({
   server: {
     port: 8080,
     proxy: {
+      '/api/live-timing/ac/positions': { target: 'ws://localhost:8000', ws: true },
       '/api': 'http://localhost:8000',
       '/health': 'http://localhost:8000'
     }

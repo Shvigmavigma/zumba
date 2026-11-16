@@ -40,6 +40,7 @@ const router = createRouter({
   },
   routes: [
     { path: '/', component: MainMenu, meta: { design: true } },
+    { path: '/live/ac', component: () => import('./pages/LiveTiming.vue'), meta: { design: true } },
     { path: '/pilots', component: PilotList, meta: { design: true } },
     { path: '/pilots/:id', component: PilotDetails, meta: { design: true } },
     { path: '/teams', component: TeamList, meta: { design: true } },

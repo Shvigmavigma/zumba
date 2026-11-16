@@ -14,6 +14,7 @@ import StaffMenu from './StaffMenu.vue'
 import UserMenu from './UserMenu.vue'
 import { brandingSettings } from '../brandingSettings'
 import { state } from '../store'
+import { timing } from '../liveTiming'
 import { openPalette } from './commandPalette'
 import { useNavigation } from './useNavigation'
 
@@ -137,7 +138,7 @@ watch(() => route.fullPath, () => { hidden.value = false })
         >
           <motion.span v-if="activeKey === item.key" class="hdr__pill" layoutId="hdr-active" :transition="pillSpring" />
           <motion.span v-else-if="hovered === item.key" class="hdr__hover" layoutId="hdr-hover" :transition="pillSpring" :initial="{ opacity: 0 }" :animate="{ opacity: 1 }" :exit="{ opacity: 0 }" />
-          <span class="hdr__label">{{ item.label }}</span>
+          <span class="hdr__label">{{ item.label }}<i v-if="item.key === 'liveTiming' && timing.active" class="live-dot" :aria-label="state.locale === 'en' ? 'Server online' : 'Сервер на связи'" role="img" /></span>
         </RouterLink>
 
         <Popover v-if="overflowItems.length" v-model:open="moreOpen" align="start" width="240px" :label="t('common.more')">
@@ -148,13 +149,13 @@ watch(() => route.fullPath, () => { hidden.value = false })
           </template>
           <div class="hdr__menu">
             <RouterLink v-for="item in overflowItems" :key="item.key" class="hdr__menu-item" :to="item.to">
-              <component :is="item.icon" :size="17" />{{ item.label }}
+              <component :is="item.icon" :size="17" />{{ item.label }}<i v-if="item.key === 'liveTiming' && timing.active" class="live-dot" />
             </RouterLink>
           </div>
         </Popover>
 
         <div ref="navMeasure" class="hdr__measure" aria-hidden="true">
-          <span v-for="item in publicItems" :key="item.key" class="hdr__link" data-measure-item><span class="hdr__label">{{ item.label }}</span></span>
+          <span v-for="item in publicItems" :key="item.key" class="hdr__link" data-measure-item><span class="hdr__label">{{ item.label }}<i v-if="item.key === 'liveTiming'" class="live-dot" /></span></span>
           <span class="hdr__link" data-measure-more><span class="hdr__label"><MoreHorizontal :size="16" />{{ t('common.more') }}</span></span>
         </div>
       </nav>

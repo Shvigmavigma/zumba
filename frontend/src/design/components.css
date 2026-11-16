@@ -353,3 +353,12 @@
   width: 72px;
   height: 72px;
 }
+.live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #ff4558;
+  box-shadow: 0 0 7px #ff455877;
+}

@@ -1,7 +1,7 @@
 <script setup>
 // iOS-style segmented control. The selection pill glides between options with a
 // shared-layout spring from Motion (the Kokonut UI "smooth tab" idea).
-import { useId } from 'vue'
+import { ref, useId } from 'vue'
 import { motion } from 'motion-v'
 
 const props = defineProps({
@@ -10,11 +10,14 @@ const props = defineProps({
   options: { type: Array, required: true },
   size: { type: String, default: 'md' },
   block: { type: Boolean, default: false },
+  navigationStyle: { type: Boolean, default: false },
   ariaLabel: { type: String, default: '' }
 })
 const emit = defineEmits(['update:modelValue'])
 const pillId = `segment-${useId()}`
 const spring = { type: 'spring', stiffness: 520, damping: 38, mass: 0.9 }
+const navigationSpring = { type: 'spring', stiffness: 480, damping: 40 }
+const hovered = ref(null)
 
 function select(value) {
   if (value !== props.modelValue) emit('update:modelValue', value)
@@ -31,7 +34,7 @@ function onKeydown(event, index) {
 </script>
 
 <template>
-  <div class="segmented" :class="[`segmented--${size}`, { 'segmented--block': block }]" role="tablist" :aria-label="ariaLabel">
+  <div class="segmented" :class="[`segmented--${size}`, { 'segmented--block': block, 'segmented--nav': navigationStyle }]" role="tablist" :aria-label="ariaLabel" @mouseleave="hovered = null">
     <button
       v-for="(option, index) in options"
       :key="String(option.value)"
@@ -42,9 +45,11 @@ function onKeydown(event, index) {
       :aria-selected="option.value === modelValue"
       :tabindex="option.value === modelValue ? 0 : -1"
       @click="select(option.value)"
+      @mouseenter="hovered = option.value"
       @keydown="onKeydown($event, index)"
     >
-      <motion.span v-if="option.value === modelValue" class="segmented__pill" :layoutId="pillId" :transition="spring" />
+      <motion.span v-if="option.value === modelValue" class="segmented__pill" :layoutId="pillId" :transition="navigationStyle ? navigationSpring : spring" />
+      <motion.span v-else-if="navigationStyle && hovered === option.value" class="segmented__hover" :layoutId="pillId + '-hover'" :transition="navigationSpring" />
       <span class="segmented__label">
         <span v-if="option.badge" class="segmented__badge">{{ option.badge }}</span>
         <component :is="option.icon" v-if="option.icon" :size="15" aria-hidden="true" />
@@ -135,6 +140,43 @@ function onKeydown(event, index) {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+}
+
+.segmented--nav {
+  padding: 2px;
+  overflow: visible;
+}
+.segmented--nav .segmented__option {
+  min-height: 40px;
+  padding-inline: 15px;
+  font-size: 14px;
+  color: var(--c-text-2);
+}
+.segmented--nav .segmented__option.is-active,
+.segmented--nav .segmented__option:hover {
+  color: var(--c-text);
+}
+.segmented--nav .segmented__pill {
+  border: 1px solid var(--c-blue-line);
+  background: var(--c-blue-soft);
+  box-shadow: inset 0 1px 0 var(--c-highlight);
+}
+.segmented--nav .segmented__pill::after {
+  content: '';
+  position: absolute;
+  bottom: 5px;
+  left: calc(50% - 8px);
+  width: 16px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--bm-blue-bright);
+  box-shadow: 0 0 10px var(--bm-blue-bright);
+}
+.segmented__hover {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--c-text) 6%, transparent);
 }
 
 .segmented__badge {

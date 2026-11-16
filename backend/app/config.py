@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     twitch_client_id: str = ""
     twitch_client_secret: str = ""
     twitch_status_cache_seconds: int = 60
+    ac_timing_origin: str = "http://185.28.85.115:8772"
 
     @property
     def cors_origin_list(self) -> list[str]:
