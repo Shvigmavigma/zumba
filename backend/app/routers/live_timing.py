@@ -19,11 +19,12 @@ from app.config import get_settings
 router = APIRouter()
 settings = get_settings()
 _origin = settings.ac_timing_origin.rstrip("/")
-_cache_key = f"bmrl:ac-timing:v2:{_origin}"
+_cache_key = f"bmrl:ac-timing:v4:{_origin}"
 _store = Redis.from_url(settings.rate_limit_storage_uri, socket_timeout=1) if (settings.rate_limit_storage_uri or "").startswith(("redis://", "rediss://")) else None
 _lock = asyncio.Lock()
 _local = {}
 _map_cache = {}
+_track_info_cache = {}
 logger = logging.getLogger(__name__)
 
 @router.websocket("/positions")
@@ -93,7 +94,9 @@ async def refresh(previous):
         drivers = [public_driver(d, online) for key, online in (("ConnectedDrivers", True), ("DisconnectedDrivers", False))
                    for d in (raw.get(key) or []) if not d["CarInfo"].get("IsSpectator")]
         session = {"track": raw["Track"], "layout": raw.get("TrackConfig") or "", "name": raw.get("Name"),
-                   "air": raw.get("AmbientTemp"), "road": raw.get("RoadTemp"), "drivers": drivers}
+                   "air": raw.get("AmbientTemp"), "road": raw.get("RoadTemp"), "weather": raw.get("WeatherGraphics"), "drivers": drivers,
+                   "durationMinutes": raw.get("Time"), "elapsedMs": raw.get("ElapsedMilliseconds"),
+                   "waitSeconds": raw.get("WaitTime"), "laps": raw.get("Laps")}
         return {"active": True, "stale": False, "session": session, "updated": time(), "retryAt": time() + 16}
     except (httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError) as exc:
         logger.warning("Live timing update failed: %s", exc)
@@ -139,6 +142,7 @@ async def timing(response: Response, status_only: bool = False):
     result = {"active": data["active"], "stale": data.get("stale", False), "updated": data["updated"]}
     if not status_only:
         result["session"] = data["session"]
+        result["snapshotAgeMs"] = max(0, (time() - data["updated"]) * 1000) if data["updated"] else 0
     return result
 
 
@@ -174,3 +178,35 @@ async def track_map(response: Response, track: str, layout: str = ""):
     _map_cache.clear()
     _map_cache[key] = data
     return data
+
+
+@router.get("/track-info")
+async def track_info(response: Response, track: str, layout: str = ""):
+    session = (await snapshot()).get("session") or {}
+    if (track, layout) != (session.get("track"), session.get("layout")) or not all(
+        re.fullmatch(r"[a-zA-Z0-9_-]+", part) for part in (track, layout) if part
+    ):
+        raise HTTPException(404, "Track unavailable")
+    key = (track, layout)
+    response.headers["Cache-Control"] = "public, max-age=600"
+    if key in _track_info_cache:
+        return _track_info_cache[key]
+    base = f"{_origin}/content/tracks/{track}/ui"
+    paths = ([f"{base}/{layout}/ui_track.json"] if layout else []) + [f"{base}/ui_track.json"]
+    try:
+        async with httpx.AsyncClient(timeout=4) as client:
+            for path in paths:
+                result = await client.get(path)
+                if result.status_code != 200:
+                    continue
+                metadata = result.json()
+                if not isinstance(metadata, dict):
+                    continue
+                data = {field: str(metadata.get(field) or "").strip()[:120] for field in ("city", "region", "country")}
+                if any(data.values()):
+                    _track_info_cache.clear()
+                    _track_info_cache[key] = data
+                    return data
+    except (httpx.HTTPError, ValueError, TypeError):
+        pass
+    return {"city": "", "region": "", "country": ""}

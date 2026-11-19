@@ -82,7 +82,7 @@ function chooseTheme(value) {
         <nav class="sheet__grid" :aria-label="t('ui.nav.primary')">
           <RouterLink v-for="item in publicItems" :key="item.key" class="sheet__tile" :to="item.to" :class="{ 'is-active': item.to === '/' ? route.path === '/' : route.path.startsWith(item.to) }">
             <component :is="item.icon" :size="20" />
-            <span>{{ item.label }} <i v-if="item.key === 'liveTiming' && timing.active" class="live-dot" /></span>
+            <span>{{ item.label }} <i v-if="item.key === 'liveTiming' && timing.active" class="ui-dot ui-dot--live live-dot" /></span>
           </RouterLink>
         </nav>
 

@@ -138,7 +138,7 @@ watch(() => route.fullPath, () => { hidden.value = false })
         >
           <motion.span v-if="activeKey === item.key" class="hdr__pill" layoutId="hdr-active" :transition="pillSpring" />
           <motion.span v-else-if="hovered === item.key" class="hdr__hover" layoutId="hdr-hover" :transition="pillSpring" :initial="{ opacity: 0 }" :animate="{ opacity: 1 }" :exit="{ opacity: 0 }" />
-          <span class="hdr__label">{{ item.label }}<i v-if="item.key === 'liveTiming' && timing.active" class="live-dot" :aria-label="state.locale === 'en' ? 'Server online' : 'Сервер на связи'" role="img" /></span>
+          <span class="hdr__label">{{ item.label }}<i v-if="item.key === 'liveTiming' && timing.active" class="ui-dot ui-dot--live live-dot" :aria-label="state.locale === 'en' ? 'Server online' : 'Сервер на связи'" role="img" /></span>
         </RouterLink>
 
         <Popover v-if="overflowItems.length" v-model:open="moreOpen" align="start" width="240px" :label="t('common.more')">
@@ -149,7 +149,7 @@ watch(() => route.fullPath, () => { hidden.value = false })
           </template>
           <div class="hdr__menu">
             <RouterLink v-for="item in overflowItems" :key="item.key" class="hdr__menu-item" :to="item.to">
-              <component :is="item.icon" :size="17" />{{ item.label }}<i v-if="item.key === 'liveTiming' && timing.active" class="live-dot" />
+              <component :is="item.icon" :size="17" />{{ item.label }}<i v-if="item.key === 'liveTiming' && timing.active" class="ui-dot ui-dot--live live-dot" />
             </RouterLink>
           </div>
         </Popover>

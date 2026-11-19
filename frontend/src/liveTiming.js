@@ -1,7 +1,7 @@
 import { onMounted, onBeforeUnmount, reactive, watch } from 'vue'
 import { API_BASE } from './api'
 
-export const timing = reactive({ active: false, stale: false, loaded: false, session: null, updated: 0 })
+export const timing = reactive({ active: false, stale: false, loaded: false, session: null, updated: 0, receivedAt: 0, snapshotAgeMs: 0 })
 
 // One poller feeds both the navigation indicator and the open timing page.
 export function useTimingPolling(route) {
@@ -27,9 +27,13 @@ export function useTimingPolling(route) {
       timing.active = data.active
       timing.stale = data.stale
       timing.updated = data.updated
-      if (full) Object.assign(timing, { session: data.session, updated: data.updated, loaded: true })
+      if (full) Object.assign(timing, { session: data.session, updated: data.updated, receivedAt: Date.now(), snapshotAgeMs: data.snapshotAgeMs || 0, loaded: true })
     } catch {
       if (controller !== current) return
+      if (full && !timing.stale && timing.receivedAt) {
+        timing.snapshotAgeMs += Math.max(0, Date.now() - timing.receivedAt)
+        timing.receivedAt = Date.now()
+      }
       timing.active = timing.updated > 0 && Date.now() / 1000 - timing.updated < 60
       timing.stale = timing.active
       if (full) {
