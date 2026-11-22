@@ -1,10 +1,12 @@
 <script setup>
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Cloud, CloudRain, CloudSun, CloudLightning, MapPin, Sun } from 'lucide-vue-next'
+import { Clock3, Cloud, CloudRain, CloudSun, CloudLightning, MapPin, Sun } from 'lucide-vue-next'
 import { API_BASE } from '../api'
 import { timing } from '../liveTiming'
 import { formatDuration } from './race/raceTime'
+import { mapIsPortrait, mapPoint } from './race/liveMapGeometry'
+import { readGameTime } from './race/liveGameTime'
 import SegmentedControl from '../ui/SegmentedControl.vue'
 
 const { locale } = useI18n()
@@ -76,12 +78,19 @@ const weather = computed(() => {
   return null
 })
 const location = computed(() => {
+  if (session.value?.track === 'monza' && session.value?.layout === 'monza_wec_2026') {
+    return words('Италия · Ломбардия · Монца', 'Italy · Lombardy · Monza')
+  }
   const info = trackInfo.value
   if (!info) return ''
   const country = info.country === 'USA' ? words('США', 'USA') : info.country
   const region = info.region || (session.value?.track === 'cota_2022' ? words('Техас', 'Texas') : '')
   const city = info.city === 'Austin' ? words('Остин', 'Austin') : info.city
   return [country, region, city].filter(Boolean).join(' · ')
+})
+const flipMap = computed(() => session.value?.track === 'monza' && session.value?.layout === 'monza_wec_2026')
+const gameTime = computed(() => {
+  return readGameTime(session.value?.weather)
 })
 const positions = ref({})
 let socket
@@ -177,8 +186,7 @@ const dots = computed(() => {
   return online.value.map(d => {
     const live = positions.value[d.slot]
     const pos = live && socketTrack === session.value?.track && socketLayout === session.value?.layout ? live : d
-    return { driver: d, left: ((pos.x + g.X_OFFSET) / g.SCALE_FACTOR + g.PADDING) / g.WIDTH * 100,
-      top: ((pos.z + g.Z_OFFSET) / g.SCALE_FACTOR + g.PADDING) / g.HEIGHT * 100 }
+    return { driver: d, ...mapPoint(pos, g, flipMap.value) }
   }).filter(p => Number.isFinite(p.left) && Number.isFinite(p.top))
 })
 const time = ms => ms > 0 ? formatDuration(ms) : '—'
@@ -203,7 +211,9 @@ const status = d => !d.online ? words('Отключился','Disconnected') : d
         <section v-reveal="{ delay: 240, y: 24 }" class="mapcard">
           <div v-if="location" class="map-location"><MapPin :size="16" aria-hidden="true" /><span>{{ location }}</span></div>
           <div v-if="weather" class="map-weather"><component :is="weather.icon" :size="19" aria-hidden="true" /><span>{{ weather.label }}</span></div>
-          <div v-if="map" class="outline"><img :src="map.image" :alt="trackName">
+          <div v-if="map" class="outline" :class="{ 'outline--rotated': mapIsPortrait(map.geometry), 'outline--flipped': flipMap }"
+               :style="mapIsPortrait(map.geometry) ? { aspectRatio: map.geometry.HEIGHT + ' / ' + map.geometry.WIDTH, '--map-ratio': map.geometry.WIDTH / map.geometry.HEIGHT } : null">
+            <img :src="map.image" :alt="trackName">
             <span v-for="p in dots" :key="p.driver.slot" class="dot" :class="{ pit: p.driver.pit }" :style="{left:p.left+'%', top:p.top+'%'}" :title="p.driver.name">{{ p.driver.position }}</span>
           </div>
           <small v-else>{{ loadingMap ? words('Загрузка карты…','Loading map…') : words('Карта недоступна','Map unavailable') }}</small>
@@ -211,6 +221,7 @@ const status = d => !d.online ? words('Отключился','Disconnected') : d
             <div>{{ words('Воздух','Air') }}<strong>{{ session.air ?? '—' }}°C</strong></div>
             <div>{{ words('Асфальт','Track') }}<strong>{{ session.road ?? '—' }}°C</strong></div>
           </div>
+          <div class="map-time"><Clock3 :size="16" aria-hidden="true" /><span>{{ words('Время на трассе','Track time') }}<strong>{{ gameTime?.estimated ? '≈ ' : '' }}{{ gameTime?.value || '—' }}</strong></span></div>
         </section>
       </div>
       <section v-reveal="{ delay: 480, y: 24 }" class="board">
@@ -267,10 +278,16 @@ header span,.live small,.metrics {font-size:13px;color:var(--c-text-2)}
 .map-temperatures {position:absolute;left:28px;right:28px;bottom:20px;display:flex;justify-content:flex-start;gap:32px;color:var(--c-text-2);font-size:13px}
 .map-temperatures div {border-left:1px solid var(--c-line-strong);padding-left:14px}
 .map-temperatures strong {display:block;color:var(--c-text);font:600 22px/1.35 var(--font-mono)}
+.map-time {position:absolute;right:28px;bottom:20px;display:flex;align-items:center;gap:8px;color:var(--c-text-2);font-size:13px}
+.map-time svg {color:var(--c-accent-text);flex:none}
+.map-time strong {display:block;color:var(--c-text);font:600 22px/1.35 var(--font-mono)}
 .outline {position:relative;width:min(100%,400px);flex:none}
 .outline::before {content:'';position:absolute;inset:-12%;z-index:0;pointer-events:none;background:radial-gradient(ellipse,rgba(3,8,20,.48),transparent 70%)}
 .outline img {position:relative}
 .outline img {width:100%;display:block}.dot {position:absolute;transform:translate(-50%,-50%);transition:left .4s linear,top .4s linear;border:2px solid #102034;background:#78baff;color:#091422;border-radius:100px;min-width:21px;padding:1px 3px;text-align:center;font:700 12px/16px var(--font-mono)}.dot.pit {background:#ffc66c}
+.outline--rotated img {position:absolute;left:50%;top:50%;width:calc(100% * var(--map-ratio));max-width:none;transform:translate(-50%, -50%) rotate(90deg)}
+.outline--rotated.outline--flipped img {transform:translate(-50%, -50%) rotate(270deg)}
+.outline--flipped:not(.outline--rotated) img {transform:rotate(180deg)}
 .boardhead {padding:18px 24px;flex-wrap:wrap}.boardhead h2 {margin:0;font-size:22px}
 .modes {gap:14px}
 .scroll {overflow-x:auto}.live table {width:100%;min-width:890px;border-collapse:collapse;text-align:left}
@@ -281,6 +298,6 @@ td {font:500 15px var(--font-mono)}td:nth-child(2),td:last-child {font:14px var(
 :root[data-theme=dark] .live .personal-sector {color:#5de39a}
 .connected {background:var(--c-blue-soft)}.connected td:first-child {box-shadow:inset 3px 0 var(--bm-blue-bright)}
 .pitText {color:var(--c-accent-text)}.updated {display:block;margin-top:12px}
-@media(max-width:850px){.cards{grid-template-columns:1fr}.metrics{gap:12px}.mapcard,.summary{padding:18px}.mapcard{padding-top:74px;padding-bottom:76px}.map-location{left:18px;top:20px}.map-weather{right:18px;top:20px}.map-temperatures{left:18px;right:18px;bottom:16px}.boardhead{padding:14px}.modes{flex-wrap:wrap}}
+@media(max-width:850px){.cards{grid-template-columns:1fr}.metrics{gap:12px}.mapcard,.summary{padding:18px}.mapcard{padding-top:74px;padding-bottom:76px}.map-location{left:18px;top:20px}.map-weather{right:18px;top:20px}.map-temperatures{left:18px;right:18px;bottom:16px;gap:18px}.map-time{right:18px;bottom:16px}.boardhead{padding:14px}.modes{flex-wrap:wrap}}
 @media(prefers-reduced-motion:reduce){.dot{transition:none}}
 </style>
